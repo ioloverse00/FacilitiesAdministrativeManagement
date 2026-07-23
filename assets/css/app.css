@@ -1,11 +1,11 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    PURE CSS LARAVEL BREEZE & MATERIAL 3 DESIGN SYSTEM (app.css)
    Universal CSS-Only Stylesheet for index.html and all 15 code.html prototypes.
    Zero Tailwind CSS, Zero JavaScript required. Pure CSS Utility & UI Architecture.
    ========================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Public+Sans:wght@400;500;600&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0,0&display=swap');
 
 :root {
   /* Core Design Tokens - Breeze & Material 3 Light Theme */
@@ -2481,4 +2481,12 @@ div[role="group"] button:active {
 .auth-submit-btn:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined', 'Material Symbols', system-ui, sans-serif;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  line-height: 1;
+  speak: none;
 }
