@@ -8,6 +8,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     initCatalogHub();
+    initAuthenticationPage();
     initComponentInteractions();
     initSidebarController();
     initProfileDropdown();
@@ -404,3 +405,38 @@ function initProfileDropdown() {
     });
 }
 
+function initAuthenticationPage() {
+    const authForm = document.querySelector('[data-auth-form]');
+    const passwordInput = document.querySelector('[data-password-input]');
+    const passwordToggle = document.querySelector('[data-password-toggle]');
+    const visibilityIcon = document.querySelector('[data-visibility-icon]');
+    const forgotPasswordLink = document.getElementById('forgot-password-link');
+
+    if (!authForm) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const subsystem = params.get('subsystem');
+
+    if (subsystem && forgotPasswordLink) {
+        forgotPasswordLink.href = `forgot_password_card_component_standard.html?subsystem=${encodeURIComponent(subsystem)}`;
+    }
+
+    if (passwordInput && passwordToggle) {
+        passwordToggle.addEventListener('click', () => {
+            const isPasswordHidden = passwordInput.type === 'password';
+            passwordInput.type = isPasswordHidden ? 'text' : 'password';
+
+            if (visibilityIcon) {
+                visibilityIcon.textContent = isPasswordHidden ? 'visibility_off' : 'visibility';
+            }
+        });
+    }
+
+    authForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const currentParams = new URLSearchParams(window.location.search);
+        const selectedSubsystem = currentParams.get('subsystem') || 'client-management';
+
+        window.location.href = `mfa_otp_verification_card_standard.html?subsystem=${encodeURIComponent(selectedSubsystem)}`;
+    });
+}
