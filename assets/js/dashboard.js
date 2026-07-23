@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+function initializeDashboard() {
     const subsystemId = getSubsystemFromUrl();
     const subsystem = subsystemId ? getSubsystemById(subsystemId) : null;
 
@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dashboardChartBreakdown = document.getElementById('dashboard-chart-breakdown');
     const dashboardQuickActionsList = document.getElementById('dashboard-quick-actions-list');
     const dashboardActivityBody = document.getElementById('dashboard-activity-tbody');
-    const breadcrumbCategory = document.getElementById('breadcrumb-category');
+    const breadcrumbCategory = document.getElementById('breadcrumb-category') || document.getElementById('page-breadcrumb-title');
     const sidebarBrandTitle = document.getElementById('sidebar-brand-title');
     const sidebarBrandCategory = document.getElementById('sidebar-brand-category');
     const sidebarSubsystemNavPanel = document.getElementById('sidebar-subsystem-nav-panel');
@@ -317,4 +317,6 @@ document.addEventListener('DOMContentLoaded', () => {
             </td>
         </tr>
     `).join('');
-});
+}
+
+document.addEventListener('fam:layout-ready', initializeDashboard);

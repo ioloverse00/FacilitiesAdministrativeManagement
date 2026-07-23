@@ -265,6 +265,22 @@ function initSidebarController() {
 
     if (!sidebar) return;
 
+    const expandedWidth = sidebar.dataset.expandedWidth || '16rem';
+    const collapsedWidthClass = 'w-0';
+    const collapsedClasses = [collapsedWidthClass, 'border-r-0', 'opacity-0', 'pointer-events-none', 'md:opacity-0', 'md:border-r-0', 'md:w-0'];
+
+    const setSidebarLayoutWidth = value => {
+        sidebar.style.width = value;
+        sidebar.style.minWidth = value;
+        sidebar.style.flexBasis = value;
+    };
+
+    const resetSidebarLayoutWidth = () => {
+        sidebar.style.width = '';
+        sidebar.style.minWidth = '';
+        sidebar.style.flexBasis = '';
+    };
+
     let isDesktopOpen = true;
     let isMobileOpen = false;
 
@@ -278,12 +294,16 @@ function initSidebarController() {
     };
 
     // Initialize icon on page load
+    if (window.innerWidth >= 768) {
+        setSidebarLayoutWidth(expandedWidth);
+    }
     updateIcon();
 
     const openMobile = () => {
         isMobileOpen = true;
-        sidebar.classList.remove('-translate-x-full', 'w-0', 'md:w-0', 'border-r-0', 'md:border-r-0', 'opacity-0', 'md:opacity-0', 'pointer-events-none', 'md:pointer-events-none');
-        sidebar.classList.add('translate-x-0', 'w-64', 'border-r', 'opacity-100');
+        resetSidebarLayoutWidth();
+        sidebar.classList.remove('-translate-x-full', ...collapsedClasses);
+        sidebar.classList.add('translate-x-0', 'border-r', 'opacity-100');
         if (backdrop) {
             backdrop.classList.remove('hidden', 'opacity-0');
             backdrop.classList.add('block', 'opacity-100', 'pointer-events-auto');
@@ -314,12 +334,14 @@ function initSidebarController() {
         } else {
             isDesktopOpen = !isDesktopOpen;
             if (isDesktopOpen) {
-                sidebar.classList.remove('w-0', 'border-r-0', 'opacity-0', 'pointer-events-none', 'md:opacity-0', 'md:border-r-0', 'md:w-0');
-                sidebar.classList.add('w-64', 'border-r', 'opacity-100');
+                sidebar.classList.remove(...collapsedClasses);
+                setSidebarLayoutWidth(expandedWidth);
+                sidebar.classList.add('border-r', 'opacity-100');
                 if (desktopToggle) desktopToggle.setAttribute('title', 'Close Sidebar');
             } else {
-                sidebar.classList.remove('w-64', 'border-r', 'opacity-100');
-                sidebar.classList.add('w-0', 'border-r-0', 'opacity-0', 'pointer-events-none', 'md:opacity-0', 'md:border-r-0', 'md:w-0');
+                setSidebarLayoutWidth('0px');
+                sidebar.classList.remove('border-r', 'opacity-100');
+                sidebar.classList.add(...collapsedClasses);
                 if (desktopToggle) desktopToggle.setAttribute('title', 'Open Sidebar');
             }
             updateIcon();
@@ -335,11 +357,14 @@ function initSidebarController() {
     window.addEventListener('resize', () => {
         if (window.innerWidth >= 768) {
             isMobileOpen = false;
+            setSidebarLayoutWidth(isDesktopOpen ? expandedWidth : '0px');
             sidebar.classList.remove('-translate-x-full', 'translate-x-0');
             if (backdrop) {
                 backdrop.classList.remove('block', 'opacity-100', 'pointer-events-auto');
                 backdrop.classList.add('hidden', 'opacity-0');
             }
+        } else {
+            resetSidebarLayoutWidth();
         }
         updateIcon();
     });

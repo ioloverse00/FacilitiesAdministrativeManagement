@@ -1,0 +1,47 @@
+<header class="bg-surface/80 backdrop-blur-md shadow-sm border-b border-outline-variant/30 flex justify-between items-center h-16 px-6 w-full z-30 shrink-0">
+    <div class="flex items-center gap-3">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f1f5f9'/%3E%3Cpath d='M10 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm12 6H10l4-5 2.5 3 2-2.5 3.5 4.5z' fill='%23cbd5e1'/%3E%3C/svg%3E" alt="Facilities and Administrative Management logo" class="w-8 h-8 rounded-lg object-cover border border-outline-variant/30 shadow-2xs shrink-0">
+        <span class="text-outline-variant font-light select-none" aria-hidden="true">|</span>
+        <button id="desktop-sidebar-toggle" type="button" class="flex items-center justify-center p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low focus:outline-none transition border border-outline-variant/30 shrink-0 min-w-[2.5rem] min-h-[2.5rem]" title="Close Sidebar" aria-label="Toggle sidebar" aria-controls="app-sidebar" aria-expanded="true">
+            <span class="material-symbols-outlined text-xl" id="sidebar-toggle-icon" aria-hidden="true">menu_open</span>
+        </button>
+    </div>
+
+    <div class="relative flex items-center">
+        <button id="profile-dropdown-toggle" type="button" class="flex items-center gap-3 p-1.5 rounded-full hover:bg-surface-container-low transition-colors focus:outline-none border border-transparent hover:border-outline-variant/30 cursor-pointer" aria-expanded="false" aria-controls="profile-dropdown-menu" aria-haspopup="menu" aria-label="Open account menu" title="Account Menu">
+            <div class="w-9 h-9 rounded-full bg-primary-container/30 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm shadow-2xs shrink-0" aria-hidden="true">AU</div>
+            <div class="hidden md:flex flex-col text-left mr-1">
+                <span class="font-label font-semibold text-sm text-on-surface leading-tight">Admin User</span>
+                <span class="text-xs text-on-surface-variant font-light">Administrator</span>
+            </div>
+            <span class="material-symbols-outlined text-on-surface-variant text-sm hidden sm:inline-block" aria-hidden="true">expand_more</span>
+        </button>
+
+        <div id="profile-dropdown-menu" class="absolute right-0 top-14 w-60 bg-surface rounded-2xl shadow-xl border border-outline-variant/30 py-2 z-50 transition-all duration-200 hidden opacity-0 scale-95 origin-top-right" role="menu">
+            <div class="px-4 py-3 border-b border-outline-variant/20 md:hidden">
+                <p class="text-sm font-semibold text-on-surface">Admin User</p>
+                <p class="text-xs text-on-surface-variant truncate">admin@example.com</p>
+            </div>
+            <div class="px-4 py-2 hidden md:block">
+                <p class="text-xs font-medium text-on-surface-variant uppercase tracking-wider">Account</p>
+            </div>
+            <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
+                <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">person</span>
+                <span class="font-medium">My Profile</span>
+            </a>
+            <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
+                <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">manage_accounts</span>
+                <span class="font-medium">Account Settings</span>
+            </a>
+            <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
+                <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">notifications</span>
+                <span class="font-medium">Notifications</span>
+            </a>
+            <div class="my-1 border-t border-outline-variant/20"></div>
+            <button type="button" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium cursor-pointer" data-open-modal="dash-logout-modal" role="menuitem">
+                <span class="material-symbols-outlined text-lg" aria-hidden="true">logout</span>
+                <span>Log Out</span>
+            </button>
+        </div>
+    </div>
+</header>

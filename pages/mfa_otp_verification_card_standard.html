@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const params = new URLSearchParams(window.location.search);
         const subsystem = params.get('subsystem') || 'client-management';
-        window.location.href = `../dashboard_app_layout/code.html?subsystem=${encodeURIComponent(subsystem)}`;
+        window.location.href = `dashboard.html?subsystem=${encodeURIComponent(subsystem)}`;
     });
 });
 </script>

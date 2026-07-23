@@ -1,0 +1,30 @@
+<footer class="app-footer w-full py-8 border-t border-outline-variant/30 flex flex-col md:flex-row justify-between items-center gap-4 text-label-sm">
+    <div class="flex items-center gap-2">
+        <span class="text-on-surface-variant">&copy; 2026 Dashboard Application. All rights reserved.</span>
+    </div>
+    <div class="flex gap-4">
+        <a class="text-on-surface-variant hover:underline hover:text-primary transition-colors" href="../pages/privacy.html">Privacy Policy</a>
+        <a class="text-on-surface-variant hover:underline hover:text-primary transition-colors" href="../pages/terms.html">Terms of Service</a>
+        <a class="text-on-surface-variant hover:underline hover:text-primary transition-colors" href="https://github.com/">Github</a>
+        <a class="text-on-surface-variant hover:underline hover:text-primary transition-colors" href="../pages/support.html">Support</a>
+    </div>
+</footer>
+
+<div id="dash-logout-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200" data-modal-backdrop aria-hidden="true">
+    <div class="bg-surface rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-outline-variant/30 relative transform scale-95 transition-transform duration-200 text-center" role="dialog" aria-modal="true" aria-labelledby="dash-logout-title">
+        <button type="button" data-close-modal="dash-logout-modal" class="absolute top-4 right-4 p-1.5 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors" aria-label="Close sign out confirmation">
+            <span class="material-symbols-outlined text-xl" aria-hidden="true">close</span>
+        </button>
+        <div class="w-14 h-14 shrink-0 rounded-full bg-surface-container-high border border-outline-variant/40 flex items-center justify-center text-on-surface mx-auto mb-4" aria-hidden="true">
+            <span class="material-symbols-outlined text-3xl text-on-surface-variant">logout</span>
+        </div>
+        <h3 id="dash-logout-title" class="text-xl font-headline font-bold text-on-surface mb-2">Sign Out of Session?</h3>
+        <p class="text-sm text-on-surface-variant leading-relaxed mb-6">Are you sure you want to log out of your current administration session?</p>
+        <div class="flex gap-3">
+            <button type="button" data-close-modal="dash-logout-modal" class="flex-1 px-4 py-2.5 rounded-xl border border-outline-variant/50 text-on-surface font-medium text-sm hover:bg-surface-container-low transition-colors cursor-pointer">Cancel</button>
+            <button type="button" data-confirm-modal="dash-logout-modal" data-toast-message="Signed out successfully." class="flex-1 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-sm shadow-md shadow-red-600/20 transition-all cursor-pointer">Sign Out</button>
+        </div>
+    </div>
+</div>
+
+<div id="dash-toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>

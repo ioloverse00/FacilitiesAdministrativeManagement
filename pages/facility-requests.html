@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Facility Requests</title>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/facility-requests.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Facility Requests"
+    data-breadcrumb-title="Facility Requests"
+    data-active-nav="facilities"
+    data-page-heading="Facility Requests"
+    data-page-description="Review new facility needs, assignments, and request status.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content">
+                    <div class="max-w-7xl mx-auto space-y-8">
+                <div class="flex flex-col gap-6">
+                    <div class="bg-surface-container-lowest rounded-xl sm:rounded-2xl border border-outline-variant/60 shadow-sm p-4 sm:px-6 sm:py-4.5 flex flex-col md:flex-row md:items-center justify-between gap-4 w-full max-w-full">
+                        <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+                            <h1 id="page-breadcrumb-title">Facility Requests</h1>
+                        </nav>
+                    </div>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
+                        <div>
+                            <h2 id="page-heading">Facility Requests</h2>
+                            <p class="text-on-surface-variant text-sm mt-2" id="page-description">Review new facility needs, assignments, and request status.</p>
+                        </div>
+                        <div class="flex flex-wrap items-center justify-start sm:justify-end gap-3 shrink-0">
+                            <button id="new-facility-request" class="btn-primary dashboard-action-button m-0" type="button">
+                                <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                                New Request
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 border-b border-outline-variant/30">
+                        <h2 class="text-lg font-headline font-semibold text-on-surface">Open Requests</h2>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Request</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
+                                    <th>Owner</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facility-requests-table">
+                                <tr>
+                                    <td>Conference room projector replacement</td>
+                                    <td>High</td>
+                                    <td>Pending</td>
+                                    <td>Facilities Desk</td>
+                                </tr>
+                                <tr>
+                                    <td>North wing air conditioning inspection</td>
+                                    <td>Medium</td>
+                                    <td>Scheduled</td>
+                                    <td>Maintenance Team</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>
