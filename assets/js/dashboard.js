@@ -1,322 +1,266 @@
-function initializeDashboard() {
-    const subsystemId = getSubsystemFromUrl();
-    const subsystem = subsystemId ? getSubsystemById(subsystemId) : null;
-
-    const dashboardHeading = document.getElementById('dashboard-heading');
-    const dashboardCopy = document.getElementById('dashboard-copy');
-    const dashboardStatsGrid = document.getElementById('dashboard-stats-grid');
-    const dashboardCharts = document.getElementById('dashboard-charts');
-    const dashboardChartOverview = document.getElementById('dashboard-chart-overview');
-    const dashboardChartBreakdown = document.getElementById('dashboard-chart-breakdown');
-    const dashboardQuickActionsList = document.getElementById('dashboard-quick-actions-list');
-    const dashboardActivityBody = document.getElementById('dashboard-activity-tbody');
-    const breadcrumbCategory = document.getElementById('breadcrumb-category') || document.getElementById('page-breadcrumb-title');
-    const sidebarBrandTitle = document.getElementById('sidebar-brand-title');
-    const sidebarBrandCategory = document.getElementById('sidebar-brand-category');
-    const sidebarSubsystemNavPanel = document.getElementById('sidebar-subsystem-nav-panel');
-    const sidebarSubsystemModulesNav = document.getElementById('sidebar-subsystem-modules-nav');
-
-    if (!dashboardHeading || !dashboardCopy || !dashboardStatsGrid || !dashboardCharts || !dashboardChartOverview || !dashboardChartBreakdown || !dashboardQuickActionsList || !dashboardActivityBody || !sidebarBrandTitle || !sidebarBrandCategory || !sidebarSubsystemNavPanel || !sidebarSubsystemModulesNav) return;
-
-    const normalizeStatValue = value => {
-        if (typeof value === 'number') return Math.min(100, Math.max(5, Math.round(value)));
-        if (!value) return 60;
-        const parsed = parseFloat(String(value).replace(/[^0-9.-]+/g, ''));
-        return Number.isFinite(parsed) ? Math.min(100, Math.max(5, Math.round(parsed))) : 60;
+(function () {
+    const statusClassMap = {
+        critical: 'fam-status-critical',
+        warning: 'fam-status-warning',
+        informational: 'fam-status-info',
+        'due soon': 'fam-status-warning',
+        'in progress': 'fam-status-progress',
+        scheduled: 'fam-status-scheduled',
+        pending: 'fam-status-pending',
+        completed: 'fam-status-completed',
+        confirmed: 'fam-status-completed',
+        assigned: 'fam-status-progress',
+        approved: 'fam-status-completed',
+        unavailable: 'fam-status-critical',
+        'needs attention': 'fam-status-warning',
+        'awaiting approval': 'fam-status-pending',
+        'for approval': 'fam-status-pending',
+        review: 'fam-status-pending',
+        conflict: 'fam-status-critical',
+        'in transit': 'fam-status-scheduled'
     };
 
-    const moduleIconMap = {
-        'Client Management Subsystem': 'groups',
-        'Applicant Registration and Profiling System': 'person_add',
-        'Recruitment and Selection Subsystem': 'search',
-        'Job Order Management Subsystem': 'assignment',
-        'Deployment and Assignment Subsystem': 'engineering',
-        'Employee Information Management System (HRIS)': 'badge',
-        'Timekeeping and Attendance System': 'schedule',
-        'Leave and Absence Management System': 'beach_access',
-        'Payroll and Compensation System': 'attach_money',
-        'Performance Management Subsystem': 'star',
-        'Training and Development Subsystem': 'school',
-        'Document and Contract Management System': 'description',
-        'Government Contribution & Compliance Subsystem': 'gavel',
-        'Benefits and Loans Management System': 'health_and_safety',
-        'Separation and Exit Clearance Subsystem': 'verified_user',
-        'Health, Safety, and Welfare Subsystem': 'safety_check',
-        'Legal and Compliance Subsystem': 'gavel',
-        'System Administration and Security Subsystem': 'admin_panel_settings',
-        'Reports, Analytics, and Dashboards System': 'insights',
-        'Asset and Equipment Issuance Tracker': 'inventory',
-        'General Ledger': 'account_balance_wallet',
-        'Accounts Payable (AP)': 'receipt_long',
-        'Accounts Receivable (AR)': 'payments',
-        'Disbursement Management': 'account_balance',
-        'Collection Management': 'currency_exchange',
-        'Budget Management': 'account_balance',
-        'Cash Management': 'account_balance_wallet',
-        'Financial Reporting & Analytics': 'insights',
-        'Tax Management': 'request_quote',
-        'Smart Warehousing System (SWS)': 'warehouse',
-        'Inventory Management System': 'inventory_2',
-        'Procurement & Sourcing Management (PSM)': 'shopping_bag',
-        'Supplier / Vendor Management': 'handshake',
-        'Purchase Order Management': 'receipt_long',
-        'Document Tracking & Logistics Records System (DTRS)': 'local_shipping',
-        'Fleet & Vehicle Management (FVM)': 'directions_car',
-        'Vehicle Reservation & Dispatch System (VRDS)': 'directions_bus',
-        'Driver and Trip Performance Monitoring': 'timeline',
-        'Fuel Management System': 'local_gas_station',
-        'Transport Cost Analysis & Optimization (TCAO)': 'analytics',
-        'Route Planning & Optimization': 'map',
-        'Mobile Fleet Command App': 'emoji_transportation',
-        'Facilities Reservation System': 'meeting_room',
-        'Visitor Management System': 'badge',
-        'Document Management (Archiving System)': 'folder',
-        'Records Retention & Compliance': 'folder_shared',
-        'Legal Management System': 'gavel',
-        'Contract Management': 'description',
-        'Dashboard & Data Visualization System': 'dashboard',
-        'KPI Monitoring & Performance Tracking System': 'trending_up',
-        'Predictive Analytics System': 'insights',
-        'Custom Report Generation System': 'insert_chart',
-        'Data Aggregation & Integration System': 'storage',
-        'Exportable Reports & Decision Support System': 'file_download',
-        'Lead and Client Tracking System': 'track_changes',
-        'Communication History Management': 'forum',
-        'Client Satisfaction and Survey System': 'emoji_events',
-        'Follow-up Reminder System': 'notifications',
-        'Opportunity Pipeline Visualization': 'timeline'
+    const iconMap = {
+        'Facility Requests': 'domain',
+        Maintenance: 'build',
+        'Maintenance Requests': 'build',
+        'Asset Management': 'inventory_2',
+        'Room Reservations': 'meeting_room',
+        Procurement: 'shopping_bag',
+        'Administrative Records': 'folder'
     };
 
-    const getModuleIcon = moduleName => {
-        if (!moduleName) return 'apps';
-        return moduleIconMap[moduleName] || 'apps';
-    };
-
-    const getStatusBadge = status => {
-        const normalized = String(status || '').toLowerCase();
-        const statusMap = {
-            completed: 'status-pill status-pill-success',
-            ready: 'status-pill status-pill-success',
-            updated: 'status-pill status-pill-info',
-            pending: 'status-pill status-pill-warning',
-            scheduled: 'status-pill status-pill-info',
-            new: 'status-pill status-pill-accent'
-        };
-        return statusMap[normalized] || 'status-pill status-pill-neutral';
-    };
-
-    const actionIconMap = {
-        'New Transaction': 'add',
-        'Upload Invoice': 'upload_file',
-        'Generate Report': 'insert_chart',
-        'Budget Planning': 'query_stats',
-        'Tax Filing': 'receipt_long',
-        'Approve invoices': 'task_alt',
-        'Create budget plan': 'account_balance',
-        'Review cash forecast': 'analytics',
-        'Export financial statements': 'file_download'
-    };
-
-    const renderLineChart = dataPoints => {
-        const points = dataPoints.map((point, index) => {
-            const value = Math.min(100, Math.max(20, Number(point.value) || 20));
-            return {
-                x: 20 + index * 60,
-                y: 150 - value
-            };
-        });
-
-        const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
-        const fillPath = `${linePath} L ${points[points.length - 1].x} 150 L ${points[0].x} 150 Z`;
-
-        return `
-            <div class="dashboard-line-chart">
-                <svg viewBox="0 0 320 180" aria-hidden="true">
-                    <defs>
-                        <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="#4f46e5" stop-opacity="0.9" />
-                            <stop offset="100%" stop-color="#c7d2fe" stop-opacity="0.08" />
-                        </linearGradient>
-                    </defs>
-                    <path d="${fillPath}" fill="url(#lineGradient)" />
-                    <path d="${linePath}" fill="none" stroke="#4338ca" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-                    ${points.map(point => `
-                        <circle cx="${point.x}" cy="${point.y}" r="4" fill="#4338ca" stroke="#ffffff" stroke-width="2" />
-                    `).join('')}
-                </svg>
-            </div>
-        `;
-    };
-
-    const renderDonutChart = segments => {
-        const gradient = segments.map((segment, index) => `${segment.color} ${index === 0 ? '0%' : ''} ${segments.slice(0, index + 1).reduce((acc, item) => acc + parseInt(item.value, 10), 0)}%`).join(', ');
-        return `
-            <div class="donut-chart" style="background: conic-gradient(${segments.map(segment => `${segment.color} ${segment.value}`).join(', ')});"></div>
-        `;
-    };
-
-    if (!subsystem) {
-        dashboardHeading.textContent = 'Welcome back, Admin';
-        dashboardCopy.textContent = 'Open the module selector and choose a subsystem to view its dedicated dashboard.';
-        breadcrumbCategory.textContent = 'No subsystem selected';
-        dashboardStatsGrid.innerHTML = '';
-        dashboardCharts.innerHTML = '';
-        dashboardQuickActionsList.innerHTML = '<p class="text-sm text-on-surface-variant">Select a subsystem from the module selector to display statistics, charts, and activity.</p>';
-        dashboardActivityBody.innerHTML = '<tr><td class="px-6 py-4 text-on-surface-variant" colspan="4">No activity available. Select a subsystem to view activity logs.</td></tr>';
-        sidebarBrandTitle.textContent = 'No subsystem selected';
-        sidebarBrandCategory.textContent = 'Choose a subsystem from the selector.';
-        sidebarSubsystemModulesNav.innerHTML = '';
-        sidebarSubsystemNavPanel.classList.add('hidden');
-        return;
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     }
 
-    document.title = `${subsystem.title} — Dashboard`;
-    dashboardHeading.textContent = 'Welcome back, Admin';
-    dashboardCopy.textContent = `Here's what's happening in ${subsystem.title} today.`;
-    if (breadcrumbCategory) breadcrumbCategory.textContent = subsystem.title;
-    sidebarBrandTitle.textContent = subsystem.title;
-    sidebarBrandCategory.textContent = subsystem.category;
-    sidebarSubsystemModulesNav.innerHTML = subsystem.modules.map((module, index) => {
-        const moduleName = typeof module === 'string' ? module : module.name;
-        const isActive = index === 0;
-        return `
-            <a href="#" class="sidebar-subsystem-link ${isActive ? 'active' : ''}">
-                <span class="material-symbols-outlined sidebar-subsystem-link-icon">${getModuleIcon(moduleName)}</span>
-                <span class="truncate">${moduleName}</span>
+    function statusBadge(status) {
+        const normalized = String(status || '').toLowerCase();
+        return `<span class="fam-status-badge ${statusClassMap[normalized] || 'fam-status-inactive'}">${escapeHtml(status)}</span>`;
+    }
+
+    function stateMessage(message, icon = 'info') {
+        return `<div class="fam-state" role="status"><span class="material-symbols-outlined" aria-hidden="true">${icon}</span><span>${escapeHtml(message)}</span></div>`;
+    }
+
+    function setLoading() {
+        document.querySelectorAll('[data-state-container]').forEach(container => {
+            container.innerHTML = stateMessage('Loading dashboard summary...', 'progress_activity');
+        });
+    }
+
+    function formatUpdatedAt(value) {
+        const date = value ? new Date(value) : new Date();
+        return `Last updated: ${date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}, ${date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+    }
+
+    function renderCreateMenu(actions) {
+        const menu = document.getElementById('create-request-menu');
+        if (!menu) return;
+        menu.innerHTML = (actions || []).map(action => `
+            <a href="${action.href}" role="menuitem" class="fam-create-menu-item">
+                <span class="material-symbols-outlined" aria-hidden="true">${action.icon}</span>
+                <span>${escapeHtml(action.label)}</span>
             </a>
-        `;
-    }).join('');
-    sidebarSubsystemNavPanel.classList.remove('hidden');
+        `).join('');
+    }
 
-    dashboardStatsGrid.innerHTML = subsystem.stats.map(stat => {
-        const deltaMap = {
-            'Pipeline Value': { text: '+12.4% vs last month', isPositive: true },
-            'Open Requests': { text: '+8.6% vs last week', isPositive: true },
-            'Active Clients': { text: '+3.2% vs last quarter', isPositive: true },
-            'Fill Rate': { text: '+4.5% vs target', isPositive: true }
-        };
-        const defaultDelta = stat.tone === 'positive'
-            ? { text: '+12% vs last month', isPositive: true }
-            : stat.tone === 'caution'
-            ? { text: '-2.4% vs last month', isPositive: false }
-            : { text: '+1.8% vs last month', isPositive: true };
-        const delta = stat.delta || deltaMap[stat.label] || defaultDelta;
+    function initializeCreateMenu() {
+        const toggle = document.getElementById('create-request-toggle');
+        const menu = document.getElementById('create-request-menu');
+        if (!toggle || !menu) return;
+        toggle.addEventListener('click', event => {
+            event.stopPropagation();
+            const isOpen = !menu.classList.contains('hidden');
+            menu.classList.toggle('hidden', isOpen);
+            toggle.setAttribute('aria-expanded', String(!isOpen));
+        });
+        document.addEventListener('click', event => {
+            if (!menu.contains(event.target) && event.target !== toggle) {
+                menu.classList.add('hidden');
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+        toggle.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                menu.classList.add('hidden');
+                toggle.setAttribute('aria-expanded', 'false');
+                toggle.focus();
+            }
+        });
+    }
 
-        return `
-            <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col justify-between gap-4 overflow-hidden relative">
-                <div class="flex items-center justify-between gap-3">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">${stat.label}</p>
-                    <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                        <span class="material-symbols-outlined text-[20px]">${stat.icon}</span>
+    function renderAlerts(alerts) {
+        const target = document.getElementById('dashboard-alerts');
+        if (!target) return;
+        if (!alerts?.length) {
+            target.innerHTML = stateMessage('No urgent items require attention.', 'check_circle');
+            return;
+        }
+        target.innerHTML = alerts.map(alert => `
+            <a class="fam-alert-card fam-alert-${String(alert.severity).toLowerCase()}" href="${alert.href}">
+                <span class="fam-alert-severity">${escapeHtml(alert.severity)}</span>
+                <span class="fam-alert-copy">${escapeHtml(alert.message)}</span>
+                <span class="fam-alert-count" aria-label="${escapeHtml(alert.count)} items">${escapeHtml(alert.count)}</span>
+            </a>
+        `).join('');
+    }
+
+    function renderKpis(kpis) {
+        const target = document.getElementById('dashboard-kpis');
+        if (!target) return;
+        if (!kpis?.length) {
+            target.innerHTML = stateMessage('No KPI data available.', 'query_stats');
+            return;
+        }
+        target.innerHTML = kpis.map(kpi => `
+            <a class="fam-card fam-kpi-card" href="${kpi.href}" aria-label="${escapeHtml(kpi.label)}">
+                <div class="fam-kpi-top">
+                    <div>
+                        <p>${escapeHtml(kpi.label)}</p>
+                        <h3>${escapeHtml(kpi.value)}</h3>
                     </div>
+                    <span class="fam-kpi-icon material-symbols-outlined" aria-hidden="true">${kpi.icon}</span>
                 </div>
+                <p class="fam-kpi-main-label">${escapeHtml(kpi.supporting)}</p>
+                <div class="fam-kpi-footer">
+                    ${statusBadge(kpi.status)}
+                    <span>${escapeHtml(kpi.trend)}</span>
+                </div>
+            </a>
+        `).join('');
+    }
+
+    function renderCharts(data) {
+        const chartApi = window.FAMDashboardCharts;
+        const trendState = document.getElementById('requests-trend-state');
+        const trendCanvas = document.getElementById('requests-trend-chart');
+        const statusState = document.getElementById('request-status-state');
+        const statusCanvas = document.getElementById('request-status-chart');
+        const totalTarget = document.getElementById('active-request-total');
+
+        chartApi?.destroyAllCharts();
+
+        if (!window.Chart || !chartApi) {
+            [trendState, statusState].forEach(state => { if (state) state.innerHTML = stateMessage('Unable to load chart library.', 'error'); });
+            return;
+        }
+
+        const trendValues = [
+            ...(data.requestTrend?.facilityRequests || []),
+            ...(data.requestTrend?.maintenanceRequests || []),
+            ...(data.requestTrend?.completedRequests || [])
+        ];
+        if (trendCanvas && trendState) {
+            if (chartApi.hasValues(trendValues)) {
+                trendState.innerHTML = '';
+                chartApi.createRequestsTrendChart(trendCanvas, data.requestTrend);
+            } else {
+                trendState.innerHTML = stateMessage('No request trend data available.', 'bar_chart');
+            }
+        }
+
+        const statusValues = (data.requestStatus || []).map(item => item.value);
+        const totalActive = statusValues.reduce((sum, value) => sum + Number(value || 0), 0);
+        if (totalTarget) totalTarget.textContent = `Active requests: ${totalActive}`;
+        if (statusCanvas && statusState) {
+            if (chartApi.hasValues(statusValues)) {
+                statusState.innerHTML = '';
+                chartApi.createRequestStatusChart(statusCanvas, data.requestStatus);
+            } else {
+                statusState.innerHTML = stateMessage('No active request status data available.', 'donut_large');
+            }
+        }
+    }
+
+    function renderTodaySchedule(items) {
+        const target = document.getElementById('today-schedule');
+        if (!target) return;
+        if (!items?.length) {
+            target.innerHTML = stateMessage('No scheduled facility activities today.', 'event_available');
+            return;
+        }
+        target.innerHTML = items.map(item => `
+            <div class="fam-timeline-item">
+                <time>${escapeHtml(item.time)}</time>
                 <div>
-                    <h3 class="text-3xl font-headline font-bold text-slate-900 leading-none">${stat.value}</h3>
+                    <strong>${escapeHtml(item.activity)}</strong>
+                    <span>${escapeHtml(item.location)} · ${escapeHtml(item.module)}</span>
                 </div>
-                <div class="flex items-center gap-2 pt-3 border-t border-slate-100 text-xs">
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-semibold ${delta.isPositive ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'}">
-                        <span class="material-symbols-outlined text-[15px]">${delta.isPositive ? 'trending_up' : 'trending_down'}</span>
-                        <span>${delta.text}</span>
-                    </span>
-                </div>
+                ${statusBadge(item.status)}
             </div>
-        `;
-    }).join('');
+        `).join('');
+    }
 
-    dashboardQuickActionsList.innerHTML = subsystem.quickActions.map(action => `
-        <button type="button" class="quick-action-button">
-            <span class="flex items-center gap-3">
-                <span class="material-symbols-outlined text-lg">${actionIconMap[action] || 'bolt'}</span>
-                <span>${action}</span>
-            </span>
-            <span class="material-symbols-outlined text-sm">arrow_forward</span>
-        </button>
-    `).join('');
+    function renderPendingActions(items) {
+        const target = document.getElementById('pending-actions');
+        if (!target) return;
+        if (!items?.length) {
+            target.innerHTML = `<tr><td colspan="7">${stateMessage('No pending actions require your review.', 'task_alt')}</td></tr>`;
+            return;
+        }
+        target.innerHTML = items.map(item => `
+            <tr>
+                <td>${escapeHtml(item.reference)}</td>
+                <td>${escapeHtml(item.item)}</td>
+                <td>${escapeHtml(item.module)}</td>
+                <td>${statusBadge(item.priority)}</td>
+                <td>${escapeHtml(item.submitted)}</td>
+                <td>${statusBadge(item.status)}</td>
+                <td><a class="fam-table-action" href="${item.href}">${escapeHtml(item.action)}</a></td>
+            </tr>
+        `).join('');
+    }
 
-    const renderAnalytics = analytics => {
-        const overviewTitle = analytics?.overviewTitle || 'Performance overview';
-        const overviewMetric = analytics?.overviewMetric || subsystem.stats[0]?.value || 'Overview';
-        const overviewSubtitle = analytics?.overviewSubtitle || subsystem.description || `Track ${subsystem.title} performance.`;
-        const overviewTrend = analytics?.overviewTrend || 'Updated now';
-        const overviewData = Array.isArray(analytics?.overviewData) && analytics.overviewData.length
-            ? analytics.overviewData
-            : subsystem.stats.map(stat => ({ label: stat.label, value: normalizeStatValue(stat.value) }));
-        const overviewHighlights = Array.isArray(analytics?.overviewHighlights) && analytics.overviewHighlights.length
-            ? analytics.overviewHighlights
-            : overviewData.slice(0, 2).map(item => ({ label: item.label, value: `${item.value}%` }));
-        const breakdownTitle = analytics?.breakdownTitle || 'Detailed breakdown';
-        const breakdownTotal = analytics?.breakdownTotal || 'Key metrics';
-        const breakdownSegments = Array.isArray(analytics?.breakdownSegments) && analytics.breakdownSegments.length
-            ? analytics.breakdownSegments
-            : subsystem.stats.map(stat => ({ label: stat.label, value: stat.value, color: '#c7c4d8' }));
-
-        dashboardChartOverview.innerHTML = `
-            <div class="dashboard-chart-header">
+    function renderRecentActivity(items) {
+        const target = document.getElementById('recent-activity');
+        if (!target) return;
+        if (!items?.length) {
+            target.innerHTML = stateMessage('No recent activity.', 'history');
+            return;
+        }
+        target.innerHTML = items.map(item => `
+            <div class="fam-activity-item">
+                <span class="fam-activity-icon material-symbols-outlined" aria-hidden="true">${iconMap[item.module] || 'notifications'}</span>
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-on-surface-variant mb-2">${overviewTitle}</p>
-                    <h3 class="text-2xl font-headline font-bold text-on-surface">${overviewMetric}</h3>
-                    <p class="text-sm text-on-surface-variant mt-2">${overviewSubtitle}</p>
+                    <strong>${escapeHtml(item.activity)}</strong>
+                    <span>${escapeHtml(item.module)} · ${escapeHtml(item.by)} · ${escapeHtml(item.time)}</span>
                 </div>
-                <button class="dashboard-chart-filter-button inline-flex items-center gap-1.5 hover:border-slate-300 transition-colors">
-                    <span>${overviewTrend}</span>
-                    <span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
-                </button>
+                ${item.status ? statusBadge(item.status) : ''}
             </div>
-            ${renderLineChart(overviewData)}
-            <div class="grid gap-3 sm:grid-cols-2 mt-5">
-                ${overviewHighlights.map(item => `
-                    <div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/20">
-                        <p class="text-xs text-on-surface-variant">${item.label}</p>
-                        <p class="mt-2 text-sm font-semibold text-on-surface">${item.value}</p>
-                    </div>
-                `).join('')}
-            </div>
-        `;
+        `).join('');
+    }
 
-        dashboardChartBreakdown.innerHTML = `
-            <div class="dashboard-chart-header">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-on-surface-variant mb-2">${breakdownTitle}</p>
-                    <h3 class="text-2xl font-headline font-bold text-on-surface">${breakdownTotal}</h3>
-                </div>
-            </div>
-            <div class="grid gap-5 lg:grid-cols-[1fr_0.95fr] items-center">
-                <div class="donut-chart-wrapper">
-                    ${renderDonutChart(breakdownSegments)}
-                    <div class="donut-center-text">
-                        <p>Total</p>
-                        <p>${breakdownTotal}</p>
-                    </div>
-                </div>
-                <div class="space-y-3">
-                    ${breakdownSegments.map(segment => `
-                        <div class="donut-list-item">
-                            <span class="flex items-center gap-3">
-                                <span class="donut-list-color" style="background: ${segment.color};"></span>
-                                <span>${segment.label}</span>
-                            </span>
-                            <span class="text-sm font-semibold text-on-surface">${segment.value}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    };
+    async function initializeDashboard() {
+        const service = window.FAMDashboardService;
+        if (!service) return;
+        setLoading();
+        try {
+            const data = await service.getDashboardPayload();
+            document.getElementById('dashboard-last-updated').textContent = formatUpdatedAt(data.generatedAt);
+            renderCreateMenu(data.requestActions);
+            renderAlerts(data.alerts);
+            renderKpis(data.kpis);
+            renderCharts(data);
+            renderPendingActions(data.pendingActions);
+            renderTodaySchedule(data.todaySchedule);
+            renderRecentActivity(data.recentActivities);
+        } catch (error) {
+            console.error(error);
+            window.FAMDashboardCharts?.destroyAllCharts();
+            document.querySelectorAll('[data-state-container]').forEach(container => {
+                container.innerHTML = stateMessage('Unable to load dashboard activity.', 'error');
+            });
+        }
+    }
 
-    renderAnalytics(subsystem.analytics);
-
-    dashboardActivityBody.innerHTML = subsystem.activity.map(item => `
-        <tr class="hover:bg-surface-container-lowest transition-colors">
-            <td class="px-6 py-4 text-sm text-on-surface">${item.label}</td>
-            <td class="px-6 py-4 text-sm text-on-surface-variant">${item.status}</td>
-            <td class="px-6 py-4 text-sm text-on-surface-variant">${item.time}</td>
-            <td class="px-6 py-4">
-                <button class="text-on-surface-variant hover:text-primary transition-colors p-1.5 rounded-md hover:bg-surface-container-low cursor-pointer" title="View Details">
-                    <span class="material-symbols-outlined text-sm">visibility</span>
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
-
-document.addEventListener('fam:layout-ready', initializeDashboard);
+    document.addEventListener('fam:layout-ready', () => {
+        initializeCreateMenu();
+        initializeDashboard();
+        document.getElementById('dashboard-refresh')?.addEventListener('click', initializeDashboard);
+        window.addEventListener('resize', () => Object.values(window.FAMDashboardCharts?.chartInstances || {}).forEach(chart => chart?.resize()));
+        document.getElementById('desktop-sidebar-toggle')?.addEventListener('click', () => {
+            window.setTimeout(() => Object.values(window.FAMDashboardCharts?.chartInstances || {}).forEach(chart => chart?.resize()), 320);
+        });
+    });
+})();
