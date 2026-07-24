@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Maintenance Requests</title>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/maintenance.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Maintenance Requests"
+    data-breadcrumb-title="Maintenance Requests"
+    data-active-nav="maintenance"
+    data-page-heading="Maintenance Requests"
+    data-page-description="Manage work orders, technician assignments, schedules, progress, and completion.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace maintenance-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>Maintenance Requests</h1>
+                                <p>Manage work orders, technician assignments, schedules, progress, and completion.</p>
+                                <span id="maintenance-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="maintenance-refresh" class="fam-icon-button" type="button" aria-label="Refresh maintenance requests">
+                                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                                <button id="maintenance-export" class="btn-secondary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                                    Export
+                                </button>
+                                <button id="new-work-order" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                                    New Work Order
+                                </button>
+                            </div>
+                        </header>
+
+                        <section class="facility-section" aria-labelledby="maintenance-summary-title">
+                            <div class="fam-section-heading">
+                                <h2 id="maintenance-summary-title">Maintenance Summary</h2>
+                            </div>
+                            <div id="maintenance-summary" class="facility-kpi-grid" aria-live="polite"></div>
+                        </section>
+
+                        <section class="facility-section" aria-labelledby="maintenance-table-title">
+                            <div class="facility-table-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="maintenance-table-title">Maintenance Requests</h2>
+                                        <p id="maintenance-table-count">Loading work orders...</p>
+                                    </div>
+                                    <div class="facility-header-controls">
+                                        <label class="facility-field facility-search-field">
+                                            <span class="sr-only">Search</span>
+                                            <input id="maintenance-search" type="search" placeholder="Search work orders...">
+                                        </label>
+                                        <button id="maintenance-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
+                                    </div>
+                                </div>
+                                <div id="maintenance-loading-state" class="fam-state">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading maintenance requests...</span>
+                                </div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table maintenance-requests-table">
+                                        <thead>
+                                            <tr>
+                                                <th><button type="button" class="facility-sort-button" data-sort="workOrderNo">Work Order No.</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="title">Title</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="asset">Asset</button></th>
+                                                <th data-column="priority"></th>
+                                                <th data-column="status"></th>
+                                                <th data-column="technician"></th>
+                                                <th data-column="scheduledDate"></th>
+                                                <th data-column="slaState"></th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="maintenance-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="maintenance-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                                <div class="facility-pagination" aria-label="Maintenance request pagination">
+                                    <button id="maintenance-prev-page" class="facility-page-button" type="button">Previous</button>
+                                    <span id="maintenance-page-status">Page 1 of 1</span>
+                                    <button id="maintenance-next-page" class="facility-page-button" type="button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside id="maintenance-drawer" class="facility-drawer-placeholder" aria-label="Work order details drawer placeholder" hidden>
+                            <div data-drawer-section="general-information"></div>
+                            <div data-drawer-field="requester"></div>
+                            <div data-drawer-field="related-facility-request"></div>
+                            <div data-drawer-field="assigned-technician"></div>
+                            <div data-drawer-section="asset-information"></div>
+                            <div data-drawer-field="location"></div>
+                            <div data-drawer-section="checklist"></div>
+                            <div data-drawer-section="work-logs"></div>
+                            <div data-drawer-section="progress-timeline"></div>
+                            <div data-drawer-section="attachments"></div>
+                            <div data-drawer-section="completion-notes"></div>
+                            <div data-drawer-section="verification"></div>
+                            <div data-drawer-section="sla-timeline"></div>
+                            <div data-drawer-section="activity-history"></div>
+                        </aside>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

@@ -17,65 +17,108 @@
     data-breadcrumb-title="Facility Requests"
     data-active-nav="facilities"
     data-page-heading="Facility Requests"
-    data-page-description="Review new facility needs, assignments, and request status.">
+    data-page-description="Manage facility service requests, assignments, approvals, and request lifecycle.">
     <div id="app-shell" class="app-shell">
         <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
         <div class="app-main-panel">
             <div id="app-header-slot" class="shrink-0"></div>
             <main id="app-content" class="app-main bg-surface-container-lowest">
-                <div id="page-content" class="app-page-content">
-                    <div class="max-w-7xl mx-auto space-y-8">
-                <div class="flex flex-col gap-6">
-                    <div class="bg-surface-container-lowest rounded-xl sm:rounded-2xl border border-outline-variant/60 shadow-sm p-4 sm:px-6 sm:py-4.5 flex flex-col md:flex-row md:items-center justify-between gap-4 w-full max-w-full">
-                        <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-                            <h1 id="page-breadcrumb-title">Facility Requests</h1>
-                        </nav>
-                    </div>
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
-                        <div>
-                            <h2 id="page-heading">Facility Requests</h2>
-                            <p class="text-on-surface-variant text-sm mt-2" id="page-description">Review new facility needs, assignments, and request status.</p>
-                        </div>
-                        <div class="flex flex-wrap items-center justify-start sm:justify-end gap-3 shrink-0">
-                            <button id="new-facility-request" class="btn-primary dashboard-action-button m-0" type="button">
-                                <span class="material-symbols-outlined" aria-hidden="true">add</span>
-                                New Request
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <div id="page-content" class="app-page-content facility-requests-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>Facility Requests</h1>
+                                <p>Manage facility service requests, assignments, approvals, and request lifecycle.</p>
+                                <span id="facility-requests-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="facility-refresh" class="fam-icon-button" type="button" aria-label="Refresh facility requests">
+                                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                                <button id="facility-export" class="btn-secondary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                                    Export
+                                </button>
+                                <button id="new-facility-request" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                                    New Facility Request
+                                </button>
+                            </div>
+                        </header>
 
-                <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div class="px-6 py-4 border-b border-outline-variant/30">
-                        <h2 class="text-lg font-headline font-semibold text-on-surface">Open Requests</h2>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Request</th>
-                                    <th>Priority</th>
-                                    <th>Status</th>
-                                    <th>Owner</th>
-                                </tr>
-                            </thead>
-                            <tbody id="facility-requests-table">
-                                <tr>
-                                    <td>Conference room projector replacement</td>
-                                    <td>High</td>
-                                    <td>Pending</td>
-                                    <td>Facilities Desk</td>
-                                </tr>
-                                <tr>
-                                    <td>North wing air conditioning inspection</td>
-                                    <td>Medium</td>
-                                    <td>Scheduled</td>
-                                    <td>Maintenance Team</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
+                        <section class="facility-section" aria-labelledby="request-summary-title">
+                            <div class="fam-section-heading">
+                                <h2 id="request-summary-title">Request Summary</h2>
+                            </div>
+                            <div id="facility-request-summary" class="facility-kpi-grid" aria-live="polite"></div>
+                        </section>
+
+                        <section class="facility-section" aria-labelledby="open-requests-title">
+                            <div class="facility-table-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="open-requests-title">Open Requests</h2>
+                                        <p id="facility-table-count">Loading requests...</p>
+                                    </div>
+                                    <div class="facility-header-controls">
+                                        <label class="facility-field facility-search-field">
+                                            <span class="sr-only">Search</span>
+                                            <input id="facility-search" type="search" placeholder="Search requests...">
+                                        </label>
+                                        <button id="facility-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
+                                    </div>
+                                </div>
+                                <div id="facility-loading-state" class="fam-state">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading facility requests...</span>
+                                </div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table">
+                                        <thead>
+                                            <tr>
+                                                <th><button type="button" class="facility-sort-button" data-sort="requestNo">Request No.</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="subject">Subject</button></th>
+                                                <th data-column="category"></th>
+                                                <th data-column="priority"></th>
+                                                <th data-column="status"></th>
+                                                <th data-column="slaState"></th>
+                                                <th data-column="assignedTo"></th>
+                                                <th data-column="submitted"></th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="facility-requests-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="facility-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                                <div class="facility-pagination" aria-label="Facility request pagination">
+                                    <button id="facility-prev-page" class="facility-page-button" type="button">Previous</button>
+                                    <span id="facility-page-status">Page 1 of 1</span>
+                                    <button id="facility-next-page" class="facility-page-button" type="button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside id="facility-request-drawer" class="facility-drawer-placeholder" aria-label="Request details drawer placeholder" hidden>
+                            <div data-drawer-section="general-information"></div>
+                            <div data-drawer-field="requester"></div>
+                            <div data-drawer-field="department"></div>
+                            <div data-drawer-field="location"></div>
+                            <div data-drawer-section="description"></div>
+                            <div data-drawer-section="attachments"></div>
+                            <div data-drawer-section="timeline"></div>
+                            <div data-drawer-section="approval-history"></div>
+                            <div data-drawer-section="sla"></div>
+                            <div data-drawer-section="ai-recommendation"></div>
+                            <div data-ai-field="suggested-priority"></div>
+                            <div data-ai-field="suggested-category"></div>
+                            <div data-ai-field="suggested-team"></div>
+                            <div data-ai-field="confidence-score"></div>
+                            <div data-ai-field="explanation"></div>
+                            <div data-ai-field="decision"></div>
+                            <div data-drawer-section="activity-log"></div>
+                            <div data-drawer-section="related-maintenance-work-order"></div>
+                        </aside>
                     </div>
                 </div>
                 <div id="app-footer-slot" class="app-footer-slot"></div>
