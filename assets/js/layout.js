@@ -33,8 +33,84 @@
         if (descriptionTarget && description) descriptionTarget.textContent = description;
     }
 
+
+    function ensureApiClient() {
+        if (window.FAMApi) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const existing = document.querySelector('script[data-api-client]');
+            if (existing) {
+                existing.addEventListener('load', resolve, { once: true });
+                existing.addEventListener('error', reject, { once: true });
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = '../assets/js/api-client.js';
+            script.defer = true;
+            script.dataset.apiClient = 'true';
+            script.addEventListener('load', resolve, { once: true });
+            script.addEventListener('error', reject, { once: true });
+            document.head.appendChild(script);
+        });
+    }
+
+
+    function ensureDetailsModal() {
+        if (window.FAMDetailsModal) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const existing = document.querySelector('script[data-details-modal]');
+            if (existing) {
+                existing.addEventListener('load', resolve, { once: true });
+                existing.addEventListener('error', reject, { once: true });
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = '../assets/js/details-modal.js';
+            script.defer = true;
+            script.dataset.detailsModal = 'true';
+            script.addEventListener('load', resolve, { once: true });
+            script.addEventListener('error', reject, { once: true });
+            document.head.appendChild(script);
+        });
+    }
+
+    function ensureLiveModule() {
+        if (window.FAMLiveModule) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const existing = document.querySelector('script[data-live-module]');
+            if (existing) {
+                existing.addEventListener('load', resolve, { once: true });
+                existing.addEventListener('error', reject, { once: true });
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = '../assets/js/live-module.js';
+            script.defer = true;
+            script.dataset.liveModule = 'true';
+            script.addEventListener('load', resolve, { once: true });
+            script.addEventListener('error', reject, { once: true });
+            document.head.appendChild(script);
+        });
+    }
+    async function verifyProtectedSession() {
+        if (!window.FAMApi) return true;
+        try {
+            await window.FAMApi.me();
+            return true;
+        } catch (error) {
+            if (error.status === 401) {
+                window.location.replace(window.FAMApi.pageLoginUrl());
+                return false;
+            }
+            throw error;
+        }
+    }
     async function initializeLayout() {
         try {
+            await ensureApiClient();
+            if (!await verifyProtectedSession()) return;
+            await ensureDetailsModal();
+            await ensureLiveModule();
+
             await Promise.all([
                 loadComponent('#app-sidebar-slot', componentPaths.sidebar),
                 loadComponent('#app-header-slot', componentPaths.header),
@@ -56,6 +132,13 @@
         }
     }
 
+
+    window.addEventListener('pageshow', event => {
+        const navigation = performance.getEntriesByType?.('navigation')?.[0];
+        if (event.persisted || navigation?.type === 'back_forward') {
+            ensureApiClient().then(() => verifyProtectedSession()).catch(error => console.error(error));
+        }
+    });
     document.addEventListener('DOMContentLoaded', initializeLayout);
 
     window.FAMLayout = {

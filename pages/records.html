@@ -1,0 +1,124 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Administrative Records</title>
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/records.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Administrative Records"
+    data-breadcrumb-title="Administrative Records"
+    data-active-nav="records"
+    data-page-heading="Administrative Records"
+    data-page-description="Manage organizational documents, contracts, compliance records, and administrative files.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace records-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>Administrative Records</h1>
+                                <p>Manage organizational documents, contracts, compliance records, and administrative files.</p>
+                                <span id="records-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="records-refresh" class="fam-icon-button" type="button" aria-label="Refresh administrative records">
+                                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                                <button id="records-export" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                                    Export
+                                </button>
+                            </div>
+                        </header>
+
+                        <section class="facility-section" aria-labelledby="records-table-title">
+                            <div class="facility-table-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="records-table-title">Administrative Records</h2>
+                                        <p id="records-table-count">Loading document records...</p>
+                                    </div>
+                                    <div class="facility-header-controls">
+                                        <label class="facility-field facility-search-field">
+                                            <span class="sr-only">Search</span>
+                                            <input id="records-search" type="search" placeholder="Search records...">
+                                        </label>
+                                        <button id="records-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
+                                    </div>
+                                </div>
+                                <div id="records-loading-state" class="fam-state">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading administrative records...</span>
+                                </div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table records-table">
+                                        <thead>
+                                            <tr>
+                                                <th><button type="button" class="facility-sort-button" data-sort="documentNo">Document No.</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="title">Title</button></th>
+                                                <th data-column="category"></th>
+                                                <th data-column="owner"></th>
+                                                <th data-column="version"></th>
+                                                <th data-column="reviewDate"></th>
+                                                <th data-column="status"></th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="records-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="records-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                                <div class="facility-pagination" aria-label="Administrative records pagination">
+                                    <button id="records-prev-page" class="facility-page-button" type="button">Previous</button>
+                                    <span id="records-page-status">Page 1 of 1</span>
+                                    <button id="records-next-page" class="facility-page-button" type="button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside id="records-details-drawer" class="facility-drawer-placeholder" aria-label="Administrative record details drawer placeholder" hidden>
+                            <div data-drawer-section="general-information"></div>
+                            <div data-drawer-section="document-metadata"></div>
+                            <div data-drawer-section="version-history"></div>
+                            <div data-drawer-section="attachments"></div>
+                            <div data-drawer-section="related-assets"></div>
+                            <div data-drawer-section="related-building"></div>
+                            <div data-drawer-section="related-room"></div>
+                            <div data-drawer-section="related-contract"></div>
+                            <div data-drawer-section="review-history"></div>
+                            <div data-drawer-section="approval-history"></div>
+                            <div data-drawer-section="access-permissions"></div>
+                            <div data-drawer-section="activity-timeline"></div>
+                            <div data-drawer-field="document-number"></div>
+                            <div data-drawer-field="contract-number"></div>
+                            <div data-drawer-field="vendor-party"></div>
+                            <div data-drawer-field="effective-date"></div>
+                            <div data-drawer-field="expiration-date"></div>
+                            <div data-drawer-field="renewal-status"></div>
+                            <div data-drawer-field="next-review-date"></div>
+                            <div data-drawer-field="review-frequency"></div>
+                            <div data-drawer-field="assigned-reviewer"></div>
+                        </aside>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>
+
+
+

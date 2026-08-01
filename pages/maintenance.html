@@ -1,9 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>Maintenance Requests</title>
+    <script src="../assets/js/theme.js"></script>
     <link href="../assets/css/app.css" rel="stylesheet">
     <script src="../assets/js/navigation.js" defer></script>
     <script src="../assets/js/sidebar.js" defer></script>
@@ -35,23 +36,12 @@
                                 <button id="maintenance-refresh" class="fam-icon-button" type="button" aria-label="Refresh maintenance requests">
                                     <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
                                 </button>
-                                <button id="maintenance-export" class="btn-secondary dashboard-action-button" type="button">
+                                <button id="maintenance-export" class="btn-primary dashboard-action-button" type="button">
                                     <span class="material-symbols-outlined" aria-hidden="true">download</span>
                                     Export
                                 </button>
-                                <button id="new-work-order" class="btn-primary dashboard-action-button" type="button">
-                                    <span class="material-symbols-outlined" aria-hidden="true">add</span>
-                                    New Work Order
-                                </button>
                             </div>
                         </header>
-
-                        <section class="facility-section" aria-labelledby="maintenance-summary-title">
-                            <div class="fam-section-heading">
-                                <h2 id="maintenance-summary-title">Maintenance Summary</h2>
-                            </div>
-                            <div id="maintenance-summary" class="facility-kpi-grid" aria-live="polite"></div>
-                        </section>
 
                         <section class="facility-section" aria-labelledby="maintenance-table-title">
                             <div class="facility-table-card">
@@ -123,3 +113,6 @@
     </div>
 </body>
 </html>
+
+
+

@@ -7,41 +7,76 @@
         </button>
     </div>
 
-    <div class="relative flex items-center">
-        <button id="profile-dropdown-toggle" type="button" class="flex items-center gap-3 p-1.5 rounded-full hover:bg-surface-container-low transition-colors focus:outline-none border border-transparent hover:border-outline-variant/30 cursor-pointer" aria-expanded="false" aria-controls="profile-dropdown-menu" aria-haspopup="menu" aria-label="Open account menu" title="Account Menu">
-            <div class="w-9 h-9 rounded-full bg-primary-container/30 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm shadow-2xs shrink-0" aria-hidden="true">AU</div>
-            <div class="hidden md:flex flex-col text-left mr-1">
-                <span class="font-label font-semibold text-sm text-on-surface leading-tight">Admin User</span>
-                <span class="text-xs text-on-surface-variant font-light">Administrator</span>
-            </div>
-            <span class="material-symbols-outlined text-on-surface-variant text-sm hidden sm:inline-block" aria-hidden="true">expand_more</span>
-        </button>
-
-        <div id="profile-dropdown-menu" class="absolute right-0 top-14 w-60 bg-surface rounded-2xl shadow-xl border border-outline-variant/30 py-2 z-50 transition-all duration-200 hidden opacity-0 scale-95 origin-top-right" role="menu">
-            <div class="px-4 py-3 border-b border-outline-variant/20 md:hidden">
-                <p class="text-sm font-semibold text-on-surface">Admin User</p>
-                <p class="text-xs text-on-surface-variant truncate">admin@example.com</p>
-            </div>
-            <div class="px-4 py-2 hidden md:block">
-                <p class="text-xs font-medium text-on-surface-variant uppercase tracking-wider">Account</p>
-            </div>
-            <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
-                <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">person</span>
-                <span class="font-medium">My Profile</span>
-            </a>
-            <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
-                <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">manage_accounts</span>
-                <span class="font-medium">Account Settings</span>
-            </a>
-            <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
-                <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">notifications</span>
-                <span class="font-medium">Notifications</span>
-            </a>
-            <div class="my-1 border-t border-outline-variant/20"></div>
-            <button type="button" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium cursor-pointer" data-open-modal="dash-logout-modal" role="menuitem">
-                <span class="material-symbols-outlined text-lg" aria-hidden="true">logout</span>
-                <span>Log Out</span>
+    <div class="flex items-center gap-2">
+        <div class="notification-center relative">
+            <button id="notification-dropdown-toggle" type="button" class="notification-bell-button" aria-expanded="false" aria-controls="notification-dropdown-menu" aria-haspopup="dialog" aria-label="Open notifications" title="Notifications">
+                <span class="material-symbols-outlined text-xl" aria-hidden="true">notifications</span>
+                <span id="notification-unread-count" class="notification-unread-badge hidden" aria-hidden="true">0</span>
             </button>
+
+            <section id="notification-dropdown-menu" class="notification-dropdown-menu hidden opacity-0 scale-95" aria-labelledby="notification-dropdown-title" role="dialog">
+                <div class="notification-panel-header">
+                    <div>
+                        <h2 id="notification-dropdown-title">Notifications</h2>
+                        <p id="notification-unread-summary">0 unread</p>
+                    </div>
+                    <div class="notification-panel-actions">
+                        <button type="button" id="notification-mark-all-read">Mark all as read</button>
+                        <a href="../pages/reports.html">View All</a>
+                    </div>
+                </div>
+                <input id="notification-search-hook" class="sr-only" type="search" aria-label="Search notifications" tabindex="-1" data-future-filter="search">
+                <div class="notification-tabs" role="tablist" aria-label="Notification filters">
+                    <button type="button" class="active" data-notification-filter="all" role="tab" aria-selected="true">All</button>
+                    <button type="button" data-notification-filter="unread" role="tab" aria-selected="false">Unread</button>
+                    <button type="button" data-notification-filter="mentions" role="tab" aria-selected="false">Mentions</button>
+                    <button type="button" data-notification-filter="system" role="tab" aria-selected="false">System</button>
+                </div>
+                <div id="notification-list" class="notification-list" data-module-filter="" data-priority-filter="" data-date-filter=""></div>
+            </section>
+        </div>
+
+        <div class="relative flex items-center">
+            <button id="profile-dropdown-toggle" type="button" class="flex items-center gap-3 p-1.5 rounded-full hover:bg-surface-container-low transition-colors focus:outline-none border border-transparent hover:border-outline-variant/30 cursor-pointer" aria-expanded="false" aria-controls="profile-dropdown-menu" aria-haspopup="menu" aria-label="Open account menu" title="Account Menu">
+                <div class="w-9 h-9 rounded-full bg-primary-container/30 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm shadow-2xs shrink-0" aria-hidden="true">AU</div>
+                <div class="hidden md:flex flex-col text-left mr-1">
+                    <span class="font-label font-semibold text-sm text-on-surface leading-tight">Admin User</span>
+                    <span class="text-xs text-on-surface-variant font-light">Administrator</span>
+                </div>
+                <span class="material-symbols-outlined text-on-surface-variant text-sm hidden sm:inline-block" aria-hidden="true">expand_more</span>
+            </button>
+
+            <div id="profile-dropdown-menu" class="absolute right-0 top-14 w-60 bg-surface rounded-2xl shadow-xl border border-outline-variant/30 py-2 z-50 transition-all duration-200 hidden opacity-0 scale-95 origin-top-right" role="menu">
+                <div class="px-4 py-3 border-b border-outline-variant/20 md:hidden">
+                    <p class="text-sm font-semibold text-on-surface">Admin User</p>
+                    <p class="text-xs text-on-surface-variant truncate">admin@example.com</p>
+                </div>
+                <div class="px-4 py-2 hidden md:block">
+                    <p class="text-xs font-medium text-on-surface-variant uppercase tracking-wider">Account</p>
+                </div>
+                <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
+                    <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">person</span>
+                    <span class="font-medium">My Profile</span>
+                </a>
+                <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
+                    <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">manage_accounts</span>
+                    <span class="font-medium">Account Settings</span>
+                </a>
+                <div class="my-1 border-t border-outline-variant/20"></div>
+                <div class="theme-menu px-4 py-3" role="group" aria-labelledby="theme-menu-label">
+                    <p id="theme-menu-label" class="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-2">Appearance</p>
+                    <div class="theme-segmented-control" data-theme-control>
+                        <button type="button" data-theme-option="light" aria-pressed="false">Light</button>
+                        <button type="button" data-theme-option="dark" aria-pressed="false">Dark</button>
+                        <button type="button" data-theme-option="system" aria-pressed="false">System</button>
+                    </div>
+                </div>
+                <div class="my-1 border-t border-outline-variant/20"></div>
+                <button type="button" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors font-medium cursor-pointer" data-auth-logout role="menuitem">
+                    <span class="material-symbols-outlined text-lg" aria-hidden="true">logout</span>
+                    <span>Log Out</span>
+                </button>
+            </div>
         </div>
     </div>
 </header>

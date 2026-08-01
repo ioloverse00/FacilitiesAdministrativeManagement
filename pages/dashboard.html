@@ -1,9 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>Facilities & Administrative Dashboard</title>
+    <script src="../assets/js/theme.js"></script>
     <link href="../assets/css/app.css" rel="stylesheet">
     <script src="../assets/js/subsystems.js" defer></script>
     <script src="../assets/js/navigation.js" defer></script>
@@ -12,7 +13,6 @@
     <script src="../assets/js/modal.js" defer></script>
     <script src="../assets/js/layout.js" defer></script>
     <script src="../assets/vendor/chartjs/chart.umd.min.js" defer></script>
-    <script src="../assets/js/dashboard.mock-data.js" defer></script>
     <script src="../assets/js/dashboard-service.js" defer></script>
     <script src="../assets/js/dashboard-charts.js" defer></script>
     <script src="../assets/js/dashboard.js" defer></script>
@@ -40,17 +40,10 @@
                                 <button id="dashboard-refresh" class="fam-icon-button" type="button" aria-label="Refresh dashboard data">
                                     <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
                                 </button>
-                                <a class="btn-secondary dashboard-action-button" href="../pages/reports.html">
+                                <a class="btn-primary dashboard-action-button" href="../pages/reports.html">
                                     <span class="material-symbols-outlined" aria-hidden="true">insert_chart</span>
                                     Generate Report
                                 </a>
-                                <div class="fam-create-menu">
-                                    <button id="create-request-toggle" class="btn-primary dashboard-action-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="create-request-menu">
-                                        <span class="material-symbols-outlined" aria-hidden="true">add</span>
-                                        Create Request
-                                    </button>
-                                    <div id="create-request-menu" class="fam-create-menu-list hidden" role="menu" aria-label="Create request"></div>
-                                </div>
                             </div>
                         </header>
 
@@ -140,3 +133,6 @@
     </div>
 </body>
 </html>
+
+
+

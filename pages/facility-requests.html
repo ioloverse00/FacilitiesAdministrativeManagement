@@ -1,15 +1,17 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>Facility Requests</title>
+    <script src="../assets/js/theme.js"></script>
     <link href="../assets/css/app.css" rel="stylesheet">
     <script src="../assets/js/navigation.js" defer></script>
     <script src="../assets/js/sidebar.js" defer></script>
     <script src="../assets/js/profile-dropdown.js" defer></script>
     <script src="../assets/js/modal.js" defer></script>
     <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/api-client.js" defer></script>
     <script src="../assets/js/facility-requests.js" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body"
@@ -35,23 +37,12 @@
                                 <button id="facility-refresh" class="fam-icon-button" type="button" aria-label="Refresh facility requests">
                                     <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
                                 </button>
-                                <button id="facility-export" class="btn-secondary dashboard-action-button" type="button">
+                                <button id="facility-export" class="btn-primary dashboard-action-button" type="button">
                                     <span class="material-symbols-outlined" aria-hidden="true">download</span>
                                     Export
                                 </button>
-                                <button id="new-facility-request" class="btn-primary dashboard-action-button" type="button">
-                                    <span class="material-symbols-outlined" aria-hidden="true">add</span>
-                                    New Facility Request
-                                </button>
                             </div>
                         </header>
-
-                        <section class="facility-section" aria-labelledby="request-summary-title">
-                            <div class="fam-section-heading">
-                                <h2 id="request-summary-title">Request Summary</h2>
-                            </div>
-                            <div id="facility-request-summary" class="facility-kpi-grid" aria-live="polite"></div>
-                        </section>
 
                         <section class="facility-section" aria-labelledby="open-requests-title">
                             <div class="facility-table-card">
@@ -125,5 +116,9 @@
             </main>
         </div>
     </div>
+    <div id="dash-toast-container" class="fixed bottom-6 right-6 z-50 grid gap-3 pointer-events-none"></div>
 </body>
 </html>
+
+
+

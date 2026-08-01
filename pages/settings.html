@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>FAM Administration</title>
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/settings.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="FAM Administration"
+    data-breadcrumb-title="FAM Administration"
+    data-active-nav="settings"
+    data-page-heading="FAM Administration"
+    data-page-description="Configure operational settings, roles, workflows, AI services, notifications, reference data, and subsystem integrations.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace admin-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>FAM Administration</h1>
+                                <p>Configure operational settings, roles, workflows, AI services, notifications, reference data, and subsystem integrations.</p>
+                                <span id="admin-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="admin-refresh" class="fam-icon-button" type="button" aria-label="Refresh administration settings">
+                                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                            </div>
+                        </header>
+
+                        <section class="admin-layout" aria-label="FAM administration settings">
+                            <label class="facility-field admin-mobile-picker">
+                                <span>Administration Category</span>
+                                <select id="admin-category-select"></select>
+                            </label>
+                            <aside class="admin-nav-card" aria-label="Administration categories">
+                                <nav id="admin-category-nav" class="admin-category-nav"></nav>
+                            </aside>
+                            <div id="admin-panel-card" class="admin-panel-card"></div>
+                        </section>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

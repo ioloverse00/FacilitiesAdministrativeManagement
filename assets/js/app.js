@@ -202,6 +202,7 @@ function initComponentInteractions() {
     // C. Form Submission & Action Feedback
     const forms = document.querySelectorAll('form');
     forms.forEach(form => {
+        if (form.matches('[data-auth-form]')) return;
         form.addEventListener('submit', (e) => {
             e.preventDefault(); // Prevent page reload on static prototype
             const submitBtn = form.querySelector('button[type="submit"], input[type="submit"], .btn-primary');
@@ -215,7 +216,7 @@ function initComponentInteractions() {
                     submitBtn.style.backgroundColor = '#059669'; // Success green
                     submitBtn.style.borderColor = '#059669';
                     submitBtn.style.color = '#ffffff';
-                    submitBtn.innerHTML = '<span>✓ Success</span>';
+                    submitBtn.innerHTML = '<span>ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Success</span>';
                     
                     setTimeout(() => {
                         submitBtn.disabled = false;
@@ -457,11 +458,28 @@ function initAuthenticationPage() {
         });
     }
 
-    authForm.addEventListener('submit', (e) => {
+    authForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const currentParams = new URLSearchParams(window.location.search);
-        const selectedSubsystem = currentParams.get('subsystem') || 'client-management';
-
-        window.location.href = `mfa_otp_verification_card_standard.html?subsystem=${encodeURIComponent(selectedSubsystem)}`;
+        const submitBtn = authForm.querySelector('button[type="submit"]');
+        const errorBox = document.getElementById('auth-error');
+        if (errorBox) { errorBox.hidden = true; errorBox.textContent = ''; }
+        if (submitBtn) submitBtn.disabled = true;
+        try {
+            const formData = new FormData(authForm);
+            const response = await fetch('../api/auth/login.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: formData.get('username'), password: formData.get('password') })
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || payload?.success === false) throw new Error(payload?.message || 'Sign in failed.');
+            const currentParams = new URLSearchParams(window.location.search);
+            window.location.href = currentParams.get('next') || 'facility-requests.html';
+        } catch (error) {
+            if (errorBox) { errorBox.textContent = error.message || 'Sign in failed.'; errorBox.hidden = false; }
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
+        }
     });
 }

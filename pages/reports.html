@@ -1,0 +1,131 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Reports &amp; Analytics</title>
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/reports.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Reports & Analytics"
+    data-breadcrumb-title="Reports & Analytics"
+    data-active-nav="reports"
+    data-page-heading="Reports & Analytics"
+    data-page-description="Generate, review, and export operational reports across facilities and administrative services.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace reports-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>Reports &amp; Analytics</h1>
+                                <p>Generate, review, and export operational reports across facilities and administrative services.</p>
+                                <span id="reports-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="reports-refresh" class="fam-icon-button" type="button" aria-label="Refresh reports">
+                                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                                <button id="export-history" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                                    Export History
+                                </button>
+                                <button id="generate-report-main" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                                    Generate Report
+                                </button>
+                            </div>
+                        </header>
+                        <section class="facility-section" aria-labelledby="report-library-title">
+                            <div class="facility-table-card reports-library-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="report-library-title">Report Library</h2>
+                                        <p>Choose a report template, configure its parameters, and generate an output.</p>
+                                    </div>
+                                    <div class="facility-header-controls">
+                                        <label class="facility-field facility-search-field">
+                                            <span class="sr-only">Search</span>
+                                            <input id="report-search" type="search" placeholder="Search reports...">
+                                        </label>
+                                    </div>
+                                </div>
+                                <div id="report-categories" class="reports-tabs" role="tablist" aria-label="Report categories"></div>
+                                <div id="reports-loading-state" class="fam-state">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading report templates...</span>
+                                </div>
+                                <div id="report-library" class="reports-grid" aria-live="polite"></div>
+                                <div id="reports-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                            </div>
+                        </section>
+                        <section class="facility-section" aria-labelledby="recent-reports-title">
+                            <div class="facility-table-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="recent-reports-title">Recent Reports</h2>
+                                        <p id="recent-reports-count">Loading recent reports...</p>
+                                    </div>
+                                    <div class="facility-header-controls">
+                                        <label class="facility-field facility-search-field">
+                                            <span class="sr-only">Search recent reports</span>
+                                            <input id="recent-report-search" type="search" placeholder="Search recent reports...">
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table reports-history-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Report Name</th>
+                                                <th>Generated By</th>
+                                                <th data-column="generatedAt"></th>
+                                                <th data-column="format"></th>
+                                                <th data-column="status"></th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="recent-reports-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="recent-reports-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                            </div>
+                        </section>
+                        <section class="facility-section" aria-labelledby="insights-title">
+                            <div class="fam-section-heading">
+                                <div>
+                                    <h2 id="insights-title">Operational Insights</h2>
+                                    <p class="fam-muted">AI-assisted summaries based on current FAM activity. For review.</p>
+                                </div>
+                            </div>
+                            <div id="reports-insights" class="reports-insights-grid"></div>
+                        </section>
+                        <aside id="generate-report-drawer" class="facility-drawer-placeholder" aria-label="Generate report drawer placeholder" hidden>
+                            <div data-drawer-section="report-information"></div>
+                            <div data-drawer-section="date-parameters"></div>
+                            <div data-drawer-section="operational-filters"></div>
+                            <div data-drawer-section="output-options"></div>
+                            <div data-drawer-section="content-options"></div>
+                            <div data-drawer-section="delivery-options"></div>
+                            <div data-preview-section="report-preview"></div>
+                        </aside>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>
+
+

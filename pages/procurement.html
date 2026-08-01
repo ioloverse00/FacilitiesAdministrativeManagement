@@ -1,0 +1,126 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Procurement Requests</title>
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/procurement.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Procurement Requests"
+    data-breadcrumb-title="Procurement Requests"
+    data-active-nav="procurement"
+    data-page-heading="Procurement Requests"
+    data-page-description="Manage facility-related purchase requests, approvals, budgets, and Supply Chain coordination.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace procurement-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>Procurement Requests</h1>
+                                <p>Manage facility-related purchase requests, approvals, budgets, and Supply Chain coordination.</p>
+                                <span id="procurement-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="procurement-refresh" class="fam-icon-button" type="button" aria-label="Refresh procurement requests">
+                                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                                <button id="procurement-export" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                                    Export
+                                </button>
+                            </div>
+                        </header>
+
+                        <section class="facility-section" aria-labelledby="procurement-table-title">
+                            <div class="facility-table-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="procurement-table-title">Procurement Requests</h2>
+                                        <p id="procurement-table-count">Loading procurement request records...</p>
+                                    </div>
+                                    <div class="facility-header-controls">
+                                        <label class="facility-field facility-search-field">
+                                            <span class="sr-only">Search</span>
+                                            <input id="procurement-search" type="search" placeholder="Search procurement requests...">
+                                        </label>
+                                        <button id="procurement-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
+                                    </div>
+                                </div>
+                                <div id="procurement-loading-state" class="fam-state">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading procurement requests...</span>
+                                </div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table procurement-table">
+                                        <thead>
+                                            <tr>
+                                                <th><button type="button" class="facility-sort-button" data-sort="requestNo">Request No.</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="purpose">Purpose</button></th>
+                                                <th data-column="origin"></th>
+                                                <th data-column="priority"></th>
+                                                <th data-column="status"></th>
+                                                <th data-column="estimatedCost"></th>
+                                                <th data-column="requestedBy"></th>
+                                                <th data-column="submitted"></th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="procurement-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="procurement-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                                <div class="facility-pagination" aria-label="Procurement request pagination">
+                                    <button id="procurement-prev-page" class="facility-page-button" type="button">Previous</button>
+                                    <span id="procurement-page-status">Page 1 of 1</span>
+                                    <button id="procurement-next-page" class="facility-page-button" type="button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside id="procurement-details-drawer" class="facility-drawer-placeholder" aria-label="Procurement request details drawer placeholder" hidden>
+                            <div data-drawer-section="general-information"></div>
+                            <div data-drawer-section="requester"></div>
+                            <div data-drawer-section="origin"></div>
+                            <div data-drawer-section="requested-items"></div>
+                            <div data-drawer-section="financial-information"></div>
+                            <div data-drawer-section="approval"></div>
+                            <div data-drawer-section="supply-chain-coordination"></div>
+                            <div data-drawer-section="integration-issues"></div>
+                            <div data-drawer-section="documents"></div>
+                            <div data-drawer-section="activity"></div>
+                            <div data-drawer-field="request-number"></div>
+                            <div data-drawer-field="purpose"></div>
+                            <div data-drawer-field="justification"></div>
+                            <div data-drawer-field="priority"></div>
+                            <div data-drawer-field="status"></div>
+                            <div data-drawer-field="approval-status"></div>
+                            <div data-drawer-field="expected-delivery-date"></div>
+                            <div data-drawer-field="budget-code"></div>
+                            <div data-drawer-field="estimated-total"></div>
+                            <div data-drawer-field="purchase-order-reference"></div>
+                            <div data-drawer-field="external-status"></div>
+                            <div data-drawer-field="user-friendly-error-summary"></div>
+                        </aside>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>
+
+
+

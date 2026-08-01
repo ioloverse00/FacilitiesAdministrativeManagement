@@ -1,0 +1,146 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Asset Management</title>
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/assets.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Asset Management"
+    data-breadcrumb-title="Asset Management"
+    data-active-nav="assets"
+    data-page-heading="Asset Management"
+    data-page-description="Track facility assets, locations, custodians, condition, maintenance, and lifecycle.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace asset-management-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>Asset Management</h1>
+                                <p>Track facility assets, locations, custodians, condition, maintenance, and lifecycle.</p>
+                                <span id="asset-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="asset-refresh" class="fam-icon-button" type="button" aria-label="Refresh asset records">
+                                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                                <button id="asset-export" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                                    Export
+                                </button>
+                            </div>
+                        </header>
+
+                        <section class="facility-section" aria-labelledby="asset-table-title">
+                            <div class="facility-table-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="asset-table-title">Asset Inventory</h2>
+                                        <p id="asset-table-count">Loading asset records...</p>
+                                    </div>
+                                    <div class="facility-header-controls">
+                                        <label class="facility-field facility-search-field">
+                                            <span class="sr-only">Search</span>
+                                            <input id="asset-search" type="search" placeholder="Search assets...">
+                                        </label>
+                                        <button id="asset-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
+                                    </div>
+                                </div>
+                                <div id="asset-loading-state" class="fam-state">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading asset records...</span>
+                                </div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table asset-management-table">
+                                        <thead>
+                                            <tr>
+                                                <th><button type="button" class="facility-sort-button" data-sort="assetCode">Asset Code</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="assetName">Asset Name</button></th>
+                                                <th data-column="category"></th>
+                                                <th data-column="location"></th>
+                                                <th data-column="condition"></th>
+                                                <th data-column="lifecycle"></th>
+                                                <th data-column="custodian"></th>
+                                                <th data-column="nextMaintenance"></th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="asset-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="asset-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                                <div class="facility-pagination" aria-label="Asset inventory pagination">
+                                    <button id="asset-prev-page" class="facility-page-button" type="button">Previous</button>
+                                    <span id="asset-page-status">Page 1 of 1</span>
+                                    <button id="asset-next-page" class="facility-page-button" type="button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside id="asset-details-drawer" class="facility-drawer-placeholder" aria-label="Asset details drawer placeholder" hidden>
+                            <div data-drawer-section="general-information"></div>
+                            <div data-drawer-section="location-and-assignment"></div>
+                            <div data-drawer-section="condition-and-lifecycle"></div>
+                            <div data-drawer-section="acquisition"></div>
+                            <div data-drawer-section="warranty"></div>
+                            <div data-drawer-section="maintenance"></div>
+                            <div data-drawer-section="documents"></div>
+                            <div data-drawer-section="activity"></div>
+                            <div data-drawer-section="ai-recommendation"></div>
+                            <div data-drawer-field="asset-code"></div>
+                            <div data-drawer-field="property-number"></div>
+                            <div data-drawer-field="asset-name"></div>
+                            <div data-drawer-field="brand"></div>
+                            <div data-drawer-field="model"></div>
+                            <div data-drawer-field="serial-number"></div>
+                            <div data-drawer-field="qr-code"></div>
+                            <div data-drawer-field="building"></div>
+                            <div data-drawer-field="facility-space"></div>
+                            <div data-drawer-field="custodian"></div>
+                            <div data-drawer-field="department"></div>
+                            <div data-drawer-field="assignment-date"></div>
+                            <div data-drawer-field="current-condition"></div>
+                            <div data-drawer-field="lifecycle-status"></div>
+                            <div data-drawer-field="last-inspection"></div>
+                            <div data-drawer-field="supplier"></div>
+                            <div data-drawer-field="acquisition-date"></div>
+                            <div data-drawer-field="acquisition-cost"></div>
+                            <div data-drawer-field="currency"></div>
+                            <div data-drawer-field="useful-life"></div>
+                            <div data-drawer-field="warranty-start"></div>
+                            <div data-drawer-field="warranty-end"></div>
+                            <div data-drawer-field="warranty-status"></div>
+                            <div data-drawer-field="last-maintenance"></div>
+                            <div data-drawer-field="next-maintenance"></div>
+                            <div data-drawer-field="preventive-maintenance-plan"></div>
+                            <div data-drawer-field="active-work-orders"></div>
+                            <div data-ai-field="predicted-maintenance-need"></div>
+                            <div data-ai-field="suggested-inspection"></div>
+                            <div data-ai-field="potential-end-of-life-flag"></div>
+                            <div data-ai-field="confidence"></div>
+                            <div data-ai-field="explanation"></div>
+                            <div data-ai-field="review-status"></div>
+                        </aside>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>
+
+
+

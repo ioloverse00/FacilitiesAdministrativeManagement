@@ -7,3 +7,11 @@ Thumbs.db
 
 # Logs and debug
 *.log
+
+# Local environment secrets
+.env
+.env.local
+.env.*.local
+
+# Generated auth test artifacts
+scripts/auth-cookies.txt

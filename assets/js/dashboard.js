@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     const statusClassMap = {
         critical: 'fam-status-critical',
         warning: 'fam-status-warning',
@@ -52,42 +52,6 @@
     function formatUpdatedAt(value) {
         const date = value ? new Date(value) : new Date();
         return `Last updated: ${date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}, ${date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
-    }
-
-    function renderCreateMenu(actions) {
-        const menu = document.getElementById('create-request-menu');
-        if (!menu) return;
-        menu.innerHTML = (actions || []).map(action => `
-            <a href="${action.href}" role="menuitem" class="fam-create-menu-item">
-                <span class="material-symbols-outlined" aria-hidden="true">${action.icon}</span>
-                <span>${escapeHtml(action.label)}</span>
-            </a>
-        `).join('');
-    }
-
-    function initializeCreateMenu() {
-        const toggle = document.getElementById('create-request-toggle');
-        const menu = document.getElementById('create-request-menu');
-        if (!toggle || !menu) return;
-        toggle.addEventListener('click', event => {
-            event.stopPropagation();
-            const isOpen = !menu.classList.contains('hidden');
-            menu.classList.toggle('hidden', isOpen);
-            toggle.setAttribute('aria-expanded', String(!isOpen));
-        });
-        document.addEventListener('click', event => {
-            if (!menu.contains(event.target) && event.target !== toggle) {
-                menu.classList.add('hidden');
-                toggle.setAttribute('aria-expanded', 'false');
-            }
-        });
-        toggle.addEventListener('keydown', event => {
-            if (event.key === 'Escape') {
-                menu.classList.add('hidden');
-                toggle.setAttribute('aria-expanded', 'false');
-                toggle.focus();
-            }
-        });
     }
 
     function renderAlerts(alerts) {
@@ -185,7 +149,7 @@
                 <time>${escapeHtml(item.time)}</time>
                 <div>
                     <strong>${escapeHtml(item.activity)}</strong>
-                    <span>${escapeHtml(item.location)} · ${escapeHtml(item.module)}</span>
+                    <span>${escapeHtml(item.location)} Â· ${escapeHtml(item.module)}</span>
                 </div>
                 ${statusBadge(item.status)}
             </div>
@@ -224,7 +188,7 @@
                 <span class="fam-activity-icon material-symbols-outlined" aria-hidden="true">${iconMap[item.module] || 'notifications'}</span>
                 <div>
                     <strong>${escapeHtml(item.activity)}</strong>
-                    <span>${escapeHtml(item.module)} · ${escapeHtml(item.by)} · ${escapeHtml(item.time)}</span>
+                    <span>${escapeHtml(item.module)} Â· ${escapeHtml(item.by)} Â· ${escapeHtml(item.time)}</span>
                 </div>
                 ${item.status ? statusBadge(item.status) : ''}
             </div>
@@ -238,7 +202,6 @@
         try {
             const data = await service.getDashboardPayload();
             document.getElementById('dashboard-last-updated').textContent = formatUpdatedAt(data.generatedAt);
-            renderCreateMenu(data.requestActions);
             renderAlerts(data.alerts);
             renderKpis(data.kpis);
             renderCharts(data);
@@ -255,12 +218,14 @@
     }
 
     document.addEventListener('fam:layout-ready', () => {
-        initializeCreateMenu();
         initializeDashboard();
         document.getElementById('dashboard-refresh')?.addEventListener('click', initializeDashboard);
+        window.addEventListener('fam:themechange', initializeDashboard);
         window.addEventListener('resize', () => Object.values(window.FAMDashboardCharts?.chartInstances || {}).forEach(chart => chart?.resize()));
         document.getElementById('desktop-sidebar-toggle')?.addEventListener('click', () => {
             window.setTimeout(() => Object.values(window.FAMDashboardCharts?.chartInstances || {}).forEach(chart => chart?.resize()), 320);
         });
     });
 })();
+
+

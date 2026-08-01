@@ -1,0 +1,200 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Room Reservations</title>
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/api-client.js" defer></script>
+    <script src="../assets/js/room-reservations.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Room Reservations"
+    data-breadcrumb-title="Room Reservations"
+    data-active-nav="room-reservations"
+    data-page-heading="Room Reservations"
+    data-page-description="Manage facility bookings, room availability, approvals, participants, and schedules.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace reservation-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>Room Reservations</h1>
+                                <p>Manage facility bookings, room availability, approvals, participants, and schedules.</p>
+                                <span id="reservation-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="reservation-refresh" class="fam-icon-button" type="button" aria-label="Refresh room reservations">
+                                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                                <button id="reservation-export" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                                    Export
+                                </button>
+                            </div>
+                        </header>
+
+                        <section class="facility-section reservation-calendar-section" aria-labelledby="reservation-calendar-title">
+                            <div class="reservation-calendar-toolbar" aria-label="Reservation calendar controls">
+                                <div class="reservation-calendar-navigation">
+                                    <button id="reservation-today" class="facility-page-button" type="button">Today</button>
+                                    <button id="reservation-prev-period" class="fam-icon-button" type="button" aria-label="Previous calendar period">
+                                        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                                    </button>
+                                    <button id="reservation-next-period" class="fam-icon-button" type="button" aria-label="Next calendar period">
+                                        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                    </button>
+                                    <h2 id="reservation-calendar-title">Loading schedule...</h2>
+                                </div>
+                                <div class="reservation-toolbar-controls">
+                                    <div class="reservation-view-toggle" role="group" aria-label="Calendar view">
+                                        <button id="reservation-month-view" class="active" type="button" data-calendar-view="month" aria-pressed="true">Month</button>
+                                        <button id="reservation-week-view" type="button" data-calendar-view="week" aria-pressed="false">Week</button>
+                                        <button id="reservation-day-view" type="button" data-calendar-view="day" aria-pressed="false">Day</button>
+                                    </div>
+                                    <label class="facility-field reservation-filter-field">
+                                        <span class="sr-only">Filter by room</span>
+                                        <select id="reservation-room-filter">
+                                            <option value="all">All rooms</option>
+                                        </select>
+                                    </label>
+                                    <label class="facility-field reservation-filter-field">
+                                        <span class="sr-only">Filter by status</span>
+                                        <select id="reservation-status-filter">
+                                            <option value="all">All statuses</option>
+                                        </select>
+                                    </label>
+                                    <button id="reservation-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
+                                </div>
+                            </div>
+                            <div class="reservation-calendar-card">
+                                <div id="reservation-calendar-loading" class="fam-state reservation-calendar-overlay" aria-live="polite">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading reservation calendar...</span>
+                                </div>
+                                <div id="reservation-calendar-panel" class="reservation-calendar" aria-live="polite"></div>
+                                <div id="reservation-calendar-message" class="reservation-calendar-message" aria-live="polite"></div>
+                            </div>
+                        </section>
+
+                        <section class="facility-section reservation-operations-section" aria-labelledby="reservation-operations-title">
+                            <div class="fam-section-heading">
+                                <div>
+                                    <h2 id="reservation-operations-title">Operational Focus</h2>
+                                    <p class="fam-muted">Today, upcoming bookings, and approval-sensitive reservations.</p>
+                                </div>
+                            </div>
+                            <div class="reservation-focus-grid">
+                                <article class="reservation-focus-panel">
+                                    <h3>Today's Reservations</h3>
+                                    <div id="reservation-today-list" class="reservation-focus-list" aria-live="polite"></div>
+                                </article>
+                                <article class="reservation-focus-panel">
+                                    <h3>Upcoming Reservations</h3>
+                                    <div id="reservation-upcoming-list" class="reservation-focus-list" aria-live="polite"></div>
+                                </article>
+                                <article class="reservation-focus-panel">
+                                    <h3>Pending Approval</h3>
+                                    <div id="reservation-pending-list" class="reservation-focus-list" aria-live="polite"></div>
+                                </article>
+                            </div>
+                        </section>
+
+                        <section class="facility-section" aria-labelledby="reservation-table-title">
+                            <div class="facility-table-card reservation-list-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="reservation-table-title">Reservation List</h2>
+                                        <p id="reservation-table-count">Loading reservation records...</p>
+                                    </div>
+                                    <div class="facility-header-controls">
+                                        <label class="facility-field facility-search-field">
+                                            <span class="sr-only">Search reservations</span>
+                                            <input id="reservation-search" type="search" placeholder="Search reservations...">
+                                        </label>
+                                    </div>
+                                </div>
+                                <div id="reservation-loading-state" class="fam-state" aria-live="polite">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading reservation list...</span>
+                                </div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table reservation-table">
+                                        <thead>
+                                            <tr>
+                                                <th><button type="button" class="facility-sort-button" data-sort="reservation_number">Reservation No.</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="purpose">Purpose</button></th>
+                                                <th>Room</th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="start_datetime">Start</button></th>
+                                                <th>End</th>
+                                                <th>Requester</th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="approval_status">Approval</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="status">Status</button></th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="reservation-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="reservation-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                                <div class="facility-pagination" aria-label="Reservation pagination">
+                                    <button id="reservation-prev-page" class="facility-page-button" type="button">Previous</button>
+                                    <span id="reservation-page-status">Page 1 of 1</span>
+                                    <button id="reservation-next-page" class="facility-page-button" type="button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside id="reservation-details-drawer" class="facility-drawer-placeholder" aria-label="Reservation details drawer placeholder" hidden>
+                            <div data-drawer-section="general-information"></div>
+                            <div data-drawer-section="schedule"></div>
+                            <div data-drawer-section="room-information"></div>
+                            <div data-drawer-section="requester"></div>
+                            <div data-drawer-section="participants"></div>
+                            <div data-drawer-section="requirements"></div>
+                            <div data-drawer-section="approval"></div>
+                            <div data-drawer-section="attachments"></div>
+                            <div data-drawer-section="attendance"></div>
+                            <div data-drawer-section="activity"></div>
+                            <div data-drawer-field="reservation-number"></div>
+                            <div data-drawer-field="purpose"></div>
+                            <div data-drawer-field="reservation-type"></div>
+                            <div data-drawer-field="status"></div>
+                            <div data-drawer-field="approval-status"></div>
+                            <div data-drawer-field="start"></div>
+                            <div data-drawer-field="end"></div>
+                            <div data-drawer-field="setup-buffer"></div>
+                            <div data-drawer-field="cleanup-buffer"></div>
+                            <div data-drawer-field="duration"></div>
+                            <div data-drawer-field="building"></div>
+                            <div data-drawer-field="floor"></div>
+                            <div data-drawer-field="facility-space"></div>
+                            <div data-drawer-field="capacity"></div>
+                            <div data-drawer-field="amenities"></div>
+                            <div data-drawer-field="availability"></div>
+                            <div data-drawer-field="conflict-details"></div>
+                            <div data-drawer-field="participant-list"></div>
+                            <div data-drawer-field="approval-timeline"></div>
+                            <div data-drawer-field="reservation-history"></div>
+                        </aside>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>
+
+
+

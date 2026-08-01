@@ -1,4 +1,4 @@
-const SUBSYSTEMS = [
+﻿const SUBSYSTEMS = [
     {
         id: 'client-management',
         title: 'Client Management',
@@ -341,3 +341,5 @@ function getSubsystemFromUrl() {
     const params = new URLSearchParams(window.location.search);
     return params.get('subsystem');
 }
+
+
