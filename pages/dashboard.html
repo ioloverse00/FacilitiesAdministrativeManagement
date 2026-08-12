@@ -12,6 +12,7 @@
     <script src="../assets/js/profile-dropdown.js" defer></script>
     <script src="../assets/js/modal.js" defer></script>
     <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/table-audit.js" defer></script>
     <script src="../assets/vendor/chartjs/chart.umd.min.js" defer></script>
     <script src="../assets/js/dashboard-service.js" defer></script>
     <script src="../assets/js/dashboard-charts.js" defer></script>
@@ -22,7 +23,7 @@
     data-breadcrumb-title="Dashboard"
     data-active-nav="dashboard"
     data-page-heading="Facilities & Administrative Dashboard"
-    data-page-description="Overview of facility operations, maintenance, assets, reservations, procurement, and administrative activity.">
+    data-page-description="Overview of official FAM modules, compliance activity, reports, and shared administration.">
     <div id="app-shell" class="app-shell">
         <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
         <div class="app-main-panel">
@@ -33,7 +34,7 @@
                         <header class="fam-page-header">
                             <div class="fam-title-block">
                                 <h1 id="dashboard-heading">Facilities &amp; Administrative Dashboard</h1>
-                                <p id="dashboard-copy">Overview of facility operations, maintenance, assets, reservations, procurement, and administrative activity.</p>
+                                <p id="dashboard-copy">Overview of official FAM modules, compliance activity, reports, and shared administration.</p>
                                 <span id="dashboard-last-updated" class="fam-last-updated">Last updated: Loading...</span>
                             </div>
                             <div class="fam-header-actions">
@@ -92,7 +93,16 @@
                                 </div>
                                 <div class="fam-card fam-table-card">
                                     <div class="fam-table-scroll">
-                                        <table>
+                                        <table class="dashboard-pending-table">
+                                            <colgroup>
+                                                <col class="table-col-reference">
+                                                <col class="table-col-subject">
+                                                <col class="table-col-category">
+                                                <col class="table-col-priority">
+                                                <col class="table-col-datetime">
+                                                <col class="table-col-status">
+                                                <col class="table-col-actions">
+                                            </colgroup>
                                             <thead>
                                                 <tr>
                                                     <th scope="col">Reference</th>
@@ -112,7 +122,7 @@
                             <section class="fam-section" aria-labelledby="schedule-title">
                                 <div class="fam-section-heading">
                                     <h2 id="schedule-title">Today's Schedule</h2>
-                                    <a class="fam-link" href="../pages/room-reservations.html">View Full Schedule</a>
+                                    <a class="fam-link" href="../pages/room-reservations.html">View Facilities Schedule</a>
                                 </div>
                                 <div id="today-schedule" class="fam-card fam-timeline" data-state-container aria-live="polite"></div>
                             </section>

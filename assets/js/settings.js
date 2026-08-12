@@ -46,7 +46,7 @@
         ['Liza Mendoza', 'EMP-0205', 'Training', 'Asset Custodian', 'Suspended', 'Jul 19, 2026 1:15 PM']
     ];
     const roles = ['System Administrator', 'FAM Administrator', 'Facility Manager', 'Maintenance Supervisor', 'Technician', 'Asset Custodian', 'Reservation Officer', 'Procurement Officer', 'Records Officer', 'Requestor', 'Approver', 'Auditor'];
-    const modules = ['Dashboard', 'Facility Requests', 'Maintenance', 'Assets', 'Reservations', 'Procurement', 'Records', 'Reports', 'Administration'];
+    const modules = ['Dashboard', 'Facilities Reservation', 'Visitor Management', 'Document Management', 'Records Retention & Compliance', 'Reports', 'Administration'];
     const perms = ['View', 'Create', 'Edit', 'Assign', 'Approve', 'Complete', 'Verify', 'Export', 'Manage', 'Delete'];
 
     function formatUpdatedAt() {
@@ -215,10 +215,10 @@
     const panels = {
         general() {
             return `${sectionHeader('General Settings', 'Configure basic operational preferences for the FAM subsystem.')}
-                ${sectionGroup('General Information', `<div class="admin-form-grid">${field('System Display Name', 'Facilities & Administrative Management')}${field('Organization Name', 'Agency Name')}${field('Organization Logo', 'Logo placeholder')}</div>`)}
+                ${sectionGroup('General Information', `<div class="admin-form-grid">${field('System Display Name', 'Facilities & Administrative Management')}${field('Organization Name', 'Moses Group of Companies')}${field('Organization Logo', 'Logo placeholder')}</div>`)}
                 ${sectionGroup('Timezone & Localization', `<div class="admin-form-grid">${selectField('Default Timezone', 'Asia/Manila', ['Asia/Manila', 'UTC', 'Asia/Singapore'])}${selectField('Default Language', 'English', ['English', 'Filipino'])}${selectField('Date Format', 'MMM DD, YYYY', ['MMM DD, YYYY', 'YYYY-MM-DD', 'DD/MM/YYYY'])}${selectField('Time Format', '12-hour', ['12-hour', '24-hour'])}${selectField('Currency', 'PHP', ['PHP', 'USD'])}${selectField('Fiscal Year Start', 'January', ['January', 'April', 'July', 'October'])}</div>`)}
                 ${sectionGroup('Business Hours', `<div class="admin-form-grid">${field('Working Days', 'Monday to Friday')}${field('Business Hours Start', '8:00 AM')}${field('Business Hours End', '5:00 PM')}</div>`)}
-                ${sectionGroup('System Defaults', `<div class="admin-form-grid">${selectField('Default Landing Page', 'Dashboard', ['Dashboard', 'Facility Requests', 'Reports & Analytics'])}</div>`)}`;
+                ${sectionGroup('System Defaults', `<div class="admin-form-grid">${selectField('Default Landing Page', 'Dashboard', ['Dashboard', 'Reports & Analytics'])}</div>`)}`;
         },
         organization() {
             return `${sectionHeader('Organization & Facilities', 'Manage operational reference lists for departments, buildings, spaces, room types, and amenities.')}
@@ -321,9 +321,9 @@
         window.FAMModal?.showToast('Settings saved successfully.');
     }
 
-    function resetSettings() {
+    async function resetSettings() {
         if (!state.dirty) return;
-        if (!window.confirm('Discard unsaved changes?')) return;
+        if (!await window.FAMModal.confirm('Discard unsaved changes?', { title: 'Discard Changes', confirmLabel: 'Discard' })) return;
         setDirty(false);
         renderPanel();
         window.FAMModal?.showToast('Unsaved changes discarded.');
@@ -458,7 +458,7 @@
                 renderPanel();
             }
         });
-        document.getElementById('admin-panel-card')?.addEventListener('click', event => {
+        document.getElementById('admin-panel-card')?.addEventListener('click', async event => {
             const orgTab = event.target.closest('[data-org-tab]');
             if (orgTab) {
                 state.organizationTab = orgTab.dataset.orgTab;
@@ -499,7 +499,7 @@
                 return;
             }
             if (event.target.closest('[data-org-deactivate]')) {
-                if (window.confirm('Deactivate this record?')) {
+                if (await window.FAMModal.confirm('Deactivate this record?', { title: 'Deactivate Record', confirmLabel: 'Deactivate' })) {
                     orgModal.values.status = 'Inactive';
                     orgModal.dirty = true;
                     renderPanel();

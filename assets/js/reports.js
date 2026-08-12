@@ -3,6 +3,14 @@
     const title = value => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     const total = rows => (rows || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
     const list = (heading, rows) => `<article class="report-card"><div class="report-card-body"><h3>${esc(heading)}</h3>${rows?.length ? `<p>${rows.map(r => `${esc(title(r.label))}: ${esc(r.value)}`).join('<br>')}</p>` : '<p>No operational data available.</p>'}</div></article>`;
+    function renderHistoryHeaders() {
+        const labels = { generatedAt: 'Generated At', format: 'Format', status: 'Status' };
+        Object.entries(labels).forEach(([key, label]) => {
+            const th = document.querySelector(`.reports-history-table [data-column="${key}"]`);
+            if (th) th.innerHTML = `<span class="facility-column-label">${esc(label)}</span>`;
+        });
+        window.FAMTableAudit?.check(document.querySelector('.reports-history-table'), 'reports-history-table');
+    }
     function renderEmpty() {
         document.getElementById('reports-empty-state')?.classList.remove('hidden');
         document.getElementById('reports-empty-state').innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">bar_chart</span><strong>No operational data is available for the selected period.</strong><span>Reports will populate from live database records only.</span>';
@@ -22,6 +30,7 @@
                 list('Records by Status', o.recordsByStatus), list('SLA Overview', o.sla)
             ].join('');
             document.getElementById('recent-reports-table').innerHTML = '';
+            renderHistoryHeaders();
             document.getElementById('recent-reports-count').textContent = 'No generated report files';
             document.getElementById('recent-reports-empty-state').classList.remove('hidden');
             document.getElementById('recent-reports-empty-state').innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">history</span><strong>No generated reports found.</strong><span>Report file generation is deferred to a later workflow.</span>';

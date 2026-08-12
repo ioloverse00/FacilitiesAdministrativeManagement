@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Employee Portal Home</title>
+    <script src="../../assets/js/theme.js"></script>
+    <link href="../../assets/css/app.css" rel="stylesheet">
+    <script src="../../assets/js/api-client.js" defer></script>
+    <script src="../../assets/js/navigation.js" defer></script>
+    <script src="../../assets/js/sidebar.js" defer></script>
+    <script src="../../assets/js/profile-dropdown.js" defer></script>
+    <script src="../../assets/js/modal.js" defer></script>
+    <script src="../../assets/js/employee/portal.js" defer></script>
+    <script src="../../assets/js/employee/dashboard.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body employee-portal-body"
+    data-page-title="Employee Portal Home"
+    data-active-nav="employee-dashboard"
+    data-page-heading="Home"
+    data-page-description="Your requests, reservations, and updates.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content employee-workspace">
+                    <div class="employee-shell">
+                        <header class="employee-page-header">
+                            <div>
+                                <p class="employee-eyebrow">Employee Portal</p>
+                                <h1>Welcome back, <span id="employee-welcome-name">Employee</span></h1>
+                                <p><strong id="employee-welcome-department">Loading...</strong></p>
+                            </div>
+                            <div class="employee-header-actions">
+                                <a class="btn-primary dashboard-action-button" href="facility-requests.html"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Submit Facility Request</a>
+                                <a class="btn-secondary dashboard-action-button" href="room-reservations.html"><span class="material-symbols-outlined" aria-hidden="true">event</span>Request Room</a>
+                            </div>
+                        </header>
+
+                        <section class="employee-home-grid" aria-label="Personal work status">
+                            <div class="employee-home-panel" aria-labelledby="employee-attention-title">
+                                <div class="fam-section-heading employee-section-heading">
+                                    <h2 id="employee-attention-title">Needs Attention</h2>
+                                    <p>Items that may need action soon.</p>
+                                </div>
+                                <div id="employee-attention-list" class="employee-attention-list" aria-live="polite"></div>
+                            </div>
+                            <div class="employee-home-panel" aria-labelledby="employee-next-title">
+                                <div class="fam-section-heading employee-section-heading">
+                                    <h2 id="employee-next-title">Upcoming</h2>
+                                    <p>Your nearest room reservation.</p>
+                                </div>
+                                <div id="employee-next-up" class="employee-next-up" aria-live="polite"></div>
+                            </div>
+                        </section>
+
+                        <section class="fam-section" aria-labelledby="employee-summary-title">
+                            <div class="fam-section-heading employee-section-heading">
+                                <h2 id="employee-summary-title">My Overview</h2>
+                            </div>
+                            <div id="employee-summary-cards" class="employee-summary-grid" aria-live="polite"></div>
+                        </section>
+
+                        <section class="fam-section" aria-labelledby="employee-activity-title">
+                            <div class="fam-section-heading employee-section-heading">
+                                <h2 id="employee-activity-title">Recent Activity</h2>
+                            </div>
+                            <div id="employee-recent-activity" class="fam-card employee-activity-card" aria-live="polite"></div>
+                        </section>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

@@ -51,10 +51,9 @@
             announceLogoutError('Unable to log out. Please try again.');
         }
     }
-    const notificationSeed = [];
-
     const typeMeta = {
         facility: { icon: 'domain', label: 'Facility Requests' },
+        facility_requests: { icon: 'domain', label: 'Facility Requests' },
         maintenance: { icon: 'build', label: 'Maintenance' },
         assets: { icon: 'inventory_2', label: 'Assets' },
         reservation: { icon: 'calendar_month', label: 'Reservations' },
@@ -63,6 +62,35 @@
         reports: { icon: 'bar_chart', label: 'Reports' },
         ai: { icon: 'auto_awesome', label: 'AI' },
         system: { icon: 'settings', label: 'System' }
+    };
+
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    const appBasePath = () => {
+        const marker = '/pages/';
+        const path = window.location.pathname;
+        const index = path.indexOf(marker);
+        if (index >= 0) return path.slice(0, index + 1);
+        return path.endsWith('/') ? path : path.replace(/[^/]*$/, '');
+    };
+    const notificationApi = path => `${appBasePath()}api/notifications/${path}`;
+    const isEmployeePortal = () => window.location.pathname.includes('/pages/employee/');
+    const fmtTime = value => {
+        if (!value) return 'Just now';
+        const date = new Date(String(value).replace(' ', 'T'));
+        if (Number.isNaN(date.getTime())) return String(value);
+        return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    };
+    const notificationHref = item => {
+        const url = String(item.action_url || '').trim();
+        if (/^https?:\/\//i.test(url) || url.startsWith('/')) return url;
+        if (isEmployeePortal() && item.module_code === 'FACILITY_REQUESTS' && item.related_entity_id) {
+            return `facility-requests.html?request=${encodeURIComponent(item.related_entity_id)}`;
+        }
+        if (isEmployeePortal() && item.module_code === 'RESERVATIONS' && item.related_entity_id) {
+            return `room-reservations.html?reservation=${encodeURIComponent(item.related_entity_id)}`;
+        }
+        if (url.startsWith('pages/')) return `${appBasePath()}${url}`;
+        return url || '#';
     };
 
 
@@ -168,32 +196,79 @@
         const markAll = document.getElementById('notification-mark-all-read');
         const tabs = Array.from(document.querySelectorAll('[data-notification-filter]'));
 
-        if (!toggle || !panel || !list || toggle.dataset.initialized === 'true') return;
+        if (!toggle || toggle.dataset.initialized === 'true') return;
         toggle.dataset.initialized = 'true';
 
         let isOpen = false;
         let filter = 'all';
-        const notifications = notificationSeed.map(item => ({ ...item }));
+        let notifications = [];
+        let unread = 0;
+        let loading = false;
+        let pollingTimer = null;
 
-        const unreadCount = () => notifications.filter(item => item.unread).length;
+        const unreadCount = () => unread;
 
         const updateCount = () => {
             const count = unreadCount();
             const label = count > 99 ? '99+' : String(count);
-            countBadge.textContent = label;
-            countBadge.classList.toggle('hidden', count === 0);
-            summary.textContent = `${count} unread`;
+            if (countBadge) {
+                countBadge.textContent = label;
+                countBadge.classList.toggle('hidden', count === 0);
+            }
+            if (summary) summary.textContent = `${count} unread`;
             toggle.setAttribute('aria-label', count ? `Open notifications, ${label} unread` : 'Open notifications');
         };
 
         const filteredItems = () => notifications.filter(item => {
-            if (filter === 'unread') return item.unread;
-            if (filter === 'mentions') return false;
-            if (filter === 'system') return item.type === 'system';
+            if (filter === 'unread') return !item.is_read;
+            if (filter === 'read') return item.is_read;
+            if (filter === 'system') return item.module_code === 'SYSTEM';
             return true;
         });
 
+        const loadNotifications = async (quiet = false) => {
+            if (loading || !window.FAMApi) return;
+            loading = true;
+            if (!quiet && list) renderLoading();
+            try {
+                const payload = await window.FAMApi.request(notificationApi('index.php?per_page=8'), { skipAuthRedirect: true });
+                notifications = payload.data?.items || [];
+                unread = Number(payload.data?.unread_count || 0);
+                updateCount();
+                if (list) render();
+            } catch (error) {
+                if (list && !quiet) {
+                    list.innerHTML = `<div class="notification-empty-state"><span class="material-symbols-outlined" aria-hidden="true">notifications_off</span><strong>Notifications unavailable.</strong><p>${esc(error.message || 'Please try again.')}</p></div>`;
+                }
+            } finally {
+                loading = false;
+            }
+        };
+
+        const markRead = async id => {
+            const item = notifications.find(entry => String(entry.id) === String(id));
+            if (item && !item.is_read) {
+                item.is_read = true;
+                unread = Math.max(0, unread - 1);
+                updateCount();
+                if (list) render();
+            }
+            try {
+                await window.FAMApi.request(notificationApi(`mark-read.php?id=${encodeURIComponent(id)}`), { method: 'POST', body: {} });
+            } catch {
+                await loadNotifications(true);
+            }
+        };
+
+        const startPolling = () => {
+            if (pollingTimer) return;
+            pollingTimer = setInterval(() => {
+                if (document.visibilityState === 'visible') loadNotifications(true);
+            }, 45000);
+        };
+
         const renderLoading = () => {
+            if (!list) return;
             list.innerHTML = Array.from({ length: 3 }).map(() => `
                 <div class="notification-skeleton-card" aria-hidden="true">
                     <span></span><div><span></span><span></span></div>
@@ -223,32 +298,42 @@
             }
 
             list.innerHTML = items.map(item => {
-                const meta = typeMeta[item.type] || typeMeta.system;
+                const module = String(item.module_code || '').toLowerCase();
+                const meta = typeMeta[module] || typeMeta.system;
+                const href = notificationHref(item);
                 return `
-                    <article class="notification-card ${item.unread ? 'unread' : 'read'}" data-notification-id="${item.id}" data-module="${item.type}" data-priority="${item.priority}" data-period="${item.time.includes('Yesterday') || item.time.includes('days') ? 'this-week' : 'today'}">
-                        <a href="${item.href}" class="notification-card-main" data-notification-open="${item.id}">
+                    <article class="notification-card ${item.is_read ? 'read' : 'unread'}" data-notification-id="${esc(item.id)}" data-module="${esc(module)}" data-priority="${esc(item.priority || 'NORMAL')}">
+                        <a href="${esc(href)}" class="notification-card-main" data-notification-open="${esc(item.id)}">
                             <span class="notification-type-icon material-symbols-outlined" aria-hidden="true">${meta.icon}</span>
                             <span class="notification-card-copy">
-                                <span class="notification-card-title">${item.title}</span>
-                                <span class="notification-card-message">${item.message}</span>
+                                <span class="notification-card-title">${esc(item.title)}</span>
+                                <span class="notification-card-message">${esc(item.message)}</span>
                                 <span class="notification-card-meta">
-                                    <span>${item.time}</span>
+                                    <span>${esc(fmtTime(item.created_at))}</span>
                                     <span>${meta.label}</span>
-                                    ${item.badge ? `<span class="notification-card-badge">${item.badge}</span>` : ''}
+                                    ${item.related_reference ? `<span class="notification-card-badge">${esc(item.related_reference)}</span>` : ''}
                                 </span>
                             </span>
                             <span class="notification-unread-dot" aria-hidden="true"></span>
                             <span class="material-symbols-outlined notification-chevron" aria-hidden="true">chevron_right</span>
                         </a>
                         <div class="notification-card-actions" aria-label="Notification actions">
-                            <button type="button" data-notification-read="${item.id}">${item.unread ? 'Mark as Read' : 'Read'}</button>
-                            <a href="${item.href}" data-notification-open="${item.id}">Open</a>
-                            <button type="button" data-notification-dismiss="${item.id}">Dismiss</button>
+                            <button type="button" data-notification-read="${esc(item.id)}">${item.is_read ? 'Read' : 'Mark as Read'}</button>
+                            <a href="${esc(href)}" data-notification-open="${esc(item.id)}">Open</a>
                         </div>
                     </article>
                 `;
             }).join('');
         };
+
+        if (!panel || !list) {
+            loadNotifications(true);
+            startPolling();
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') loadNotifications(true);
+            });
+            return;
+        }
 
         const openPanel = () => {
             isOpen = true;
@@ -256,7 +341,7 @@
             panel.classList.remove('hidden', 'opacity-0', 'scale-95');
             panel.classList.add('block', 'opacity-100', 'scale-100');
             toggle.setAttribute('aria-expanded', 'true');
-            render();
+            loadNotifications(true);
         };
 
         const closePanel = () => {
@@ -285,33 +370,27 @@
         });
 
         markAll?.addEventListener('click', () => {
-            notifications.forEach(item => { item.unread = false; });
+            notifications.forEach(item => { item.is_read = true; });
+            unread = 0;
             render();
+            window.FAMApi.request(notificationApi('mark-all-read.php'), { method: 'POST', body: {} }).catch(() => loadNotifications(true));
         });
 
         list.addEventListener('click', event => {
             const readId = event.target.closest('[data-notification-read]')?.dataset.notificationRead;
-            const dismissId = event.target.closest('[data-notification-dismiss]')?.dataset.notificationDismiss;
             const openId = event.target.closest('[data-notification-open]')?.dataset.notificationOpen;
 
             if (readId) {
                 event.preventDefault();
-                const item = notifications.find(entry => entry.id === readId);
-                if (item) item.unread = false;
-                render();
-            }
-
-            if (dismissId) {
-                event.preventDefault();
-                const index = notifications.findIndex(entry => entry.id === dismissId);
-                if (index >= 0) notifications.splice(index, 1);
-                render();
+                markRead(readId);
             }
 
             if (openId) {
-                const item = notifications.find(entry => entry.id === openId);
-                if (item) item.unread = false;
-                updateCount();
+                event.preventDefault();
+                const href = event.target.closest('[data-notification-open]')?.getAttribute('href') || '#';
+                markRead(openId).finally(() => {
+                    if (href && href !== '#') window.location.href = href;
+                });
             }
         });
 
@@ -339,7 +418,11 @@
             }
         });
 
-        render();
+        loadNotifications();
+        startPolling();
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') loadNotifications(true);
+        });
     }
 
     window.FAMProfileDropdown = {

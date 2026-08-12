@@ -10,6 +10,18 @@
     const fmtTime = value => { const d = value instanceof Date ? value : toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'Time unavailable'; };
     const fmtDateTime = value => { const d = toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not applicable'; };
     const badge = value => `<span class="facility-badge facility-status-${String(value || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${esc(title(value || 'Not applicable'))}</span>`;
+    function reservationQueueStatus(event) {
+        const status = String(event.status || '').toUpperCase();
+        const approval = String(event.approval || '').toUpperCase();
+        if (status === 'CHECKED_IN') return 'CHECKED_IN';
+        if (status === 'COMPLETED') return 'CHECKED_OUT';
+        if (status === 'REJECTED' || approval === 'REJECTED') return 'REJECTED';
+        if (status === 'CANCELLED' || approval === 'CANCELLED') return 'CANCELLED';
+        if (status === 'SUBMITTED' || approval === 'PENDING') return 'PENDING';
+        if (status === 'APPROVED' || approval === 'APPROVED') return 'APPROVED';
+        return status || approval || 'Not applicable';
+    }
+    const trunc = (value, className = 'table-cell-truncate') => `<span class="${className}" title="${esc(value || 'Not applicable')}">${esc(value || 'Not applicable')}</span>`;
 
     function range() {
         const a = new Date(state.anchor);
@@ -53,20 +65,20 @@
     }
 
     function tone(event) {
-        const value = String(event.approval || event.status || '').toLowerCase();
+        const value = `${event.approval || ''} ${event.status || ''}`.toLowerCase();
         if (value.includes('reject')) return 'danger';
         if (value.includes('cancel')) return 'muted';
-        if (value.includes('pending')) return 'warning';
+        if (value.includes('pending') || value.includes('submit')) return 'warning';
         if (value.includes('check') || value.includes('active')) return 'info';
-        if (value.includes('complete')) return 'neutral';
+        if (value.includes('complete')) return 'info';
         if (value.includes('approve')) return 'success';
         return 'info';
     }
 
-    function eventButton(event, compact = false) {
+    function eventButton(event) {
         const time = fmtTime(event.start), room = event.room || 'Room unavailable', purpose = event.purpose || event.reservationNo || 'Reservation';
         const label = `${time} ${room} ${purpose} ${title(event.status)} ${title(event.approval)}`;
-        return `<button class="reservation-event reservation-event-${tone(event)}" type="button" data-reservation-id="${esc(event.id)}" aria-label="${esc(label)}" title="${esc(label)}"><span class="reservation-event-time">${esc(time)}</span><strong>${esc(compact ? room : purpose)}</strong><span>${esc(compact ? purpose : room)}</span></button>`;
+        return `<button class="reservation-event reservation-event-${tone(event)}" type="button" data-reservation-id="${esc(event.id)}" aria-label="${esc(label)}" title="${esc(label)}"><span class="reservation-event-time">${esc(time)}</span><strong>${esc(room)}</strong><span>${esc(purpose)}</span></button>`;
     }
 
     function days(start, end) {
@@ -77,8 +89,11 @@
 
     function renderCalendar() {
         const panel = qs('reservation-calendar-panel'), r = range(), grouped = new Map();
+        const visible = state.status === 'all'
+            ? state.events.filter(event => ['SUBMITTED','APPROVED','CHECKED_IN','COMPLETED'].includes(String(event.status || '').toUpperCase()))
+            : state.events;
         renderToolbar();
-        state.events.forEach(event => {
+        visible.forEach(event => {
             const start = toDate(event.start);
             if (!start) return;
             const key = isoDate(start);
@@ -89,7 +104,7 @@
             panel.innerHTML = '<div class="reservation-calendar-weekdays">' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day => `<span>${day}</span>`).join('') + '</div>' +
                 `<div class="reservation-month-grid">${days(r.start, r.end).map(day => {
                     const items = grouped.get(isoDate(day)) || [];
-                    return `<section class="reservation-day-cell ${day.getMonth() !== state.anchor.getMonth() ? 'muted' : ''} ${sameDay(day, new Date()) ? 'today' : ''}" aria-label="${esc(day.toLocaleDateString())}"><div class="reservation-day-number">${day.getDate()}</div><div class="reservation-day-events">${items.slice(0, 3).map(item => eventButton(item, true)).join('')}${items.length > 3 ? `<span class="reservation-more-events">${items.length - 3} more</span>` : ''}</div></section>`;
+                    return `<section class="reservation-day-cell ${day.getMonth() !== state.anchor.getMonth() ? 'muted' : ''} ${sameDay(day, new Date()) ? 'today' : ''}" aria-label="${esc(day.toLocaleDateString())}"><div class="reservation-day-number">${day.getDate()}</div><div class="reservation-day-events">${items.slice(0, 3).map(item => eventButton(item)).join('')}${items.length > 3 ? `<span class="reservation-more-events">${items.length - 3} more</span>` : ''}</div></section>`;
                 }).join('')}</div>`;
         } else {
             panel.innerHTML = `<div class="reservation-agenda">${days(r.start, r.end).map(day => {
@@ -97,26 +112,37 @@
                 return `<section class="reservation-agenda-day ${sameDay(day, new Date()) ? 'today' : ''}"><header><span>${esc(day.toLocaleDateString(undefined, { weekday: 'short' }))}</span><strong>${esc(day.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</strong></header><div>${items.length ? items.map(item => eventButton(item)).join('') : '<p>No reservations scheduled.</p>'}</div></section>`;
             }).join('')}</div>`;
         }
-        qs('reservation-calendar-message').textContent = state.events.length ? `${state.events.length} reservation${state.events.length === 1 ? '' : 's'} scheduled for this period.` : 'No reservations scheduled for this period.';
+        qs('reservation-calendar-message').textContent = visible.length ? `${visible.length} operational reservation${visible.length === 1 ? '' : 's'} scheduled for this period.` : 'No operational reservations scheduled for this period.';
     }
 
     function focusRow(event) {
-        return `<button class="reservation-focus-row" type="button" data-reservation-id="${esc(event.id)}"><span>${esc(fmtTime(event.start))}-${esc(fmtTime(event.end))}</span><strong>${esc(event.room || event.purpose || event.reservationNo || 'Reservation')}</strong>${badge(event.approval || event.status)}</button>`;
+        const room = event.room || 'Room unavailable';
+        const purpose = event.purpose || event.reservationNo || 'Reservation';
+        return `<button class="reservation-focus-row reservation-event-${tone(event)}" type="button" data-reservation-id="${esc(event.id)}"><span>${esc(fmtTime(event.start))}-${esc(fmtTime(event.end))}</span><strong>${esc(room)}</strong><small>${esc(purpose)}</small>${badge(reservationQueueStatus(event))}</button>`;
     }
 
     function renderFocusPanels() {
         const now = new Date(), ordered = [...state.events].sort((a, b) => (toDate(a.start) || 0) - (toDate(b.start) || 0));
         const today = ordered.filter(item => sameDay(toDate(item.start), now)).slice(0, 5);
         const upcoming = ordered.filter(item => (toDate(item.start) || 0) >= now).slice(0, 5);
-        const pending = ordered.filter(item => String(item.approval || '').toLowerCase().includes('pending')).slice(0, 5);
-        qs('reservation-today-list').innerHTML = today.length ? today.map(focusRow).join('') : '<p>No reservations scheduled for today.</p>';
-        qs('reservation-upcoming-list').innerHTML = upcoming.length ? upcoming.map(focusRow).join('') : '<p>No upcoming reservations in this period.</p>';
-        qs('reservation-pending-list').innerHTML = pending.length ? pending.map(focusRow).join('') : '<p>No reservations pending approval.</p>';
+        const pending = ordered.filter(item => `${item.approval || ''} ${item.status || ''}`.toLowerCase().match(/pending|submit/)).slice(0, 5);
+        const recent = [...ordered].reverse().filter(item => `${item.approval || ''} ${item.status || ''}`.toLowerCase().match(/reject|cancel/)).slice(0, 5);
+        const todayList = qs('reservation-today-list');
+        const upcomingList = qs('reservation-upcoming-list');
+        const pendingList = qs('reservation-pending-list');
+        const recentList = qs('reservation-recent-list');
+        if (todayList) todayList.innerHTML = today.length ? today.map(focusRow).join('') : '<p>No reservations scheduled for today.</p>';
+        if (upcomingList) upcomingList.innerHTML = upcoming.length ? upcoming.map(focusRow).join('') : '<p>No upcoming reservations in this period.</p>';
+        if (pendingList) pendingList.innerHTML = pending.length ? pending.map(focusRow).join('') : '<p>No reservations pending approval.</p>';
+        if (recentList) recentList.innerHTML = recent.length ? recent.map(focusRow).join('') : '<p>No rejected or cancelled reservations in this period.</p>';
     }
 
     function renderList() {
+        const body = qs('reservation-table');
+        if (!body) return;
         qs('reservation-loading-state')?.classList.add('hidden');
-        const body = qs('reservation-table'), empty = qs('reservation-empty-state'), pager = document.querySelector('.reservation-workspace .facility-pagination');
+        const empty = qs('reservation-empty-state'), pager = document.querySelector('.reservation-workspace .facility-pagination');
+        window.FAMTableAudit?.check(body?.closest('table'), 'reservation-table');
         qs('reservation-table-count').textContent = state.pagination.total ? `Showing ${state.rows.length} of ${state.pagination.total} reservation records` : 'No reservation records';
         if (!state.rows.length) {
             body.innerHTML = '';
@@ -131,7 +157,11 @@
         qs('reservation-page-status').textContent = `Page ${state.page} of ${pages}`;
         qs('reservation-prev-page').disabled = state.page <= 1;
         qs('reservation-next-page').disabled = state.page >= pages;
-        body.innerHTML = state.rows.map(row => `<tr><td class="facility-request-number"><strong>${esc(row.reservationNo)}</strong></td><td><div class="facility-subject-cell"><strong>${esc(row.purpose || 'Reservation')}</strong><span>${esc(row.attendees)} attendees</span></div></td><td>${esc(row.room || 'Not assigned')}</td><td class="facility-date-cell">${esc(fmtDateTime(row.start))}</td><td class="facility-date-cell">${esc(fmtDateTime(row.end))}</td><td>${esc(row.requester || 'Not available')}</td><td>${badge(row.approval)}</td><td>${badge(row.status)}</td><td class="facility-actions-cell"><button class="facility-action-toggle" type="button" data-reservation-id="${esc(row.id)}">View Details</button></td></tr>`).join('');
+        body.innerHTML = state.rows.map(row => {
+            const actions = `<button type="button" role="menuitem" data-open-reservation-details="${esc(row.id)}">View Details</button>`;
+            return `<tr><td class="facility-request-number">${trunc(row.reservationNo, 'table-cell-primary')}</td><td><div class="facility-subject-cell table-cell-stack">${trunc(row.purpose || 'Reservation', 'table-cell-primary')}${trunc(`${row.attendees || 0} attendees`, 'table-cell-secondary')}</div></td><td>${trunc(row.room || 'Not assigned')}</td><td class="facility-date-cell">${trunc(fmtDateTime(row.start))}</td><td>${badge(row.status)}</td><td class="facility-actions-cell"><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-reservation-menu="${esc(row.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${esc(row.reservationNo)}">&#8942;</button><div class="facility-action-dropdown hidden" data-reservation-menu-panel="${esc(row.id)}" role="menu">${actions}</div></div></td></tr>`;
+        }).join('');
+        window.FAMTableAudit?.check(body.closest('table'), 'reservation-table');
     }
 
     function detail(label, value) { return `<dl class="facility-detail-row"><dt>${esc(label)}</dt><dd>${esc(value || 'Not applicable')}</dd></dl>`; }
@@ -142,10 +172,25 @@
     function drawerDetails(item) {
         const participants = (item.participants || []).map(p => `${p.full_name || 'Participant'} - ${title(p.participant_role || 'participant')} (${title(p.attendance_status || 'pending')})`);
         const history = (item.history || []).map(h => `${title(h.old_status || 'Created')} to ${title(h.new_status)} - ${fmtDateTime(h.changed_at)}${h.change_reason ? ` - ${h.change_reason}` : ''}`);
-        return `<div class="facility-details-modal-panel"><div class="facility-details-modal-header"><div><p>Room Reservation</p><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h2 id="reservation-drawer-title">${esc(item.purpose || 'Reservation Details')}</h2></div><button class="facility-details-modal-close" type="button" data-close-reservation-drawer aria-label="Close reservation details">&times;</button></div><div class="facility-details-modal-body"><div class="facility-detail-grid"><section><h3>General Information</h3>${detail('Reservation No.', item.reservationNo)}${detail('Status', title(item.status))}${detail('Approval Status', title(item.approval))}${detail('Purpose', item.purpose)}</section><section><h3>Schedule</h3>${detail('Start', fmtDateTime(item.start))}${detail('End', fmtDateTime(item.end))}${detail('Attendee Count', item.attendees)}</section><section><h3>Room Information</h3>${detail('Facility Space', item.room)}${detail('Building', item.building)}${detail('Floor', item.floor)}${detail('Room Type', item.roomType)}</section><section><h3>Requester</h3>${detail('Name', item.requester)}${detail('Employee No.', item.employeeNumber)}${detail('Department', item.department)}</section><section><h3>Setup Requirements</h3><p>Review setup, cleanup, amenity, and conflict notes in the source reservation workflow.</p></section><section><h3>Participants</h3>${lines(participants, 'No participants recorded.')}</section><section class="facility-detail-wide"><h3>Approval Information</h3>${detail('Approval Status', title(item.approval))}</section><section class="facility-detail-wide"><h3>History and Remarks</h3>${lines(history, 'No reservation history recorded.')}</section></div></div></div>`;
+        const actions = adminActions(item);
+        return `<div class="facility-details-modal-panel"><div class="facility-details-modal-header"><div><p>Room Reservation</p><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h2 id="reservation-drawer-title">${esc(item.purpose || 'Reservation Details')}</h2></div><button class="facility-details-modal-close" type="button" data-close-reservation-drawer aria-label="Close reservation details">&times;</button></div><div class="facility-details-modal-body"><div class="facility-detail-grid"><section><h3>General Information</h3>${detail('Reservation No.', item.reservationNo)}${detail('Status', title(item.status))}${detail('Approval Status', title(item.approval))}${detail('Purpose', item.purpose)}</section><section><h3>Schedule</h3>${detail('Start', fmtDateTime(item.start))}${detail('End', fmtDateTime(item.end))}${detail('Attendee Count', item.attendees)}</section><section><h3>Room Information</h3>${detail('Facility Space', item.room)}${detail('Building', item.building)}${detail('Floor', item.floor)}${detail('Room Type', item.roomType)}${detail('Capacity', item.capacity)}</section><section><h3>Requester</h3>${detail('Name', item.requester)}${detail('Employee No.', item.employeeNumber)}${detail('Department', item.department)}</section><section><h3>Setup Requirements</h3>${detail('Setup Requirements', item.lifecycle?.setup_requirements)}${detail('Setup Buffer', `${item.lifecycle?.setup_buffer_minutes || 0} min`)}${detail('Cleanup Buffer', `${item.lifecycle?.cleanup_buffer_minutes || 0} min`)}</section><section><h3>Attendance</h3>${detail('Checked In', fmtDateTime(item.lifecycle?.checked_in_at))}${detail('Checked Out', fmtDateTime(item.lifecycle?.checked_out_at))}</section><section><h3>Participants</h3>${lines(participants, 'No participants recorded.')}</section><section class="facility-detail-wide"><h3>History and Remarks</h3>${lines(history, 'No reservation history recorded.')}</section></div></div>${actions ? `<div class="facility-dialog-actions">${actions}</div>` : ''}</div>`;
+    }
+    function adminActions(item) {
+        const status = String(item.status || '').toUpperCase();
+        const buttons = [];
+        if (status === 'SUBMITTED') {
+            buttons.push(`<button class="btn-primary dashboard-action-button" type="button" data-reservation-action="approve" data-action-id="${esc(item.id)}">Approve</button>`);
+            buttons.push(`<button class="btn-secondary dashboard-action-button" type="button" data-reservation-action="reject" data-action-id="${esc(item.id)}">Reject</button>`);
+        }
+        if (['SUBMITTED','APPROVED'].includes(status)) buttons.push(`<button class="btn-secondary dashboard-action-button" type="button" data-reservation-action="cancel" data-action-id="${esc(item.id)}">Cancel Reservation</button>`);
+        if (status === 'APPROVED' && String(item.approval || '').toUpperCase() === 'APPROVED' && !item.lifecycle?.checked_in_at && toDate(item.end) < new Date()) {
+            buttons.push(`<button class="btn-secondary dashboard-action-button" type="button" data-reservation-action="no-show" data-action-id="${esc(item.id)}">Mark No Show</button>`);
+        }
+        return buttons.join('');
     }
     async function openDetails(id) {
         const drawer = qs('reservation-details-drawer');
+        if (drawer.parentElement !== document.body) document.body.appendChild(drawer);
         state.lastFocus = document.activeElement;
         drawer.hidden = false;
         drawer.className = 'facility-details-modal';
@@ -168,11 +213,12 @@
     }
     function closeDetails() {
         const drawer = qs('reservation-details-drawer');
-        drawer.hidden = true;
-        drawer.innerHTML = '';
-        document.body.classList.remove('facility-details-modal-open');
-        state.lastFocus?.focus?.();
-        state.lastFocus = null;
+        window.FAMModal?.closeElement?.(drawer, () => {
+            drawer.innerHTML = '';
+            document.body.classList.remove('facility-details-modal-open');
+            state.lastFocus?.focus?.();
+            state.lastFocus = null;
+        });
     }
     function trapDetailsFocus(event) {
         const drawer = qs('reservation-details-drawer');
@@ -202,6 +248,7 @@
         }
     }
     async function loadList() {
+        if (!qs('reservation-table')) return;
         const r = range();
         qs('reservation-loading-state')?.classList.remove('hidden');
         try {
@@ -216,7 +263,26 @@
             renderList();
         }
     }
-    function refreshAll() { renderToolbar(); loadCalendar(); loadList(); }
+    async function refreshAll() { renderToolbar(); await loadCalendar(); }
+    async function processReservation(action, id) {
+        const body = {};
+        if (['reject','cancel','no-show'].includes(action)) {
+            const labels = {
+                reject: ['Reason for rejecting this reservation:', 'Reservation rejected.', 'Reject Reservation', 'Reject'],
+                cancel: ['Reason for cancelling this reservation:', 'Reservation cancelled.', 'Cancel Reservation', 'Cancel Reservation'],
+                'no-show': ['Reason for marking this reservation as no-show:', 'Reservation marked as no-show.', 'Mark No Show', 'Mark No Show'],
+            }[action];
+            const reason = await window.FAMModal.prompt(labels[0], labels[1], { title: labels[2], confirmLabel: labels[3] });
+            if (reason === null) return;
+            body.reason = reason;
+        }
+        if (action === 'approve' && !await window.FAMModal.confirm('Approve this room reservation?', { title: 'Approve Reservation', confirmLabel: 'Approve' })) return;
+        await window.FAMApi.request(`../api/reservations/${action}.php?id=${encodeURIComponent(id)}`, { method: 'POST', body });
+        state.details.delete(String(id));
+        await refreshAll();
+        await openDetails(id);
+        window.FAMModal?.showToast('Reservation updated.');
+    }
     function shift(amount) {
         if (state.view === 'month') state.anchor.setMonth(state.anchor.getMonth() + amount);
         if (state.view === 'week') state.anchor.setDate(state.anchor.getDate() + amount * 7);
@@ -261,7 +327,7 @@
         state.page = 1;
         qs('reservation-room-filter').value = 'all';
         qs('reservation-status-filter').value = 'all';
-        qs('reservation-search').value = '';
+        if (qs('reservation-search')) qs('reservation-search').value = '';
         refreshAll();
     });
     qs('reservation-prev-page')?.addEventListener('click', () => { state.page = Math.max(1, state.page - 1); loadList(); });
@@ -275,8 +341,18 @@
         loadList();
     });
     document.addEventListener('click', event => {
+        const menuToggle = event.target.closest('[data-reservation-menu]');
+        if (menuToggle) {
+            event.preventDefault();
+            event.stopPropagation();
+            return window.FAMTableMenus?.toggle(menuToggle, document.querySelector(`[data-reservation-menu-panel="${CSS.escape(menuToggle.dataset.reservationMenu)}"]`));
+        }
+        const detailAction = event.target.closest('[data-open-reservation-details]');
+        if (detailAction) return openDetails(detailAction.dataset.openReservationDetails);
         const open = event.target.closest('[data-reservation-id]');
         if (open) return openDetails(open.dataset.reservationId);
+        const action = event.target.closest('[data-reservation-action]');
+        if (action) return processReservation(action.dataset.reservationAction, action.dataset.actionId).catch(error => window.FAMModal?.showToast(error.message || 'Unable to update reservation.'));
         if (event.target.closest('[data-close-reservation-drawer]')) return closeDetails();
         if (event.target === qs('reservation-details-drawer')) return closeDetails();
         const retry = event.target.closest('[data-reservation-retry]');
@@ -286,5 +362,9 @@
     document.addEventListener('keydown', event => {
         trapDetailsFocus(event);
         if (event.key === 'Escape' && !qs('reservation-details-drawer')?.hidden) closeDetails();
+    });
+    document.addEventListener('fam:layout-ready', () => {
+        const reservationId = new URLSearchParams(window.location.search).get('reservation');
+        if (reservationId && /^\d+$/.test(reservationId)) setTimeout(() => openDetails(reservationId), 500);
     });
 })();

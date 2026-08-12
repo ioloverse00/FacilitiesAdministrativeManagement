@@ -20,17 +20,21 @@ The Admin Portal should not present ordinary employee/requester submission actio
 
 ## Employee Portal
 
-The future Employee Portal owns requester self-service workflows.
+The Employee Portal owns requester self-service workflows. Phase 1 provides the shell at `pages/employee/`, employee-only navigation, safe employee context, empty employee pages, and a read-only profile.
 
 Employee users may:
 
 - submit facility requests
 - submit room reservation requests
+- check in to approved room reservations during the allowed window
+- check out from checked-in room reservations
 - submit procurement requests
 - track their own requests
 - receive notifications about request status, approvals, assignments, and completion
 
 Requester-facing permission codes such as `facility_requests.create`, `reservations.create`, `procurement.create`, and `records.create` remain available for future Employee Portal use. They should not be removed from RBAC just because the Admin Portal hides requester-facing entry points.
+
+Facility Request and Room Reservation submission forms are implemented in the Employee Portal and must use the shared module services. Room reservation attendance is requester-owned in the normal workflow: employees check themselves in and out through employee-scoped endpoints. Dashboard quick actions should navigate to those employee workspaces and must not fake record creation.
 
 ## Admin-Only Exceptions
 
@@ -41,3 +45,12 @@ The following actions may appear in the FAM Admin Portal only when they are expl
 - `Register Asset`: an asset registry workflow owned by FAM, backed by a real write API and validation
 
 If the backend workflow is not implemented, the Admin Portal should hide the action instead of showing a fake, disabled, or placeholder create button.
+
+## Visitor Management Admin Boundary
+
+Visitor Management is an Admin Portal module because reception and FAM staff own on-site intake, verification, badge issuance, review, check-in, check-out, and operational history.
+
+Allowed admin actions include registering a walk-in, recording an admin pre-registration, approving or rejecting a visit, verifying identity, issuing or returning a badge, cancelling an administrative visit record, and viewing visitor history.
+
+The Admin Portal must not expose public visitor self-registration, OTP verification, QR code generation/scanning, or anonymous visitor account flows. Public visitor self-registration is handled by `pages/visitor-registration.html` and the unauthenticated `api/public/visitors/*` endpoints; reception/security continue review, identity verification, badge issuance, check-in, and check-out in the Admin Portal.
+

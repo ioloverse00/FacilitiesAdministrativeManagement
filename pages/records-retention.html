@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Records Retention &amp; Compliance</title>
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/api-client.js" defer></script>
+    <script src="../assets/js/table-audit.js" defer></script>
+    <script src="../assets/js/records-retention.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Records Retention"
+    data-breadcrumb-title="Records Retention"
+    data-active-nav="records-retention"
+    data-page-heading="Records Retention &amp; Compliance"
+    data-page-description="Manage retention schedules, legal holds, disposition review, archiving, and compliance tracking.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace retention-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header retention-page-header">
+                            <div class="facility-title-block">
+                                <h1>Records Retention &amp; Compliance</h1>
+                                <p>Control record lifecycle review, legal holds, archive decisions, and logical disposition.</p>
+                                <span id="retention-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="retention-refresh" class="fam-icon-button" type="button" aria-label="Refresh retention records">
+                                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                                <button id="retention-schedule-add" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">rule</span>
+                                    Add Schedule
+                                </button>
+                            </div>
+                        </header>
+
+                        <section class="document-summary-strip retention-summary-strip" aria-label="Retention summary">
+                            <article><strong id="retention-active-count">0</strong><p>Active Records</p></article>
+                            <article><strong id="retention-due-count">0</strong><p>Due for Review</p></article>
+                            <article><strong id="retention-hold-count">0</strong><p>Legal Holds</p></article>
+                            <article><strong id="retention-archived-count">0</strong><p>Archived</p></article>
+                            <article><strong id="retention-disposed-count">0</strong><p>Disposed</p></article>
+                        </section>
+
+                        <section class="facility-section" aria-labelledby="retention-table-title">
+                            <div class="facility-table-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="retention-table-title">Compliance Queue</h2>
+                                        <p id="retention-table-count">Loading retention records...</p>
+                                    </div>
+                                    <div class="facility-header-controls retention-controls">
+                                        <label class="facility-field facility-search-field">
+                                            <span class="sr-only">Search</span>
+                                            <input id="retention-search" type="search" placeholder="Search records...">
+                                        </label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Schedule</span><select id="retention-schedule-filter"><option value="all">All Schedules</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Status</span><select id="retention-status-filter"><option value="all">All Statuses</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Due state</span><select id="retention-due-filter"><option value="all">All Review States</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Hold</span><select id="retention-hold-filter"><option value="all">All Holds</option></select></label>
+                                    </div>
+                                </div>
+                                <div id="retention-loading-state" class="fam-state">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading retention records...</span>
+                                </div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table records-table retention-table">
+                                        <colgroup>
+                                            <col class="retention-col-record">
+                                            <col class="retention-col-category">
+                                            <col class="retention-col-schedule">
+                                            <col class="retention-col-start">
+                                            <col class="retention-col-disposition">
+                                            <col class="retention-col-hold">
+                                            <col class="retention-col-status">
+                                            <col class="retention-col-actions">
+                                        </colgroup>
+                                        <thead>
+                                            <tr>
+                                                <th><button type="button" class="facility-sort-button" data-sort="title">Record</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="category">Category</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="schedule">Schedule</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="retention_start">Start</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="disposition_date">Review Date</button></th>
+                                                <th>Hold</th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="status">Status</button></th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="retention-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="retention-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                                <div class="facility-pagination" aria-label="Retention records pagination">
+                                    <button id="retention-prev-page" class="facility-page-button" type="button">Previous</button>
+                                    <span id="retention-page-status">Page 1 of 1</span>
+                                    <button id="retention-next-page" class="facility-page-button" type="button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside id="retention-dialog" class="facility-dialog retention-dialog" hidden></aside>
+                        <aside id="retention-details-modal" class="facility-details-modal retention-details-modal" hidden></aside>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

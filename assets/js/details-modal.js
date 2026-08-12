@@ -14,6 +14,18 @@
         return !!target.closest('#facility-requests-table, #facility-request-drawer');
     }
 
+    function isVisitorManagementTarget(target) {
+        return !!target.closest('.visitor-management-workspace, #visitor-details-drawer, [data-visitor-action], [data-open-visitor], [data-open-visitor-menu], [data-visitor-menu]');
+    }
+
+    function isRoomReservationTarget(target) {
+        return !!target.closest('.reservation-workspace, #reservation-details-drawer, [data-open-reservation-details], [data-reservation-menu], [data-reservation-menu-panel], [data-reservation-id]');
+    }
+
+    function isDocumentManagementTarget(target) {
+        return !!target.closest('.records-workspace, #document-dialog, #document-details-modal, [data-document-action], [data-document-menu-toggle]');
+    }
+
     function actionLabel(target) {
         if (target.dataset.calendarReservation) return 'View Details';
         const explicit = target.dataset.requestAction
@@ -119,7 +131,7 @@
 
     function maybeHandle(event) {
         const target = event.target.closest('button, a');
-        if (!target || isFacilityRequestTarget(target)) return;
+        if (!target || isFacilityRequestTarget(target) || isVisitorManagementTarget(target) || isRoomReservationTarget(target) || isDocumentManagementTarget(target)) return;
         const label = actionLabel(target).toLowerCase();
         if (!viewActions.has(label)) return;
         event.preventDefault();

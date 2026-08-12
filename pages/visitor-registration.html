@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <title>Visitor Registration | FAM</title>
+  <link rel="stylesheet" href="../assets/css/visitor-registration.css">
+</head>
+<body class="public-visitor-page">
+  <main class="visitor-shell">
+    <header class="visitor-hero">
+      <div class="brand-mark" aria-hidden="true">FAM</div>
+      <div>
+        <h1>Visitor Registration</h1>
+        <p class="intro">Complete your registration before entering the premises.</p>
+      </div>
+    </header>
+
+    <section class="visitor-panel" aria-labelledby="wizardTitle">
+      <div class="mobile-progress" aria-live="polite">
+        <span id="mobileStepCount">Step 1 of 5</span>
+        <strong id="mobileStepTitle">Personal Information</strong>
+        <div class="progress-track"><span id="progressBar"></span></div>
+      </div>
+
+      <ol class="stepper" aria-label="Registration progress">
+        <li class="active" data-step-dot="1">Personal</li>
+        <li data-step-dot="2">Visit</li>
+        <li data-step-dot="3">Verify</li>
+        <li data-step-dot="4">Review</li>
+        <li data-step-dot="5">Done</li>
+      </ol>
+
+      <form id="visitorForm" novalidate>
+        <input type="hidden" name="form_started_at" id="formStartedAt">
+        <input type="hidden" name="scheduled_start_at" id="scheduledStartAt">
+        <input type="hidden" name="scheduled_end_at" id="scheduledEndAt">
+        <input type="hidden" name="company_or_school" id="companyOrSchool">
+        <label class="hp-field">Leave this field blank <input name="website" tabindex="-1" autocomplete="off"></label>
+
+        <section class="wizard-step" data-step="1" aria-labelledby="wizardTitle">
+          <p class="step-kicker">Step 1 of 5</p>
+          <h2 id="wizardTitle">Personal Information</h2>
+          <p class="step-copy">Tell us who is visiting. Your email will be verified before submission.</p>
+          <div class="field-stack">
+            <label class="required-field" for="fullName"><span class="label-text">Full name <span class="required-mark" aria-hidden="true">*</span></span><input id="fullName" name="full_name" required autocomplete="name"></label>
+            <div class="paired-fields">
+              <label class="required-field" for="emailAddress"><span class="label-text">Email address <span class="required-mark" aria-hidden="true">*</span></span><input id="emailAddress" name="email_address" type="email" required autocomplete="email"></label>
+              <label for="mobileNumber">Mobile number <input id="mobileNumber" name="mobile_number" autocomplete="tel" placeholder="Optional"></label>
+            </div>
+            <label class="required-field" for="visitorType"><span class="label-text">Visitor type <span class="required-mark" aria-hidden="true">*</span></span><select id="visitorType" name="visitor_type" required></select></label>
+            <label for="organizationName"><span id="organizationLabel" class="label-text">Organization / Company / School</span><input id="organizationName" name="organization_name" autocomplete="organization" placeholder="Optional"></label>
+          </div>
+          <div class="form-actions only-primary">
+            <button class="primary-action" type="button" data-next="1">Continue</button>
+          </div>
+        </section>
+
+        <section class="wizard-step hidden" data-step="2" aria-labelledby="visitStepTitle">
+          <p class="step-kicker">Step 2 of 5</p>
+          <h2 id="visitStepTitle">Visit Information</h2>
+          <p class="step-copy">Share where you are going and the reason for your visit.</p>
+          <div class="field-stack">
+            <label class="required-field" for="destinationDepartment"><span class="label-text">Destination <span class="required-mark" aria-hidden="true">*</span></span><select id="destinationDepartment" name="destination_department_reference_id" required><option value="">Select a destination</option></select></label>
+            <label class="required-field" for="visitPurpose"><span class="label-text">Visit purpose <span class="required-mark" aria-hidden="true">*</span></span><input id="visitPurpose" name="visit_purpose" required maxlength="240"></label>
+            <label class="optional-host" for="hostContact">Host / Contact Person <input id="hostContact" name="host_contact_person" maxlength="160" placeholder="Optional"></label>
+            <label id="facilitySpaceWrap" for="facilitySpace">Facility space <select id="facilitySpace" name="facility_space_id"><option value="">Optional</option></select></label>
+            <label class="applicant-field" for="applicantReference">Applicant reference <input id="applicantReference" name="applicant_reference" maxlength="120" placeholder="Optional"></label>
+            <fieldset class="schedule-box">
+              <legend>Preferred Visit Date and Time</legend>
+              <label class="check-row"><input id="visitingNow" type="checkbox" checked> Visiting now</label>
+              <div class="paired-fields" id="scheduleFields">
+                <label for="visitDate">Visit date <input id="visitDate" type="date"></label>
+                <label for="arrivalTime">Arrival time <input id="arrivalTime" type="time"></label>
+                <label for="endTime">Expected end time <input id="endTime" type="time" title="Optional"></label>
+              </div>
+            </fieldset>
+            <label for="visitDescription">Additional details <textarea id="visitDescription" name="visit_description" rows="4" maxlength="1000" placeholder="Optional"></textarea></label>
+          </div>
+          <div class="form-actions">
+            <button type="button" data-back="2">Back</button>
+            <button class="primary-action" type="button" id="requestOtp">Verify Email</button>
+          </div>
+        </section>
+
+        <section class="wizard-step hidden" data-step="3" aria-labelledby="otpTitle">
+          <p class="step-kicker">Step 3 of 5</p>
+          <h2 id="otpTitle">Email Verification</h2>
+          <p class="step-copy">We sent a 6-digit verification code to <strong id="maskedEmail">your email</strong>.</p>
+          <fieldset class="otp-fieldset" aria-describedby="otpHelp resendHint">
+            <legend class="sr-only">Verification code</legend>
+            <div class="otp-entry">
+              <input class="otp-digit" inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="Digit 1 of verification code">
+              <input class="otp-digit" inputmode="numeric" maxlength="1" aria-label="Digit 2 of verification code">
+              <input class="otp-digit" inputmode="numeric" maxlength="1" aria-label="Digit 3 of verification code">
+              <input class="otp-digit" inputmode="numeric" maxlength="1" aria-label="Digit 4 of verification code">
+              <input class="otp-digit" inputmode="numeric" maxlength="1" aria-label="Digit 5 of verification code">
+              <input class="otp-digit" inputmode="numeric" maxlength="1" aria-label="Digit 6 of verification code">
+            </div>
+          </fieldset>
+          <input id="otpCode" type="hidden">
+          <p id="otpHelp" class="helper-text">Enter or paste the six-digit code.</p>
+          <div class="form-actions split-actions">
+            <div class="tertiary-actions">
+              <a id="resendOtp" class="link-action is-disabled" href="#" role="button" aria-disabled="true">Resend Code</a>
+              <a id="changeEmail" class="link-action" href="#">Change Email</a>
+            </div>
+            <div class="button-actions">
+              <button type="button" data-back="3">Back</button>
+              <button id="verifyOtp" class="primary-action" type="button">Verify Code</button>
+            </div>
+          </div>
+          <p id="resendHint" class="privacy-note"></p>
+        </section>
+
+        <section class="wizard-step hidden" data-step="4" aria-labelledby="reviewTitle">
+          <p class="step-kicker">Step 4 of 5</p>
+          <h2 id="reviewTitle">Review and Consent</h2>
+          <p class="step-copy">Please review your details before submitting your registration.</p>
+          <div class="review-card">
+            <div class="review-heading"><h3>Personal Information</h3><a href="#" data-edit="1">Edit</a></div>
+            <dl id="personalReview"></dl>
+          </div>
+          <div class="review-card">
+            <div class="review-heading"><h3>Visit Information</h3><a href="#" data-edit="2">Edit</a></div>
+            <dl id="visitReview"></dl>
+          </div>
+          <section class="privacy-card" aria-labelledby="privacyTitle">
+            <div class="privacy-icon" aria-hidden="true">i</div>
+            <div>
+              <h3 id="privacyTitle">Privacy Notice and Consent</h3>
+              <p>We collect and process your personal information for visitor registration, identity verification, facility access control, safety, security, and related administrative purposes.</p>
+              <p>Your information will be handled in accordance with the Data Privacy Act of 2012 (Republic Act No. 10173) and applicable organizational privacy policies. It will be retained only for as long as necessary to fulfill these purposes.</p>
+              <details class="privacy-disclosure">
+                <summary>Read the full Privacy Notice</summary>
+                <p>This registration may collect your name, contact details, organization or school, visit purpose, destination, schedule details, and related visitor information needed to process your facility visit.</p>
+                <p>The information may be used by authorized personnel for visitor management, access control, identity verification, safety, security, incident response, and administrative records related to your visit.</p>
+                <p>For privacy-related questions or requests, please coordinate with the Reception or Security Desk so your concern can be referred to the appropriate office.</p>
+              </details>
+            </div>
+          </section>
+          <label class="consent-row consent-outside" for="privacyConsent">
+            <input id="privacyConsent" name="privacy_consent" type="checkbox" required aria-required="true" aria-describedby="consentError">
+            <span>I have read and understood the Privacy Notice and consent to the collection and processing of my personal information for visitor registration and facility access purposes.</span>
+          </label>
+          <p id="consentError" class="field-error" hidden>You must agree to the Privacy Notice before submitting.</p>
+          <div class="form-actions">
+            <button type="button" data-back="4">Back</button>
+            <button class="primary-action" type="submit">Submit Registration</button>
+          </div>
+        </section>
+      </form>
+
+      <section id="confirmStep" class="wizard-step confirmation-step hidden" data-step="5" aria-labelledby="confirmTitle" role="status" aria-live="polite">
+        <div class="success-hero">
+          <div class="success-icon" aria-hidden="true">&#10003;</div>
+          <p class="step-kicker">Step 5 of 5</p>
+          <h2 id="confirmTitle" tabindex="-1">Registration Submitted</h2>
+          <p>Your visitor registration has been received.</p>
+        </div>
+
+        <section class="reference-card" aria-labelledby="referenceTitle">
+          <p id="referenceTitle">Visitor Reference Number</p>
+          <div class="reference-row">
+            <strong id="refNumber"></strong>
+            <button id="copyReference" type="button">Copy</button>
+          </div>
+          <p id="copyStatus" class="copy-status" aria-live="polite"></p>
+        </section>
+
+        <section class="qr-card" aria-labelledby="qrTitle">
+          <div class="qr-card-header">
+            <h3 id="qrTitle">Visitor Pass QR</h3>
+            <span class="status-badge">Pending Review</span>
+          </div>
+          <div class="qr-content">
+            <div class="qr-frame">
+              <img id="visitorQrImage" alt="" hidden>
+              <p id="qrFallback" class="qr-fallback" hidden>QR code could not be generated. Please use your Visitor Reference Number at Reception.</p>
+            </div>
+            <div class="qr-instructions">
+              <p>Present this QR code at the Reception or Security Desk for visitor verification and check-in.</p>
+              <p>If the QR code cannot be scanned, provide your Visitor Reference Number.</p>
+              <p class="qr-caution">This QR code does not guarantee entry. Reception or Security must still verify your registration and identification.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="confirmation-summary" aria-labelledby="detailsTitle">
+          <h3 id="detailsTitle">Registration Details</h3>
+          <dl>
+            <div><dt>Status</dt><dd><span class="status-badge">Pending Review</span></dd></div>
+            <div><dt>Visitor</dt><dd id="refName"></dd></div>
+            <div><dt>Destination</dt><dd id="refDestination"></dd></div>
+            <div><dt>Visit</dt><dd id="refSchedule"></dd></div>
+          </dl>
+          <p>Reception or Security will review your registration before check-in.</p>
+        </section>
+
+        <section class="next-steps" aria-labelledby="nextStepsTitle">
+          <h3 id="nextStepsTitle">What happens next?</h3>
+          <ol>
+            <li>Your registration has been received.</li>
+            <li>Present your Visitor Reference Number and a valid identification document at the Reception or Security Desk.</li>
+            <li>Reception or Security will verify your information.</li>
+            <li>Once approved, you will be checked in and issued a visitor badge if applicable.</li>
+          </ol>
+        </section>
+
+        <div class="form-actions confirmation-actions">
+          <a id="startAnother" class="link-action" href="#">Register Another Visitor</a>
+          <button id="printConfirmation" type="button">Print Confirmation</button>
+          <button id="finishRegistration" class="primary-action" type="button">Done</button>
+        </div>
+      </section>
+
+      <p id="formStatus" class="status-message" role="status" aria-live="assertive"></p>
+    </section>
+
+    <footer class="support-footer">
+      <p>Need assistance? Please proceed to the Reception or Security Desk if you encounter issues with online registration.</p>
+      <p><a href="#privacyTitle">Privacy Notice</a> &middot; Facilities &amp; Administrative Management &middot; <span id="currentYear"></span></p>
+    </footer>
+  </main>
+  <script src="../assets/js/visitor-registration.js"></script>
+</body>
+</html>

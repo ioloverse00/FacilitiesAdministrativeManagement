@@ -71,10 +71,10 @@ final class Database
      */
     private static function configuration(): array
     {
-        $host = self::stringValue('DB_HOST');
-        $port = self::stringValue('DB_PORT');
-        $database = self::stringValue('DB_DATABASE');
-        $username = self::stringValue('DB_USERNAME');
+        $host = self::stringValue('DB_HOST', '127.0.0.1');
+        $port = self::stringValue('DB_PORT', '3306');
+        $database = self::stringValue('DB_DATABASE', 'ismers_fam');
+        $username = self::stringValue('DB_USERNAME', 'root');
         $password = self::stringValue('DB_PASSWORD', '');
         $charset = self::stringValue('DB_CHARSET', 'utf8mb4');
 

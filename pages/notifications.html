@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Notifications</title>
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/api-client.js" defer></script>
+    <script src="../assets/js/notifications.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Notifications"
+    data-breadcrumb-title="Notifications"
+    data-active-nav="dashboard"
+    data-page-heading="Notifications"
+    data-page-description="View system updates assigned to your account.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>Notifications</h1>
+                                <p>View system updates assigned to your account.</p>
+                            </div>
+                        </header>
+                        <section class="facility-section" aria-labelledby="notifications-title">
+                            <div class="facility-table-card employee-notifications-card">
+                                <div class="employee-records-header employee-notifications-header">
+                                    <div>
+                                        <h2 id="notifications-title">Notification Center</h2>
+                                        <p>Only notifications sent to your account appear here.</p>
+                                    </div>
+                                    <div class="employee-filter-pills" role="group" aria-label="Notification filters">
+                                        <button type="button" class="active" data-notification-page-filter="all" aria-pressed="true">All</button>
+                                        <button type="button" data-notification-page-filter="unread" aria-pressed="false">Unread</button>
+                                        <button type="button" data-notification-page-filter="read" aria-pressed="false">Read</button>
+                                    </div>
+                                </div>
+                                <div id="notifications-page-state" class="employee-placeholder-card employee-notifications-state" aria-live="polite"></div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

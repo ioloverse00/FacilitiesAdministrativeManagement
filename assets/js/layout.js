@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     const componentPaths = {
         sidebar: '../components/sidebar.html',
         header: '../components/header.html',
@@ -16,6 +16,16 @@
         target.innerHTML = await response.text();
     }
 
+
+    function applyPermissionVisibility() {
+        const permissions = window.FAMApi?.currentUser?.permissions || [];
+        document.querySelectorAll('[data-requires-permission]').forEach(element => {
+            const required = element.dataset.requiresPermission;
+            if (required && !permissions.includes(required)) {
+                element.classList.add('hidden');
+            }
+        });
+    }
     function applyPageMetadata() {
         const config = window.pageConfig || {};
         const title = config.title || document.body.dataset.pageTitle;
@@ -147,3 +157,4 @@
         applyPageMetadata
     };
 })();
+

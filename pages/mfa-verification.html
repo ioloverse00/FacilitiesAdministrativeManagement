@@ -62,7 +62,7 @@
             </button>
 </p>
 <div class="mt-6 pt-6 border-t border-outline-variant/30 text-center">
-<a class="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-on-surface-variant hover:text-primary transition-colors" href="../authentication_card_component_standard/code.html" id="back-to-login-link">
+<a class="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-on-surface-variant hover:text-primary transition-colors" href="login.html" id="back-to-login-link">
 <span class="material-symbols-outlined text-[16px]">arrow_back</span>
                 Back to Sign In
             </a>
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const subsystem = params.get('subsystem');
     if (subsystem) {
         const backLink = document.getElementById('back-to-login-link');
-        if (backLink) backLink.href = `../authentication_card_component_standard/code.html?subsystem=${encodeURIComponent(subsystem)}`;
+        if (backLink) backLink.href = `login.html?subsystem=${encodeURIComponent(subsystem)}`;
     }
 });
 document.addEventListener('DOMContentLoaded', () => {
@@ -101,4 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 </body></html>
+
+
 

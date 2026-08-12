@@ -2,23 +2,32 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Reservations' . DIRECTORY_SEPARATOR . 'ReservationService.php';
+
 final class LiveDataService
 {
     public function __construct(private readonly PDO $pdo) {}
 
     public function dashboard(): array
     {
+        (new ReservationService($this->pdo))->reconcileExpiredApprovedReservations();
         return [
             'generatedAt' => date('c'),
             'alerts' => $this->alerts(),
             'kpis' => [
                 'facilityRequests' => $this->count('facility_request'),
+                'facilityOpen' => (int) $this->scalar("SELECT COUNT(*) FROM facility_request WHERE deleted_at IS NULL AND status NOT IN ('COMPLETED','VERIFIED','CLOSED','CANCELLED','REJECTED')"),
                 'maintenance' => $this->count('maintenance_work_order'),
+                'maintenanceOpen' => (int) $this->scalar("SELECT COUNT(*) FROM maintenance_work_order WHERE deleted_at IS NULL AND status NOT IN ('COMPLETED','VERIFIED','CANCELLED')"),
                 'assets' => $this->count('asset'),
+                'assetsAttention' => (int) $this->scalar("SELECT COUNT(*) FROM asset WHERE deleted_at IS NULL AND condition_status IN ('POOR','CRITICAL','FOR_INSPECTION')"),
                 'reservations' => $this->count('facility_reservation'),
+                'reservationsToday' => (int) $this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND DATE(start_datetime)=CURRENT_DATE() AND status IN ('SUBMITTED','APPROVED','CHECKED_IN','COMPLETED')"),
                 'procurement' => $this->count('procurement_request'),
+                'procurementOpen' => (int) $this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND status NOT IN ('COMPLETED','CANCELLED','REJECTED')"),
                 'records' => $this->count('record'),
-                'overdueSla' => (int) $this->scalar("SELECT COUNT(*) FROM sla_tracking st INNER JOIN facility_request fr ON fr.facility_request_id=st.facility_request_id WHERE fr.deleted_at IS NULL AND (st.resolution_breached=1 OR (st.resolution_due_at<NOW() AND fr.status NOT IN ('COMPLETED','VERIFIED','CLOSED','CANCELLED')))")
+                'recordsDispositionDue' => (int) $this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND scheduled_disposition_date IS NOT NULL AND scheduled_disposition_date<=DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)"),
+                'overdueSla' => (int) $this->scalar("SELECT COUNT(*) FROM sla_tracking st INNER JOIN facility_request fr ON fr.facility_request_id=st.facility_request_id WHERE fr.deleted_at IS NULL AND fr.status NOT IN ('COMPLETED','VERIFIED','CLOSED','CANCELLED','REJECTED') AND (st.resolution_breached=1 OR st.resolution_due_at<NOW())")
             ],
             'requestTrend' => $this->requestTrend(),
             'requestStatus' => $this->groupRows('facility_request', 'status'),
@@ -94,7 +103,9 @@ final class LiveDataService
     public function reservationsList(array $q): array
     {
         $sql = "SELECT r.*, fs.space_name, fs.space_type, fs.floor_number, b.building_id, b.building_name, e.full_name requester_name, e.employee_number requester_number, d.department_name FROM facility_reservation r INNER JOIN facility_space fs ON fs.facility_space_id=r.facility_space_id LEFT JOIN building b ON b.building_id=fs.building_id LEFT JOIN employee_reference e ON e.employee_reference_id=r.requested_by_employee_reference_id LEFT JOIN department_reference d ON d.department_reference_id=r.department_reference_id";
-        [$where,$params]=$this->filters('r',$q,['status'=>'r.status','approval_status'=>'r.approval_status','facility_space_id'=>'r.facility_space_id','building_id'=>'b.building_id','requested_by'=>'r.requested_by_employee_reference_id'],['r.reservation_number','r.purpose','fs.space_name','e.full_name','d.department_name']);
+        $filterQuery = $q;
+        unset($filterQuery['date_from'], $filterQuery['date_to']);
+        [$where,$params]=$this->filters('r',$filterQuery,['status'=>'r.status','approval_status'=>'r.approval_status','facility_space_id'=>'r.facility_space_id','building_id'=>'b.building_id','requested_by'=>'r.requested_by_employee_reference_id'],['r.reservation_number','r.purpose','fs.space_name','e.full_name','d.department_name']);
         if (($q['date_from'] ?? '') !== '') { $where[]='r.start_datetime>=:date_from'; $params['date_from']=$this->dateTime($q['date_from']); }
         if (($q['date_to'] ?? '') !== '') { $where[]='r.start_datetime<=:date_to'; $params['date_to']=$this->dateTime($q['date_to']); }
         $sorts=['reservation_number'=>'r.reservation_number','purpose'=>'r.purpose','start_datetime'=>'r.start_datetime','status'=>'r.status','approval_status'=>'r.approval_status','created_at'=>'r.created_at'];
@@ -187,3 +198,4 @@ final class LiveDataService
     private function shapeProcurement(array $r): array { return ['id'=>(int)$r['procurement_request_id'],'requestNo'=>$r['request_number'],'justification'=>$r['justification'],'origin'=>$r['facility_request_number'] ? 'Facility Request' : ($r['work_order_number'] ? 'Maintenance' : 'Direct Request'),'originRef'=>$r['facility_request_number'] ?: $r['work_order_number'],'priority'=>$r['priority'],'status'=>$r['status'],'approval'=>$r['approval_status'],'integration'=>$r['integration_status'],'estimatedCost'=>(float)$r['estimated_total'],'currency'=>$r['currency_code'],'requestedBy'=>$r['requester_name'],'employeeNumber'=>$r['requester_number'],'department'=>$r['department_name'],'budget'=>$r['budget_code'],'createdAt'=>$r['created_at']]; }
     private function shapeRecord(array $r): array { return ['id'=>(int)$r['record_id'],'documentNo'=>$r['record_number'],'title'=>$r['record_title'],'description'=>$r['record_description'],'type'=>$r['record_type'],'category'=>$r['schedule_name'],'owner'=>$r['owner_name'],'department'=>$r['department_name'],'recordDate'=>$r['record_date'],'reviewDate'=>$r['scheduled_disposition_date'],'status'=>$r['record_status'],'confidentiality'=>$r['confidentiality_level'],'sourceModule'=>$r['source_module'],'createdAt'=>$r['created_at']]; }
 }
+

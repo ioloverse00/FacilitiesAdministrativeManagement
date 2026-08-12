@@ -1,0 +1,93 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Visitor Management</title>
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/table-audit.js" defer></script>
+    <script src="../assets/js/visitor-management.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Visitor Management"
+    data-breadcrumb-title="Visitor Management"
+    data-active-nav="visitor-management"
+    data-page-heading="Visitor Management"
+    data-page-description="Reception and security queue for verifying submitted visitors, processing check-ins, badges, and check-outs.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace visitor-management-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>Visitor Management</h1>
+                                <p>Reception and security queue for verifying submitted visitors, processing check-ins, badges, and check-outs.</p>
+                                <span id="visitor-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="visitor-refresh" class="btn-primary dashboard-action-button" type="button"><span class="material-symbols-outlined" aria-hidden="true">refresh</span>Refresh Queue</button>
+                                <a class="btn-secondary dashboard-action-button" href="visitor-scanner.html"><span class="material-symbols-outlined" aria-hidden="true">qr_code_scanner</span>Open Visitor Scanner</a>
+                                <button id="visitor-export" class="btn-secondary dashboard-action-button" type="button"><span class="material-symbols-outlined" aria-hidden="true">download</span>Export</button>
+                                <button id="visitor-register-walkin" class="btn-secondary dashboard-action-button hidden" type="button" title="Manual Registration is for contingency use only when QR, kiosk, phone, or internet registration is unavailable."><span class="material-symbols-outlined" aria-hidden="true">edit_note</span>Manual Registration</button>
+                            </div>
+                        </header>
+
+                        <section class="visitor-summary-strip" id="visitor-summary" aria-live="polite"></section>
+
+                        <section class="facility-section" aria-labelledby="visitor-table-title">
+                            <div class="facility-table-card visitor-table-card">
+                                <div class="facility-table-header visitor-table-header">
+                                    <div>
+                                        <h2 id="visitor-table-title">Visitor Records</h2>
+                                        <p id="visitor-table-count">Loading visitor records...</p>
+                                    </div>
+                                    <div class="facility-header-controls visitor-search-actions">
+                                        <label class="facility-field facility-search-field"><span class="sr-only">Search visitors</span><input id="visitor-search" type="search" placeholder="Search visitors..."></label>
+                                        <button id="visitor-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
+                                    </div>
+                                </div>
+                                <div id="visitor-loading-state" class="fam-state" aria-live="polite"><span class="material-symbols-outlined" aria-hidden="true">progress_activity</span><span>Loading visitor records...</span></div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table visitor-management-table">
+                                        <colgroup>
+                                            <col class="table-col-reference">
+                                            <col class="table-col-visitor">
+                                            <col class="table-col-category">
+                                            <col class="table-col-department">
+                                            <col class="table-col-datetime">
+                                            <col class="table-col-datetime">
+                                            <col class="table-col-status">
+                                            <col class="table-col-actions">
+                                        </colgroup>
+                                        <thead><tr><th><button type="button" class="facility-sort-button" data-visitor-sort="visitor_reference_number">Visitor Reference</button></th><th><button type="button" class="facility-sort-button" data-visitor-sort="full_name">Visitor</button></th><th data-column="visitorType"></th><th data-column="destination"></th><th>Time In</th><th>Time Out</th><th data-column="status"></th><th>Actions</th></tr></thead>
+                                        <tbody id="visitor-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="visitor-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                                <div class="facility-pagination" aria-label="Visitor pagination"><button id="visitor-prev-page" class="facility-page-button" type="button">Previous</button><span id="visitor-page-status">Page 1 of 1</span><button id="visitor-next-page" class="facility-page-button" type="button">Next</button></div>
+                            </div>
+                        </section>
+                        <aside id="visitor-details-drawer" class="facility-drawer-placeholder" hidden></aside>
+                        <div id="visitor-dialog" class="facility-dialog" hidden></div>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>
+
+
+
+
+

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Notifications' . DIRECTORY_SEPARATOR . 'NotificationService.php';
+
 final class FacilityRequestPolicy
 {
     public static function hasPermission(array $user, string $permission): bool
@@ -145,7 +147,7 @@ final class FacilityRequestService
     {
         $where = ['fr.deleted_at IS NULL']; $params = [];
         if (($query['search'] ?? '') !== '') { $where[] = '(fr.request_number LIKE :search OR fr.subject LIKE :search OR fr.description LIKE :search)'; $params['search'] = '%' . trim((string)$query['search']) . '%'; }
-        foreach (['status'=>'fr.status','priority'=>'fr.priority','category_id'=>'fr.request_category_id','department_id'=>'fr.department_reference_id','assigned_to'=>'fr.assigned_to_employee_reference_id'] as $key=>$column) {
+        foreach (['status'=>'fr.status','priority'=>'fr.priority','category_id'=>'fr.request_category_id','department_id'=>'fr.department_reference_id','assigned_to'=>'fr.assigned_to_employee_reference_id','requested_by'=>'fr.requested_by_employee_reference_id'] as $key=>$column) {
             if (($query[$key] ?? '') !== '') { $where[] = "$column = :$key"; $params[$key] = $query[$key]; }
         }
         if (($query['date_from'] ?? '') !== '') { $where[] = 'fr.created_at >= :date_from'; $params['date_from'] = $this->dateTime((string)$query['date_from']); }
@@ -214,6 +216,9 @@ final class FacilityRequestService
         $row = $this->find($id);
         $this->safeAudit($user, 'FACILITY_REQUEST_CREATED', 'SUCCESS', $id, $number, null, $row ? $this->shape($row, true) : []);
         $this->safeActivity($user, $id, $number, 'FACILITY_REQUEST_CREATED', 'Facility request created', (string)$clean['subject']);
+        if ($row && (string) ($row['source_channel'] ?? '') === 'EMPLOYEE_PORTAL') {
+            $this->safeNotifyAdmins($row, 'FACILITY_REQUEST_SUBMITTED', 'New Facility Request', sprintf('%s was submitted by %s.', $number, (string) ($row['requester_full_name'] ?? 'an employee')));
+        }
         return $this->details($id) ?? ['id'=>$id,'request_number'=>$number];
     }
 
@@ -254,7 +259,9 @@ final class FacilityRequestService
         $after = $this->find($id);
         $this->safeAudit($user, 'FACILITY_REQUEST_ASSIGNED', 'SUCCESS', $id, (string)$before['request_number'], $this->shape($before, true), $after ? $this->shape($after, true) : []);
         $this->safeActivity($user, $id, (string)$before['request_number'], 'FACILITY_REQUEST_ASSIGNED', 'Facility request assigned', (string)$before['subject']);
-        $this->notifyEmployee($employeeId, 'FACILITY_REQUEST_ASSIGNED', 'Facility request assigned', (string)$before['subject'], $id, (string)$before['request_number']);
+        if ($after && $new !== $old) {
+            $this->safeNotifyRequester($after, 'FACILITY_REQUEST_ASSIGNED', 'Facility Request Assigned', sprintf('Your Facility Request %s has been assigned.', (string)$before['request_number']));
+        }
         return $this->details($id);
     }
 
@@ -281,6 +288,16 @@ final class FacilityRequestService
         $after = $this->find($id);
         $this->safeAudit($user, 'FACILITY_REQUEST_STATUS_CHANGED', 'SUCCESS', $id, (string)$before['request_number'], $this->shape($before, true), $after ? $this->shape($after, true) : []);
         $this->safeActivity($user, $id, (string)$before['request_number'], 'FACILITY_REQUEST_STATUS_CHANGED', 'Facility request status changed', (string)$before['status'].' to '.$next);
+        if ($after && $next !== (string) $before['status']) {
+            if ($next === 'CANCELLED' && (int) ($before['requested_by_employee_reference_id'] ?? 0) === (int) ($user['employee_id'] ?? 0)) {
+                $this->safeNotifyAdmins($after, 'FACILITY_REQUEST_CANCELLED_BY_REQUESTER', 'Facility Request Cancelled', sprintf('%s was cancelled by %s.', (string)$before['request_number'], (string)($before['requester_full_name'] ?? 'the requester')));
+            } else {
+                $message = $this->requesterStatusMessage((string)$before['request_number'], $next);
+                if ($message !== null) {
+                    $this->safeNotifyRequester($after, 'FACILITY_REQUEST_' . $next, $message[0], $message[1]);
+                }
+            }
+        }
         return $this->details($id);
     }
 
@@ -369,13 +386,31 @@ final class FacilityRequestService
         } catch (Throwable $e) { error_log('Facility request activity failed: '.get_class($e).': '.$e->getMessage().' in '.$e->getFile().':'.$e->getLine()); }
     }
 
-    private function notifyEmployee(int $employeeId, string $event, string $title, string $message, int $id, string $reference): void
+    private function safeNotifyAdmins(array $request, string $event, string $title, string $message): void
     {
         try {
-            $stmt=$this->pdo->prepare('SELECT user_account_id FROM user_account WHERE employee_reference_id=:employee_id AND account_status=\'ACTIVE\' AND deleted_at IS NULL LIMIT 1');
-            $stmt->execute(['employee_id'=>$employeeId]); $userId=$stmt->fetchColumn(); if (!$userId) return;
-            $this->pdo->prepare("INSERT INTO notification (recipient_user_id,event_code,module_code,notification_type,title,message,priority,related_entity_type,related_entity_id,related_reference,metadata_json,created_at) VALUES (:user_id,:event,'FACILITY_REQUESTS','IN_APP',:title,:message,'NORMAL','facility_request',:id,:reference,:metadata,NOW())")->execute(['user_id'=>(int)$userId,'event'=>$event,'title'=>$title,'message'=>$message,'id'=>$id,'reference'=>$reference,'metadata'=>json_encode(['source'=>'facility_requests_api'])]);
+            (new NotificationService($this->pdo))->notifyFacilityAdmins($request, $event, $title, $message);
         } catch (Throwable $e) { error_log('Facility request notification failed: '.get_class($e).': '.$e->getMessage().' in '.$e->getFile().':'.$e->getLine()); }
+    }
+
+    private function safeNotifyRequester(array $request, string $event, string $title, string $message): void
+    {
+        try {
+            (new NotificationService($this->pdo))->notifyFacilityRequester($request, $event, $title, $message);
+        } catch (Throwable $e) { error_log('Facility request notification failed: '.get_class($e).': '.$e->getMessage().' in '.$e->getFile().':'.$e->getLine()); }
+    }
+
+    private function requesterStatusMessage(string $reference, string $status): ?array
+    {
+        return match ($status) {
+            'PENDING_APPROVAL' => ['Facility Request Under Review', sprintf('Your Facility Request %s is now under review.', $reference)],
+            'APPROVED' => ['Facility Request Approved', sprintf('Your Facility Request %s has been approved.', $reference)],
+            'REJECTED' => ['Facility Request Rejected', sprintf('Your Facility Request %s was rejected.', $reference)],
+            'IN_PROGRESS' => ['Facility Request In Progress', sprintf('Work has started on Facility Request %s.', $reference)],
+            'COMPLETED' => ['Facility Request Completed', sprintf('Facility Request %s has been completed.', $reference)],
+            'CANCELLED' => ['Facility Request Cancelled', sprintf('Facility Request %s has been cancelled.', $reference)],
+            default => null,
+        };
     }
 
     private function uuid(): string

@@ -12,6 +12,7 @@
     <script src="../assets/js/modal.js" defer></script>
     <script src="../assets/js/layout.js" defer></script>
     <script src="../assets/js/api-client.js" defer></script>
+    <script src="../assets/js/table-audit.js" defer></script>
     <script src="../assets/js/facility-requests.js" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body"
@@ -65,6 +66,15 @@
                                 </div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table">
+                                        <colgroup>
+                                            <col class="table-col-reference">
+                                            <col class="table-col-subject">
+                                            <col class="table-col-category">
+                                            <col class="table-col-priority">
+                                            <col class="table-col-status">
+                                            <col class="table-col-datetime">
+                                            <col class="table-col-actions">
+                                        </colgroup>
                                         <thead>
                                             <tr>
                                                 <th><button type="button" class="facility-sort-button" data-sort="requestNo">Request No.</button></th>
@@ -72,8 +82,6 @@
                                                 <th data-column="category"></th>
                                                 <th data-column="priority"></th>
                                                 <th data-column="status"></th>
-                                                <th data-column="slaState"></th>
-                                                <th data-column="assignedTo"></th>
                                                 <th data-column="submitted"></th>
                                                 <th>Actions</th>
                                             </tr>

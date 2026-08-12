@@ -22,10 +22,14 @@
 
     const iconMap = {
         'Facility Requests': 'domain',
+        'Facilities Reservation': 'meeting_room',
         Maintenance: 'build',
         'Maintenance Requests': 'build',
         'Asset Management': 'inventory_2',
         'Room Reservations': 'meeting_room',
+        'Document Management': 'folder',
+        'Records Retention': 'fact_check',
+        'Records Retention & Compliance': 'fact_check',
         Procurement: 'shopping_bag',
         'Administrative Records': 'folder'
     };
@@ -161,19 +165,21 @@
         if (!target) return;
         if (!items?.length) {
             target.innerHTML = `<tr><td colspan="7">${stateMessage('No pending actions require your review.', 'task_alt')}</td></tr>`;
+            window.FAMTableAudit?.check(target.closest('table'), 'dashboard-pending-table');
             return;
         }
         target.innerHTML = items.map(item => `
             <tr>
-                <td>${escapeHtml(item.reference)}</td>
-                <td>${escapeHtml(item.item)}</td>
-                <td>${escapeHtml(item.module)}</td>
+                <td><span class="table-cell-truncate" title="${escapeHtml(item.reference)}">${escapeHtml(item.reference)}</span></td>
+                <td><span class="table-cell-truncate" title="${escapeHtml(item.item)}">${escapeHtml(item.item)}</span></td>
+                <td><span class="table-cell-truncate" title="${escapeHtml(item.module)}">${escapeHtml(item.module)}</span></td>
                 <td>${statusBadge(item.priority)}</td>
-                <td>${escapeHtml(item.submitted)}</td>
+                <td><span class="table-cell-truncate" title="${escapeHtml(item.submitted)}">${escapeHtml(item.submitted)}</span></td>
                 <td>${statusBadge(item.status)}</td>
                 <td><a class="fam-table-action" href="${item.href}">${escapeHtml(item.action)}</a></td>
             </tr>
         `).join('');
+        window.FAMTableAudit?.check(target.closest('table'), 'dashboard-pending-table');
     }
 
     function renderRecentActivity(items) {

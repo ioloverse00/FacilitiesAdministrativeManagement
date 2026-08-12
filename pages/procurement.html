@@ -11,6 +11,7 @@
     <script src="../assets/js/profile-dropdown.js" defer></script>
     <script src="../assets/js/modal.js" defer></script>
     <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/table-audit.js" defer></script>
     <script src="../assets/js/procurement.js" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body"
@@ -64,15 +65,22 @@
                                 </div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table procurement-table">
+                                        <colgroup>
+                                            <col class="table-col-reference">
+                                            <col class="table-col-purpose">
+                                            <col class="table-col-priority">
+                                            <col class="table-col-status">
+                                            <col class="table-col-amount">
+                                            <col class="table-col-datetime">
+                                            <col class="table-col-actions">
+                                        </colgroup>
                                         <thead>
                                             <tr>
                                                 <th><button type="button" class="facility-sort-button" data-sort="requestNo">Request No.</button></th>
                                                 <th><button type="button" class="facility-sort-button" data-sort="purpose">Purpose</button></th>
-                                                <th data-column="origin"></th>
                                                 <th data-column="priority"></th>
                                                 <th data-column="status"></th>
                                                 <th data-column="estimatedCost"></th>
-                                                <th data-column="requestedBy"></th>
                                                 <th data-column="submitted"></th>
                                                 <th>Actions</th>
                                             </tr>

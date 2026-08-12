@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     class ApiError extends Error {
         constructor(message, details) {
             super(message || 'Request failed.');
@@ -19,7 +19,7 @@
     }
 
     function loginUrl() {
-        return `${window.location.origin}${appBasePath()}pages/authentication_card_component_standard.html`;
+        return `${window.location.origin}${appBasePath()}pages/login.html`;
     }
 
     function pageLoginUrl() {

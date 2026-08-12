@@ -1,4 +1,4 @@
-<div id="sidebar-backdrop" class="fixed top-16 bottom-0 left-0 right-0 md:inset-0 bg-gray-900/50 backdrop-blur-md z-40 hidden md:hidden transition-opacity duration-300 opacity-0"></div>
+﻿<div id="sidebar-backdrop" class="fixed top-16 bottom-0 left-0 right-0 md:inset-0 bg-gray-900/50 backdrop-blur-md z-40 hidden md:hidden transition-opacity duration-300 opacity-0"></div>
 
 <aside id="app-sidebar" class="dashboard-sidebar fixed md:static top-16 md:top-auto left-0 z-50 bg-white flex flex-col shrink-0 shadow-xl md:shadow-none transition-all duration-300 ease-in-out overflow-hidden w-64 border-r border-slate-200 -translate-x-full md:translate-x-0 opacity-100" data-expanded-width="16rem" aria-label="Application navigation">
     <div class="shrink-0 px-4 pt-4 pb-4 border-b border-slate-200">
@@ -6,7 +6,7 @@
             <span class="sidebar-brand-icon inline-flex items-center justify-center w-11 h-11 rounded-[1.35rem] bg-slate-100 text-primary text-xl shadow-sm" aria-hidden="true">
                 <span class="material-symbols-outlined">account_balance</span>
             </span>
-            <p id="sidebar-brand-title" class="text-sm font-semibold text-slate-950 truncate">Agency Name</p>
+            <p id="sidebar-brand-title" class="text-sm font-semibold text-slate-950 truncate">Moses Group of Companies</p>
             <p id="sidebar-brand-category" class="text-xs text-slate-500 mt-1 truncate">Facilities & Administrative Systems</p>
         </div>
     </div>
@@ -16,29 +16,21 @@
             <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">dashboard</span>
             <span class="font-label font-medium text-sm">Dashboard</span>
         </a>
-        <a class="sidebar-main-link" href="../pages/facility-requests.html" data-nav-key="facilities">
-            <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">domain</span>
-            <span class="font-label font-medium text-sm">Facility Requests</span>
-        </a>
-        <a class="sidebar-main-link" href="../pages/maintenance.html" data-nav-key="maintenance">
-            <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">build</span>
-            <span class="font-label font-medium text-sm">Maintenance Requests</span>
-        </a>
-        <a class="sidebar-main-link" href="../pages/assets.html" data-nav-key="assets">
-            <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">inventory_2</span>
-            <span class="font-label font-medium text-sm">Asset Management</span>
-        </a>
         <a class="sidebar-main-link" href="../pages/room-reservations.html" data-nav-key="room-reservations">
             <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">meeting_room</span>
-            <span class="font-label font-medium text-sm">Room Reservations</span>
+            <span class="font-label font-medium text-sm">Facilities Reservation</span>
         </a>
-        <a class="sidebar-main-link" href="../pages/procurement.html" data-nav-key="procurement">
-            <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">shopping_bag</span>
-            <span class="font-label font-medium text-sm">Procurement Requests</span>
+        <a class="sidebar-main-link" href="../pages/visitor-management.html" data-nav-key="visitor-management" data-requires-permission="visitors.view">
+            <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">badge</span>
+            <span class="font-label font-medium text-sm">Visitor Management</span>
         </a>
         <a class="sidebar-main-link" href="../pages/records.html" data-nav-key="records">
             <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">folder</span>
-            <span class="font-label font-medium text-sm">Administrative Records</span>
+            <span class="font-label font-medium text-sm">Document Management</span>
+        </a>
+        <a class="sidebar-main-link" href="../pages/records-retention.html" data-nav-key="records-retention" data-requires-permission="retention.view">
+            <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">fact_check</span>
+            <span class="font-label font-medium text-sm">Records Retention &amp; Compliance</span>
         </a>
         <a class="sidebar-main-link" href="../pages/reports.html" data-nav-key="reports">
             <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">insert_chart</span>
@@ -54,3 +46,5 @@
         </div>
     </nav>
 </aside>
+
+

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>Administrative Records</title>
+    <title>Document Management</title>
     <script src="../assets/js/theme.js"></script>
     <link href="../assets/css/app.css" rel="stylesheet">
     <script src="../assets/js/navigation.js" defer></script>
@@ -11,14 +11,16 @@
     <script src="../assets/js/profile-dropdown.js" defer></script>
     <script src="../assets/js/modal.js" defer></script>
     <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/api-client.js" defer></script>
+    <script src="../assets/js/table-audit.js" defer></script>
     <script src="../assets/js/records.js" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body"
-    data-page-title="Administrative Records"
-    data-breadcrumb-title="Administrative Records"
+    data-page-title="Document Management"
+    data-breadcrumb-title="Document Management"
     data-active-nav="records"
-    data-page-heading="Administrative Records"
-    data-page-description="Manage organizational documents, contracts, compliance records, and administrative files.">
+    data-page-heading="Document Management"
+    data-page-description="Manage, organize, version, and retrieve official FAM documents.">
     <div id="app-shell" class="app-shell">
         <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
         <div class="app-main-panel">
@@ -26,34 +28,65 @@
             <main id="app-content" class="app-main bg-surface-container-lowest">
                 <div id="page-content" class="app-page-content facility-requests-workspace records-workspace">
                     <div class="facility-requests-shell">
-                        <header class="facility-page-header">
+                        <header class="facility-page-header document-page-header">
                             <div class="facility-title-block">
-                                <h1>Administrative Records</h1>
-                                <p>Manage organizational documents, contracts, compliance records, and administrative files.</p>
+                                <h1>Document Management</h1>
+                                <p>Manage, organize, version, and retrieve official FAM documents.</p>
                                 <span id="records-updated" class="fam-last-updated">Last updated: Loading...</span>
                             </div>
                             <div class="facility-header-actions">
-                                <button id="records-refresh" class="fam-icon-button" type="button" aria-label="Refresh administrative records">
+                                <button id="records-refresh" class="fam-icon-button" type="button" aria-label="Refresh documents">
                                     <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
                                 </button>
                                 <button id="records-export" class="btn-primary dashboard-action-button" type="button">
                                     <span class="material-symbols-outlined" aria-hidden="true">download</span>
                                     Export
                                 </button>
+                                <button id="document-add" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+                                    Add Document
+                                </button>
                             </div>
                         </header>
+
+                        <section class="document-summary-strip" aria-label="Document summary">
+                            <article>
+                                <span class="material-symbols-outlined" aria-hidden="true">description</span>
+                                <div><strong id="document-active-count">0</strong><p>Active Documents</p></div>
+                            </article>
+                            <article>
+                                <span class="material-symbols-outlined" aria-hidden="true">archive</span>
+                                <div><strong id="document-archived-count">0</strong><p>Archived Documents</p></div>
+                            </article>
+                            <article>
+                                <span class="material-symbols-outlined" aria-hidden="true">update</span>
+                                <div><strong id="document-recent-count">0</strong><p>Recent Updates</p></div>
+                            </article>
+                        </section>
 
                         <section class="facility-section" aria-labelledby="records-table-title">
                             <div class="facility-table-card">
                                 <div class="facility-table-header">
                                     <div>
-                                        <h2 id="records-table-title">Administrative Records</h2>
-                                        <p id="records-table-count">Loading document records...</p>
+                                        <h2 id="records-table-title">Document Repository</h2>
+                                        <p id="records-table-count">Loading documents...</p>
                                     </div>
                                     <div class="facility-header-controls">
                                         <label class="facility-field facility-search-field">
                                             <span class="sr-only">Search</span>
-                                            <input id="records-search" type="search" placeholder="Search records...">
+                                            <input id="records-search" type="search" placeholder="Search documents...">
+                                        </label>
+                                        <label class="facility-field document-filter-field">
+                                            <span class="sr-only">Category</span>
+                                            <select id="document-category-filter"><option value="all">All Categories</option></select>
+                                        </label>
+                                        <label class="facility-field document-filter-field">
+                                            <span class="sr-only">Confidentiality</span>
+                                            <select id="document-confidentiality-filter"><option value="all">All Confidentiality</option></select>
+                                        </label>
+                                        <label class="facility-field document-filter-field">
+                                            <span class="sr-only">Status</span>
+                                            <select id="document-status-filter"><option value="all">All Statuses</option></select>
                                         </label>
                                         <button id="records-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
                                     </div>
@@ -64,15 +97,23 @@
                                 </div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table records-table">
+                                        <colgroup>
+                                            <col class="document-col-document">
+                                            <col class="document-col-category">
+                                            <col class="document-col-related">
+                                            <col class="document-col-version">
+                                            <col class="document-col-status">
+                                            <col class="document-col-updated">
+                                            <col class="document-col-actions">
+                                        </colgroup>
                                         <thead>
                                             <tr>
-                                                <th><button type="button" class="facility-sort-button" data-sort="documentNo">Document No.</button></th>
-                                                <th><button type="button" class="facility-sort-button" data-sort="title">Title</button></th>
-                                                <th data-column="category"></th>
-                                                <th data-column="owner"></th>
-                                                <th data-column="version"></th>
-                                                <th data-column="reviewDate"></th>
-                                                <th data-column="status"></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="title">Document</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="category">Category</button></th>
+                                                <th>Related To</th>
+                                                <th>Version</th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="status">Status</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="updated_at">Updated</button></th>
                                                 <th>Actions</th>
                                             </tr>
                                         </thead>
@@ -88,29 +129,8 @@
                             </div>
                         </section>
 
-                        <aside id="records-details-drawer" class="facility-drawer-placeholder" aria-label="Administrative record details drawer placeholder" hidden>
-                            <div data-drawer-section="general-information"></div>
-                            <div data-drawer-section="document-metadata"></div>
-                            <div data-drawer-section="version-history"></div>
-                            <div data-drawer-section="attachments"></div>
-                            <div data-drawer-section="related-assets"></div>
-                            <div data-drawer-section="related-building"></div>
-                            <div data-drawer-section="related-room"></div>
-                            <div data-drawer-section="related-contract"></div>
-                            <div data-drawer-section="review-history"></div>
-                            <div data-drawer-section="approval-history"></div>
-                            <div data-drawer-section="access-permissions"></div>
-                            <div data-drawer-section="activity-timeline"></div>
-                            <div data-drawer-field="document-number"></div>
-                            <div data-drawer-field="contract-number"></div>
-                            <div data-drawer-field="vendor-party"></div>
-                            <div data-drawer-field="effective-date"></div>
-                            <div data-drawer-field="expiration-date"></div>
-                            <div data-drawer-field="renewal-status"></div>
-                            <div data-drawer-field="next-review-date"></div>
-                            <div data-drawer-field="review-frequency"></div>
-                            <div data-drawer-field="assigned-reviewer"></div>
-                        </aside>
+                        <aside id="document-dialog" class="facility-dialog document-dialog" hidden></aside>
+                        <aside id="document-details-modal" class="facility-details-modal document-details-modal" hidden></aside>
                     </div>
                 </div>
                 <div id="app-footer-slot" class="app-footer-slot"></div>

@@ -59,6 +59,14 @@ set_exception_handler(static function (Throwable $exception): void {
                 $previous->getLine()
             ));
         }
+    } elseif ($exception instanceof DatabaseConfigurationException || $exception instanceof DatabaseConnectionException) {
+        error_log(sprintf(
+            'API error: %s: %s in %s:%d',
+            $exception::class,
+            $exception->getMessage(),
+            $exception->getFile(),
+            $exception->getLine()
+        ));
     } else {
         error_log('API error: ' . $exception::class);
     }

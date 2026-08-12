@@ -1,9 +1,10 @@
 ﻿(function () {
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const title = value => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const title = value => String(value || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     const fmt = value => value ? new Date(String(value).replace(' ', 'T')).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not applicable';
     const currency = (value, code = 'PHP') => new Intl.NumberFormat(undefined, { style: 'currency', currency: code || 'PHP' }).format(Number(value || 0));
     const badge = (value, type = 'status') => `<span class="facility-badge facility-${type}-${String(value || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${esc(title(value || 'Not applicable'))}</span>`;
+    const truncate = (value, className = 'table-cell-truncate') => `<span class="${className}" title="${esc(value || 'Not applicable')}">${esc(value || 'Not applicable')}</span>`;
 
     function qs(id) { return document.getElementById(id); }
     function params(state) {
@@ -12,18 +13,36 @@
         p.set('page', state.page); p.set('per_page', state.perPage); p.set('sort', state.sort); p.set('direction', state.direction);
         return p.toString();
     }
+    function renderHeaders(config) {
+        const columns = Array.isArray(config.columns) ? config.columns : [];
+        const table = qs(config.tableBodyId)?.closest('table');
+        if (!table) return;
+        table.querySelectorAll('th[data-column]').forEach(th => {
+            const key = th.dataset.column;
+            const column = columns.find(col => col.columnKey === key || col.key === key);
+            th.innerHTML = `<span class="facility-column-label">${esc(column?.label || title(key))}</span>`;
+        });
+    }
+    function auditTable(config) {
+        const table = qs(config.tableBodyId)?.closest('table');
+        if (!table || !window.FAMTableAudit) return;
+        window.FAMTableAudit.check(table, config.tableBodyId);
+    }
     function renderRows(config, rows, state) {
         const loading = qs(config.loadingId), body = qs(config.tableBodyId), empty = qs(config.emptyId), count = qs(config.countId), pager = document.querySelector(config.paginationSelector);
+        renderHeaders(config);
         loading?.classList.add('hidden');
         if (count) count.textContent = rows.length ? `${state.pagination.total} ${config.recordLabel}` : `No matching ${config.recordLabel}`;
         if (!body) return;
+        auditTable(config);
         if (!rows.length) {
             body.innerHTML = ''; empty?.classList.remove('hidden'); pager?.classList.add('hidden');
             if (empty) empty.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">inbox</span><strong>${esc(config.emptyTitle)}</strong><span>${esc(config.emptyText || 'Records will appear here after they are created in the database.')}</span>`;
             return;
         }
         empty?.classList.add('hidden'); pager?.classList.remove('hidden');
-        body.innerHTML = rows.map(row => `<tr data-live-id="${row.id}">${config.columns.map(col => `<td class="${esc(col.className || '')}">${col.render ? col.render(row, { esc, title, fmt, currency, badge }) : esc(row[col.key])}</td>`).join('')}<td class="facility-actions-cell"><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-live-view="${row.id}">View Details</button></div></td></tr>`).join('');
+        body.innerHTML = rows.map(row => `<tr data-live-id="${row.id}">${config.columns.map(col => `<td class="${esc(col.className || '')}">${col.render ? col.render(row, { esc, title, fmt, currency, badge, truncate }) : truncate(row[col.key])}</td>`).join('')}<td class="facility-actions-cell"><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-live-view="${row.id}" aria-label="View details">&#8942;</button></div></td></tr>`).join('');
+        auditTable(config);
     }
     function renderPagination(config, state) {
         const pages = Math.max(1, Number(state.pagination.total_pages || 1));
