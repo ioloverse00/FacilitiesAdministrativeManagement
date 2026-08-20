@@ -497,7 +497,8 @@
         }
     }
 
-    function detail(label, value) { return `<dl class="facility-detail-row"><dt>${esc(label)}</dt><dd>${esc(value || 'Not available')}</dd></dl>`; }
+    function detail(label, value, className = '') { return `<dl class="facility-detail-row ${esc(className)}"><dt>${esc(label)}</dt><dd>${esc(value || 'Not available')}</dd></dl>`; }
+    function detailGrid(content) { return `<div class="detail-grid">${content}</div>`; }
     function actionHelper(item) {
         if (item.allowed_actions?.check_in_not_yet) return `<p class="fam-muted employee-reservation-action-note">Check-in will be available 30 minutes before your reservation.</p>`;
         if (item.allowed_actions?.check_in_ended) return `<p class="fam-muted employee-reservation-action-note">The check-in period has ended.</p>`;
@@ -513,11 +514,13 @@
     }
     function renderDetails(dialog, item) {
         const history = (item.history || []).map(row => `<li><strong>${esc(title(row.new_status))}</strong><span>${esc(fmtDateTime(row.changed_at))}</span>${row.change_reason ? `<p>${esc(row.change_reason)}</p>` : ''}</li>`).join('');
+        const reservationDetails = detailGrid(`${detail('Reservation Number', item.reservationNo)}${detail('Status', statusLabel(item))}${detail('Approval Status', title(item.approval))}${detail('Expected Attendees', item.attendees)}${detail('Purpose', item.purpose, 'detail-item--full')}${detail('Setup Requirements', item.lifecycle?.setup_requirements, 'detail-item--full')}${detail('Cancellation / Rejection Reason', item.lifecycle?.cancellation_reason || item.lifecycle?.remarks, 'detail-item--full')}`);
+        const scheduleRoom = detailGrid(`${detail('Room', item.room)}${detail('Building', item.building)}${detail('Date', fmtDate(item.start))}${detail('Start Time', fmtTime(item.start))}${detail('End Time', fmtTime(item.end))}${detail('Approved At', fmtDateTime(item.lifecycle?.approved_at))}${detail('Check In Time', fmtDateTime(item.lifecycle?.checked_in_at))}${detail('Check Out Time', fmtDateTime(item.lifecycle?.checked_out_at))}`);
         dialog.innerHTML = `<div class="facility-dialog-panel employee-request-details">
             <div class="facility-details-modal-header"><div><p>My Room Reservations</p><span class="facility-details-modal-request-number">${esc(item.reservationNo)}</span><h2>${esc(item.room || 'Reservation Details')}</h2></div><button class="facility-details-modal-close" type="button" data-close-dialog aria-label="Close reservation details">&times;</button></div>
             <div class="facility-details-modal-body"><div class="visitor-detail-accordion">
-                <details class="visitor-detail-disclosure" open><summary>Reservation Details</summary>${detail('Reservation Number', item.reservationNo)}${detail('Status', statusLabel(item))}${detail('Approval Status', title(item.approval))}${detail('Purpose', item.purpose)}${detail('Expected Attendees', item.attendees)}${detail('Setup Requirements', item.lifecycle?.setup_requirements)}${detail('Cancellation / Rejection Reason', item.lifecycle?.cancellation_reason || item.lifecycle?.remarks)}</details>
-                <details class="visitor-detail-disclosure" open><summary>Schedule and Room</summary>${detail('Room', item.room)}${detail('Building', item.building)}${detail('Date', fmtDate(item.start))}${detail('Start Time', fmtTime(item.start))}${detail('End Time', fmtTime(item.end))}${detail('Approved At', fmtDateTime(item.lifecycle?.approved_at))}${detail('Check In Time', fmtDateTime(item.lifecycle?.checked_in_at))}${detail('Check Out Time', fmtDateTime(item.lifecycle?.checked_out_at))}</details>
+                <details class="visitor-detail-disclosure" open><summary>Reservation Details</summary>${reservationDetails}</details>
+                <details class="visitor-detail-disclosure" open><summary>Schedule and Room</summary>${scheduleRoom}</details>
                 <details class="visitor-detail-disclosure"><summary>Activity History</summary>${history ? `<ol class="facility-history-list visitor-activity-timeline">${history}</ol>` : '<p>No activity history recorded.</p>'}</details>
             </div></div>
             ${workflowActions(item)}

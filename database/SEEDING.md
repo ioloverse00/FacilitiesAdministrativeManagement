@@ -26,6 +26,7 @@ Both seed files are wrapped in `START TRANSACTION;` and `COMMIT;` and are intend
 - `PR-2026-%`
 - `DOC-2026-%`
 - `REC-2026-%`
+- `LM-2026-%`
 - `CON-2026-%`
 - `VIS-2026-%`
 - `VP-2026-%`

@@ -1,0 +1,35 @@
+[
+  {
+    "fixture": "philippine_drivers_license_sample_01",
+    "image": "philippine_drivers_license_sample_01.jpg",
+    "expected": {
+      "document_detected": true,
+      "full_name": "DELA CRUZ, JUAN PEDRO GARCIA",
+      "id_type": "DRIVER_LICENSE",
+      "id_last4": "3456",
+      "needs_review": false
+    }
+  },
+  {
+    "fixture": "driver_license_label_layout_example",
+    "image": "driver_license_label_layout_example.png",
+    "expected": {
+      "document_detected": true,
+      "full_name": "JUAN DELA CRUZ",
+      "id_type": "DRIVER_LICENSE",
+      "id_last4": "0047",
+      "needs_review": false
+    }
+  },
+  {
+    "fixture": "poor_quality_unknown_card_example",
+    "image": "poor_quality_unknown_card_example.png",
+    "expected": {
+      "document_detected": true,
+      "full_name": null,
+      "id_type": "OTHER",
+      "id_last4": null,
+      "needs_review": true
+    }
+  }
+]

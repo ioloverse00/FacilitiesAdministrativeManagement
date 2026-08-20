@@ -42,11 +42,14 @@ The following built/supporting features are preserved for direct access, integra
 ## Visitor Management Ownership Rules
 
 - Reuse the existing `visitor` and `visit` tables for visitor profile and visit lifecycle data.
-- Use `visitor_badge` for reusable physical badge inventory and issue/return state.
+- Treat the authenticated Reception Console as the active Phase 1 intake workflow for normal on-site visitor entry.
+- Use `visitor_badge` for reusable physical badge inventory and issue/return state. Direct reception check-in requires an available badge and moves the badge to `ISSUED`.
 - Use `visitor_visit_history` for lifecycle history instead of writing ad hoc status notes into the visit record.
 - Write audit/activity telemetry for create, review, check-in, check-out, and update actions.
 - Keep applicant references as metadata on visits until a separate admissions/applicant module owns applicant source data.
 - Store public OTP challenges in `visitor_registration_challenge`; never store or expose plaintext OTP values.
+- Public registration, OTP, and visitor pass QR fields remain compatibility/future-phase workflows; they are not the primary Phase 1 reception workflow.
+- Do not store raw ID images, OCR output, or scanned document files in Visitor Management Phase 1.
 
 ## Employee Portal Ownership Rules
 

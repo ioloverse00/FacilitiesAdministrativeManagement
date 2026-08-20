@@ -19,8 +19,43 @@ final class RetentionPolicy
 
 final class RetentionService
 {
+    private const DUE_REVIEW_DAYS = 30;
+
     public function __construct(private readonly PDO $pdo)
     {
+    }
+
+    public static function countRecordsDueForReview(PDO $pdo): int
+    {
+        $sql = self::baseSelectStatic('COUNT(DISTINCT r.record_id)') . ' WHERE r.deleted_at IS NULL AND ' . self::dueStateSql('DUE_FOR_REVIEW');
+        return (int) $pdo->query($sql)->fetchColumn();
+    }
+
+    public static function calculateScheduledDispositionDate(?string $startDate, ?array $schedule): ?string
+    {
+        if ($startDate === null || $startDate === '' || $schedule === null || self::isPermanentSchedule($schedule)) {
+            return null;
+        }
+
+        $value = max(0, (int) ($schedule['retention_period_value'] ?? $schedule['periodValue'] ?? 0));
+        $unit = strtoupper((string) ($schedule['retention_period_unit'] ?? $schedule['periodUnit'] ?? 'YEARS'));
+        $date = new DateTimeImmutable($startDate);
+        return match ($unit) {
+            'DAYS' => $date->modify("+$value days")->format('Y-m-d'),
+            'MONTHS' => $date->modify("+$value months")->format('Y-m-d'),
+            default => $date->modify("+$value years")->format('Y-m-d'),
+        };
+    }
+
+    public static function isPermanentSchedule(?array $schedule): bool
+    {
+        if ($schedule === null) {
+            return false;
+        }
+
+        $unit = strtoupper((string) ($schedule['retention_period_unit'] ?? $schedule['periodUnit'] ?? ''));
+        $action = strtoupper((string) ($schedule['disposition_action'] ?? $schedule['dispositionAction'] ?? ''));
+        return $unit === 'PERMANENT' || $action === 'PERMANENT';
     }
 
     public function list(array $query): array
@@ -40,6 +75,10 @@ final class RetentionService
         $sort = $sortMap[(string) ($query['sort'] ?? '')] ?? 'r.scheduled_disposition_date';
         $direction = strtolower((string) ($query['direction'] ?? 'asc')) === 'desc' ? 'DESC' : 'ASC';
         [$where, $params] = $this->filters($query);
+        $dueState = strtoupper((string) ($query['due_state'] ?? 'all'));
+        if ($dueState !== '' && $dueState !== 'ALL') {
+            $where .= ' AND ' . self::dueStateSql($dueState);
+        }
 
         $count = $this->pdo->prepare($this->baseSelect('COUNT(DISTINCT r.record_id)') . $where);
         $count->execute($params);
@@ -55,10 +94,6 @@ final class RetentionService
         $statement->execute();
 
         $items = array_map(fn (array $row): array => $this->shape($row), $statement->fetchAll());
-        if (($query['due_state'] ?? 'all') !== 'all') {
-            $items = array_values(array_filter($items, fn (array $item): bool => $item['dueState'] === $query['due_state']));
-            $total = count($items);
-        }
 
         return [
             'items' => $items,
@@ -100,7 +135,7 @@ final class RetentionService
             'schedules' => $this->schedules(),
             'categories' => array_values(array_filter(array_unique(array_map(fn (array $row): string => (string) $row['record_category'], $this->rows("SELECT DISTINCT record_category FROM retention_schedule WHERE record_category IS NOT NULL AND record_category <> '' ORDER BY record_category"))))),
             'statuses' => ['ACTIVE', 'ARCHIVED', 'DISPOSED', 'ON_HOLD'],
-            'due_states' => ['ACTIVE', 'DUE_SOON', 'DUE_FOR_REVIEW', 'OVERDUE', 'ON_HOLD', 'ARCHIVED', 'DISPOSED', 'PERMANENT'],
+            'due_states' => ['ACTIVE', 'DUE_FOR_REVIEW', 'OVERDUE', 'ON_HOLD', 'ARCHIVED', 'DISPOSED', 'PERMANENT'],
             'hold_states' => ['NONE', 'ACTIVE', 'RELEASED'],
         ];
     }
@@ -147,10 +182,17 @@ final class RetentionService
         if ($schedule === null || $schedule['status'] !== 'ACTIVE' || $startDate === null) {
             throw new InvalidArgumentException(json_encode(['retention_schedule_id' => 'Choose an active retention schedule and start date.'], JSON_THROW_ON_ERROR));
         }
-        if ($this->show($id) === null) {
+        $item = $this->show($id);
+        if ($item === null) {
             return null;
         }
-        $disposition = $this->calculateDispositionDate($startDate, $schedule);
+        if (in_array($item['recordStatus'], ['ARCHIVED', 'DISPOSED'], true)) {
+            throw new InvalidArgumentException(json_encode(['record' => 'Terminal records cannot be reassigned.'], JSON_THROW_ON_ERROR));
+        }
+        if ($item['legalHoldStatus'] === 'ACTIVE') {
+            throw new InvalidArgumentException(json_encode(['legal_hold' => 'Release the legal hold before changing this record schedule.'], JSON_THROW_ON_ERROR));
+        }
+        $disposition = self::calculateScheduledDispositionDate($startDate, $schedule);
         $statement = $this->pdo->prepare('UPDATE record SET retention_schedule_id = :schedule_id, retention_start_date = :start_date, scheduled_disposition_date = :disposition_date, updated_by_user_id = :user_id, updated_at = NOW() WHERE record_id = :id AND deleted_at IS NULL');
         $statement->execute(['schedule_id' => $scheduleId, 'start_date' => $startDate, 'disposition_date' => $disposition, 'user_id' => (int) $user['id'], 'id' => $id]);
         $this->logActivity('RETENTION_ASSIGNED', 'Retention Schedule Assigned', $id, (int) $user['id'], ['schedule_id' => $scheduleId, 'retention_start_date' => $startDate, 'scheduled_disposition_date' => $disposition]);
@@ -171,6 +213,12 @@ final class RetentionService
         if ($item['recordStatus'] === 'DISPOSED') {
             throw new InvalidArgumentException(json_encode(['record' => 'Disposed records cannot be extended.'], JSON_THROW_ON_ERROR));
         }
+        if ($item['legalHoldStatus'] === 'ACTIVE') {
+            throw new InvalidArgumentException(json_encode(['legal_hold' => 'Release the legal hold before extending this record.'], JSON_THROW_ON_ERROR));
+        }
+        if ($item['dueState'] === 'PERMANENT') {
+            throw new InvalidArgumentException(json_encode(['record' => 'Permanent retention records cannot be extended.'], JSON_THROW_ON_ERROR));
+        }
         $this->pdo->prepare('UPDATE record SET scheduled_disposition_date = :date, last_reviewed_at = NOW(), disposition_reason = :reason, updated_by_user_id = :user_id, updated_at = NOW() WHERE record_id = :id')->execute(['date' => $newDate, 'reason' => $reason, 'user_id' => (int) $user['id'], 'id' => $id]);
         $this->logActivity('RETENTION_EXTENDED', 'Retention Extended', $id, (int) $user['id'], ['new_date' => $newDate, 'reason' => $reason]);
         return $this->show($id);
@@ -178,6 +226,13 @@ final class RetentionService
 
     public function archive(int $id, array $data, array $user): ?array
     {
+        $item = $this->show($id);
+        if ($item === null) {
+            return null;
+        }
+        if ($item['legalHoldStatus'] === 'ACTIVE') {
+            throw new InvalidArgumentException(json_encode(['legal_hold' => 'Release the legal hold before archiving this record.'], JSON_THROW_ON_ERROR));
+        }
         return $this->transition($id, 'ARCHIVED', 'RETENTION_ARCHIVED', 'Record Archived', $data, $user, false);
     }
 
@@ -199,10 +254,14 @@ final class RetentionService
     public function placeHold(int $id, array $data, array $user): ?array
     {
         $reason = $this->requiredReason($data);
-        if ($this->show($id) === null) {
+        $item = $this->show($id);
+        if ($item === null) {
             return null;
         }
-        $this->pdo->prepare("UPDATE record SET legal_hold_status = 'ACTIVE', legal_hold_reason = :reason, legal_hold_placed_by_user_id = :user_id, legal_hold_placed_at = NOW(), legal_hold_released_by_user_id = NULL, legal_hold_released_at = NULL, legal_hold_release_reason = NULL, record_status = IF(record_status IN ('DISPOSED','ARCHIVED'), record_status, 'ON_HOLD'), updated_by_user_id = :user_id, updated_at = NOW() WHERE record_id = :id")->execute(['reason' => $reason, 'user_id' => (int) $user['id'], 'id' => $id]);
+        if (in_array($item['recordStatus'], ['ARCHIVED', 'DISPOSED'], true)) {
+            throw new InvalidArgumentException(json_encode(['record' => 'Terminal records cannot be placed on legal hold.'], JSON_THROW_ON_ERROR));
+        }
+        $this->pdo->prepare("UPDATE record SET legal_hold_status = 'ACTIVE', legal_hold_reason = :reason, legal_hold_placed_by_user_id = :placed_by, legal_hold_placed_at = NOW(), legal_hold_released_by_user_id = NULL, legal_hold_released_at = NULL, legal_hold_release_reason = NULL, record_status = IF(record_status IN ('DISPOSED','ARCHIVED'), record_status, 'ON_HOLD'), updated_by_user_id = :updated_by, updated_at = NOW() WHERE record_id = :id")->execute(['reason' => $reason, 'placed_by' => (int) $user['id'], 'updated_by' => (int) $user['id'], 'id' => $id]);
         $this->logActivity('LEGAL_HOLD_PLACED', 'Legal Hold Placed', $id, (int) $user['id'], ['reason' => $reason]);
         return $this->show($id);
     }
@@ -213,7 +272,7 @@ final class RetentionService
         if ($this->show($id) === null) {
             return null;
         }
-        $this->pdo->prepare("UPDATE record SET legal_hold_status = 'RELEASED', legal_hold_released_by_user_id = :user_id, legal_hold_released_at = NOW(), legal_hold_release_reason = :reason, record_status = IF(record_status = 'ON_HOLD', 'ACTIVE', record_status), updated_by_user_id = :user_id, updated_at = NOW() WHERE record_id = :id")->execute(['reason' => $reason, 'user_id' => (int) $user['id'], 'id' => $id]);
+        $this->pdo->prepare("UPDATE record SET legal_hold_status = 'RELEASED', legal_hold_released_by_user_id = :released_by, legal_hold_released_at = NOW(), legal_hold_release_reason = :reason, record_status = IF(record_status = 'ON_HOLD', 'ACTIVE', record_status), updated_by_user_id = :updated_by, updated_at = NOW() WHERE record_id = :id")->execute(['reason' => $reason, 'released_by' => (int) $user['id'], 'updated_by' => (int) $user['id'], 'id' => $id]);
         $this->logActivity('LEGAL_HOLD_RELEASED', 'Legal Hold Released', $id, (int) $user['id'], ['reason' => $reason]);
         return $this->show($id);
     }
@@ -224,12 +283,16 @@ final class RetentionService
         if ($this->show($id) === null) {
             return null;
         }
-        $sql = 'UPDATE record SET record_status = :status, last_reviewed_at = NOW(), disposition_reason = :reason, updated_by_user_id = :user_id, updated_at = NOW()';
+        $sql = 'UPDATE record SET record_status = :status, last_reviewed_at = NOW(), disposition_reason = :reason, updated_by_user_id = :updated_by, updated_at = NOW()';
         if ($dispositioned) {
-            $sql .= ', dispositioned_by_user_id = :user_id, dispositioned_at = NOW()';
+            $sql .= ', dispositioned_by_user_id = :dispositioned_by, dispositioned_at = NOW()';
         }
         $sql .= ' WHERE record_id = :id AND deleted_at IS NULL';
-        $this->pdo->prepare($sql)->execute(['status' => $status, 'reason' => $reason, 'user_id' => (int) $user['id'], 'id' => $id]);
+        $params = ['status' => $status, 'reason' => $reason, 'updated_by' => (int) $user['id'], 'id' => $id];
+        if ($dispositioned) {
+            $params['dispositioned_by'] = (int) $user['id'];
+        }
+        $this->pdo->prepare($sql)->execute($params);
         $this->logActivity($event, $title, $id, (int) $user['id'], ['reason' => $reason]);
         return $this->show($id);
     }
@@ -239,8 +302,12 @@ final class RetentionService
         $where = ['r.deleted_at IS NULL'];
         $params = [];
         if (($query['search'] ?? '') !== '') {
-            $where[] = '(r.record_number LIKE :search OR r.record_title LIKE :search OR r.record_description LIKE :search OR rs.schedule_name LIKE :search)';
-            $params['search'] = '%' . trim((string) $query['search']) . '%';
+            $search = '%' . trim((string) $query['search']) . '%';
+            $where[] = '(r.record_number LIKE :search_record OR r.record_title LIKE :search_title OR r.record_description LIKE :search_description OR rs.schedule_name LIKE :search_schedule)';
+            $params['search_record'] = $search;
+            $params['search_title'] = $search;
+            $params['search_description'] = $search;
+            $params['search_schedule'] = $search;
         }
         foreach (['status' => 'r.record_status', 'schedule_id' => 'r.retention_schedule_id', 'category' => 'rs.record_category', 'legal_hold_status' => 'r.legal_hold_status'] as $key => $column) {
             if (($query[$key] ?? '') !== '' && ($query[$key] ?? 'all') !== 'all') {
@@ -252,6 +319,19 @@ final class RetentionService
     }
 
     private function baseSelect(string $columns): string
+    {
+        return self::baseSelectStatic($columns);
+    }
+
+    public function attentionQueue(int $limit = 5): array
+    {
+        $limit = max(1, min(20, $limit));
+        $where = "r.deleted_at IS NULL AND (" . self::dueStateSql('OVERDUE') . ' OR ' . self::dueStateSql('DUE_FOR_REVIEW') . ')';
+        $rows = $this->rows($this->baseSelect($this->selectColumns()) . " WHERE $where ORDER BY r.scheduled_disposition_date ASC, r.updated_at DESC LIMIT $limit");
+        return array_map(fn (array $row): array => $this->shape($row), $rows);
+    }
+
+    private static function baseSelectStatic(string $columns): string
     {
         return "SELECT $columns FROM record r LEFT JOIN retention_schedule rs ON rs.retention_schedule_id = r.retention_schedule_id LEFT JOIN department_reference d ON d.department_reference_id = r.originating_department_reference_id LEFT JOIN employee_reference owner ON owner.employee_reference_id = r.record_owner_employee_reference_id ";
     }
@@ -301,9 +381,28 @@ final class RetentionService
                 'dispositionAction' => (string) ($row['disposition_action'] ?? ''),
                 'legalBasis' => (string) ($row['legal_basis'] ?? ''),
             ],
+            'allowedActions' => $this->allowedActions($status, $hold, $dueState),
             'createdAt' => (string) ($row['created_at'] ?? ''),
             'updatedAt' => (string) ($row['updated_at'] ?? ''),
         ];
+    }
+
+    private function allowedActions(string $recordStatus, string $legalHoldStatus, string $dueState): array
+    {
+        $status = strtoupper($recordStatus);
+        $hold = strtoupper($legalHoldStatus);
+        if (in_array($status, ['ARCHIVED', 'DISPOSED'], true)) {
+            return ['view'];
+        }
+        if ($hold === 'ACTIVE' || $status === 'ON_HOLD') {
+            return ['view', 'release-hold'];
+        }
+        $actions = ['view', 'assign', 'archive', 'place-hold'];
+        if ($dueState !== 'PERMANENT') {
+            $actions[] = 'extend';
+            $actions[] = 'dispose';
+        }
+        return $actions;
     }
 
     private function dueState(array $row): string
@@ -315,7 +414,7 @@ final class RetentionService
         if (strtoupper((string) ($row['legal_hold_status'] ?? 'NONE')) === 'ACTIVE' || $status === 'ON_HOLD') {
             return 'ON_HOLD';
         }
-        if ($this->isPermanent($row)) {
+        if (self::isPermanentSchedule($row)) {
             return 'PERMANENT';
         }
         $date = (string) ($row['scheduled_disposition_date'] ?? '');
@@ -327,7 +426,7 @@ final class RetentionService
         if ($due < $today) {
             return 'OVERDUE';
         }
-        if ($due <= $today->modify('+30 days')) {
+        if ($due <= $today->modify('+' . self::DUE_REVIEW_DAYS . ' days')) {
             return 'DUE_FOR_REVIEW';
         }
         return 'ACTIVE';
@@ -382,26 +481,27 @@ final class RetentionService
         return $clean;
     }
 
-    private function calculateDispositionDate(string $startDate, array $schedule): ?string
-    {
-        if ($this->isPermanent($schedule)) {
-            return null;
-        }
-        $value = max(0, (int) ($schedule['retention_period_value'] ?? $schedule['periodValue'] ?? 0));
-        $unit = strtoupper((string) ($schedule['retention_period_unit'] ?? $schedule['periodUnit'] ?? 'YEARS'));
-        $date = new DateTimeImmutable($startDate);
-        return match ($unit) {
-            'DAYS' => $date->modify("+$value days")->format('Y-m-d'),
-            'MONTHS' => $date->modify("+$value months")->format('Y-m-d'),
-            default => $date->modify("+$value years")->format('Y-m-d'),
-        };
-    }
-
     private function isPermanent(array $schedule): bool
     {
-        $unit = strtoupper((string) ($schedule['retention_period_unit'] ?? $schedule['periodUnit'] ?? ''));
-        $action = strtoupper((string) ($schedule['disposition_action'] ?? $schedule['dispositionAction'] ?? ''));
-        return $unit === 'PERMANENT' || $action === 'PERMANENT';
+        return self::isPermanentSchedule($schedule);
+    }
+
+    private static function dueStateSql(string $state): string
+    {
+        $terminal = "UPPER(COALESCE(r.record_status,'ACTIVE'))";
+        $hold = "UPPER(COALESCE(r.legal_hold_status,'NONE'))";
+        $permanent = "(UPPER(COALESCE(rs.retention_period_unit,'')) = 'PERMANENT' OR UPPER(COALESCE(rs.disposition_action,'')) = 'PERMANENT')";
+        $reviewCutoff = 'DATE_ADD(CURRENT_DATE(), INTERVAL ' . self::DUE_REVIEW_DAYS . ' DAY)';
+
+        return match ($state) {
+            'ARCHIVED' => "$terminal = 'ARCHIVED'",
+            'DISPOSED' => "$terminal = 'DISPOSED'",
+            'ON_HOLD' => "$terminal NOT IN ('ARCHIVED','DISPOSED') AND ($hold = 'ACTIVE' OR $terminal = 'ON_HOLD')",
+            'PERMANENT' => "$terminal NOT IN ('ARCHIVED','DISPOSED') AND $hold <> 'ACTIVE' AND $terminal <> 'ON_HOLD' AND $permanent",
+            'OVERDUE' => "$terminal NOT IN ('ARCHIVED','DISPOSED') AND $hold <> 'ACTIVE' AND $terminal <> 'ON_HOLD' AND NOT $permanent AND r.scheduled_disposition_date IS NOT NULL AND r.scheduled_disposition_date < CURRENT_DATE()",
+            'DUE_FOR_REVIEW' => "$terminal NOT IN ('ARCHIVED','DISPOSED') AND $hold <> 'ACTIVE' AND $terminal <> 'ON_HOLD' AND NOT $permanent AND r.scheduled_disposition_date IS NOT NULL AND r.scheduled_disposition_date BETWEEN CURRENT_DATE() AND $reviewCutoff",
+            default => "$terminal NOT IN ('ARCHIVED','DISPOSED') AND $hold <> 'ACTIVE' AND $terminal <> 'ON_HOLD' AND NOT $permanent AND (r.scheduled_disposition_date IS NULL OR r.scheduled_disposition_date > $reviewCutoff)",
+        };
     }
 
     private function schedule(int $id): ?array

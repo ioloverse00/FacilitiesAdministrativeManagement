@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'RecordsRetention' . DIRECTORY_SEPARATOR . 'RetentionService.php';
+
 final class DocumentPolicy
 {
     public static function hasPermission(array $user, string $permission): bool
@@ -41,6 +43,12 @@ final class DocumentService
         'image/png',
         'image/jpeg',
     ];
+    private const LEGAL_EVIDENCE_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg'];
+    private const LEGAL_EVIDENCE_MIME = [
+        'application/pdf',
+        'image/png',
+        'image/jpeg',
+    ];
 
     private const CATEGORY_MAP = [
         'FACILITY_RESERVATION' => ['DOC-RES', 'Facility & Reservation'],
@@ -54,7 +62,7 @@ final class DocumentService
     {
     }
 
-    public function list(array $query): array
+    public function list(array $query, ?array $user = null): array
     {
         $page = max(1, (int) ($query['page'] ?? 1));
         $perPage = min(100, max(1, (int) ($query['per_page'] ?? 10)));
@@ -70,7 +78,7 @@ final class DocumentService
         ];
         $sort = $sortMap[(string) ($query['sort'] ?? '')] ?? 'd.updated_at';
         $direction = strtolower((string) ($query['direction'] ?? 'desc')) === 'asc' ? 'ASC' : 'DESC';
-        [$where, $params] = $this->filters($query);
+        [$where, $params] = $this->filters($query, $this->canViewLegalDocuments($user));
 
         $count = $this->pdo->prepare($this->baseSelect('COUNT(DISTINCT d.document_id)') . $where);
         $count->execute($params);
@@ -111,6 +119,64 @@ final class DocumentService
         $item['currentVersion'] = $this->currentVersion($id);
         $item['retention'] = $this->retentionForDocument($id);
         return $item;
+    }
+
+    public function listRelated(string $module, string $reference): array
+    {
+        $module = strtolower(trim($module));
+        $reference = trim($reference);
+        if ($module === '' || $reference === '') {
+            return [];
+        }
+
+        $statement = $this->pdo->prepare($this->baseSelect($this->selectColumns()) . ' WHERE d.deleted_at IS NULL AND rec.source_module = :module AND rec.source_entity_type = :reference GROUP BY d.document_id ORDER BY d.updated_at DESC, d.document_id DESC');
+        $statement->execute([
+            'module' => $module,
+            'reference' => $reference,
+        ]);
+
+        return array_map(function (array $row): array {
+            $item = $this->shape($row);
+            $current = $this->currentVersion((int) $row['document_id']);
+            if ($current !== null) {
+                $item['currentVersion'] = $current;
+            }
+            return $item;
+        }, $statement->fetchAll());
+    }
+
+    public function currentRelatedFiles(string $module, string $reference): array
+    {
+        $module = strtolower(trim($module));
+        $reference = trim($reference);
+        if ($module === '' || $reference === '') {
+            return [];
+        }
+
+        $statement = $this->pdo->prepare("SELECT d.document_id, d.document_number, d.document_title, d.document_status, d.current_version_number, dv.document_version_id, dv.version_number, dv.file_name, dv.file_extension, dv.mime_type, dv.file_size, dv.storage_path, dv.file_hash, dv.uploaded_at FROM document d INNER JOIN record_document rd ON rd.document_id = d.document_id INNER JOIN record rec ON rec.record_id = rd.record_id AND rec.deleted_at IS NULL INNER JOIN document_version dv ON dv.document_id = d.document_id AND dv.deleted_at IS NULL AND dv.is_current = TRUE WHERE d.deleted_at IS NULL AND rec.source_module = :module AND rec.source_entity_type = :reference ORDER BY d.updated_at DESC, d.document_id DESC");
+        $statement->execute([
+            'module' => $module,
+            'reference' => $reference,
+        ]);
+
+        return array_map(function (array $row): array {
+            $storagePath = (string) $row['storage_path'];
+            return [
+                'id' => (int) $row['document_id'],
+                'documentNo' => (string) $row['document_number'],
+                'title' => (string) $row['document_title'],
+                'status' => (string) $row['document_status'],
+                'version' => 'v' . (int) $row['version_number'],
+                'versionNumber' => (int) $row['version_number'],
+                'fileName' => (string) $row['file_name'],
+                'extension' => (string) $row['file_extension'],
+                'mimeType' => (string) ($row['mime_type'] ?? 'application/octet-stream'),
+                'fileSize' => (int) ($row['file_size'] ?? 0),
+                'fileHash' => (string) ($row['file_hash'] ?? ''),
+                'uploadedAt' => (string) $row['uploaded_at'],
+                'absolutePath' => $this->storageRoot() . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $storagePath),
+            ];
+        }, $statement->fetchAll());
     }
 
     public function options(): array
@@ -167,6 +233,38 @@ final class DocumentService
         return $this->show($documentId) ?? [];
     }
 
+    public function validateUploadedFile(array $file): void
+    {
+        $this->validateUpload($file);
+    }
+
+    public function validateLegalEvidenceFile(array $file): void
+    {
+        $this->validateUpload($file, self::LEGAL_EVIDENCE_EXTENSIONS, self::LEGAL_EVIDENCE_MIME);
+    }
+
+    public function legalCategoryDefaults(): array
+    {
+        $statement = $this->pdo->prepare("SELECT document_category_id id, default_confidentiality_level default_confidentiality FROM document_category WHERE category_code = 'DOC-LEGAL' AND status = 'ACTIVE' LIMIT 1");
+        $statement->execute();
+        $row = $statement->fetch();
+        if (!is_array($row)) {
+            throw new InvalidArgumentException(json_encode(['document_category_id' => 'Legal document category is not configured.'], JSON_THROW_ON_ERROR));
+        }
+        return [
+            'document_category_id' => (int) $row['id'],
+            'confidentiality_level' => 'RESTRICTED',
+        ];
+    }
+
+    public function legalMatterReferenceForDocument(int $documentId): ?string
+    {
+        $statement = $this->pdo->prepare("SELECT rec.source_entity_type FROM record_document rd INNER JOIN record rec ON rec.record_id = rd.record_id AND rec.deleted_at IS NULL WHERE rd.document_id = :id AND rec.source_module = 'legal_management' LIMIT 1");
+        $statement->execute(['id' => $documentId]);
+        $reference = $statement->fetchColumn();
+        return is_string($reference) && $reference !== '' ? $reference : null;
+    }
+
     public function uploadVersion(int $documentId, array $data, array $file, array $user): ?array
     {
         if ($this->show($documentId) === null) {
@@ -183,6 +281,7 @@ final class DocumentService
             $this->pdo->prepare('UPDATE document_version SET is_current = FALSE WHERE document_id = :id')->execute(['id' => $documentId]);
             $this->insertVersion($documentId, $next, $stored, $upload, $summary, (int) $user['id']);
             $this->pdo->prepare('UPDATE document SET current_version_number = :version, updated_at = NOW() WHERE document_id = :id')->execute(['version' => $next, 'id' => $documentId]);
+            $this->markLinkedLegalSummariesStale($documentId, $user);
             $this->logActivity('DOCUMENT_VERSION_UPLOADED', 'New Version Uploaded', $documentId, (int) $user['id']);
             $this->pdo->commit();
         } catch (Throwable $exception) {
@@ -282,8 +381,10 @@ final class DocumentService
         ];
     }
 
-    private function validateUpload(array $file): array
+    private function validateUpload(array $file, ?array $allowedExtensions = null, ?array $allowedMime = null): array
     {
+        $allowedExtensions ??= self::ALLOWED_EXTENSIONS;
+        $allowedMime ??= self::ALLOWED_MIME;
         if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             throw new InvalidArgumentException(json_encode(['file' => 'Choose a file to upload.'], JSON_THROW_ON_ERROR));
         }
@@ -292,11 +393,11 @@ final class DocumentService
         }
         $original = basename((string) ($file['name'] ?? 'document'));
         $extension = strtolower(pathinfo($original, PATHINFO_EXTENSION));
-        if (!in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
+        if (!in_array($extension, $allowedExtensions, true)) {
             throw new InvalidArgumentException(json_encode(['file' => 'This file type is not supported.'], JSON_THROW_ON_ERROR));
         }
         $mime = (new finfo(FILEINFO_MIME_TYPE))->file((string) $file['tmp_name']) ?: '';
-        if (!in_array($mime, self::ALLOWED_MIME, true)) {
+        if (!in_array($mime, $allowedMime, true)) {
             throw new InvalidArgumentException(json_encode(['file' => 'This file type is not supported.'], JSON_THROW_ON_ERROR));
         }
 
@@ -318,7 +419,10 @@ final class DocumentService
         }
         $storedName = bin2hex(random_bytes(16)) . '.' . $upload['extension'];
         $absolutePath = $absoluteDir . DIRECTORY_SEPARATOR . $storedName;
-        if (!move_uploaded_file($upload['tmp_name'], $absolutePath)) {
+        $stored = is_uploaded_file($upload['tmp_name'])
+            ? move_uploaded_file($upload['tmp_name'], $absolutePath)
+            : (PHP_SAPI === 'cli' && copy($upload['tmp_name'], $absolutePath));
+        if (!$stored) {
             throw new RuntimeException('Unable to store uploaded document.');
         }
 
@@ -353,8 +457,11 @@ final class DocumentService
         if ($scheduleId === null || empty($user['employee_id'])) {
             return;
         }
+        $schedule = $this->retentionSchedule($scheduleId);
+        $retentionStart = $clean['document_date'] ?? date('Y-m-d');
+        $dispositionDate = RetentionService::calculateScheduledDispositionDate($retentionStart, $schedule);
         $recordNumber = $this->nextRecordNumber();
-        $statement = $this->pdo->prepare('INSERT INTO record (record_number, record_title, record_description, record_type, retention_schedule_id, originating_department_reference_id, record_owner_employee_reference_id, source_module, source_entity_type, source_entity_id, record_date, retention_start_date, scheduled_disposition_date, record_status, confidentiality_level, created_by_user_id, updated_by_user_id, created_at, updated_at) VALUES (:record_number, :title, :description, :type, :schedule_id, :department_id, :owner_id, :source_module, :source_entity_type, NULL, :record_date, :retention_start, NULL, :status, :confidentiality, :created_by, :updated_by, NOW(), NOW())');
+        $statement = $this->pdo->prepare('INSERT INTO record (record_number, record_title, record_description, record_type, retention_schedule_id, originating_department_reference_id, record_owner_employee_reference_id, source_module, source_entity_type, source_entity_id, record_date, retention_start_date, scheduled_disposition_date, record_status, confidentiality_level, created_by_user_id, updated_by_user_id, created_at, updated_at) VALUES (:record_number, :title, :description, :type, :schedule_id, :department_id, :owner_id, :source_module, :source_entity_type, NULL, :record_date, :retention_start, :disposition_date, :status, :confidentiality, :created_by, :updated_by, NOW(), NOW())');
         $recordType = ucwords(strtolower(str_replace('_', ' ', $clean['related_module'])));
         $statement->execute([
             'record_number' => $recordNumber,
@@ -366,8 +473,9 @@ final class DocumentService
             'owner_id' => (int) $user['employee_id'],
             'source_module' => strtolower($clean['related_module']),
             'source_entity_type' => $clean['related_reference'] ?: 'DOCUMENT',
-            'record_date' => $clean['document_date'] ?? date('Y-m-d'),
-            'retention_start' => $clean['document_date'] ?? date('Y-m-d'),
+            'record_date' => $retentionStart,
+            'retention_start' => $retentionStart,
+            'disposition_date' => $dispositionDate,
             'status' => $clean['status'],
             'confidentiality' => $clean['confidentiality_level'],
             'created_by' => (int) $user['id'],
@@ -418,6 +526,14 @@ final class DocumentService
         return $fallback === false || $fallback === null ? null : (int) $fallback;
     }
 
+    private function retentionSchedule(int $scheduleId): ?array
+    {
+        $statement = $this->pdo->prepare('SELECT * FROM retention_schedule WHERE retention_schedule_id = :id AND status = :status LIMIT 1');
+        $statement->execute(['id' => $scheduleId, 'status' => 'ACTIVE']);
+        $row = $statement->fetch();
+        return is_array($row) ? $row : null;
+    }
+
     private function baseSelect(string $columns): string
     {
         return "SELECT $columns FROM document d INNER JOIN document_category dc ON dc.document_category_id = d.document_category_id LEFT JOIN user_account uu ON uu.user_account_id = d.uploaded_by_user_id LEFT JOIN employee_reference uploader ON uploader.employee_reference_id = uu.employee_reference_id LEFT JOIN employee_reference owner ON owner.employee_reference_id = d.owner_employee_reference_id LEFT JOIN record_document rd ON rd.document_id = d.document_id LEFT JOIN record rec ON rec.record_id = rd.record_id AND rec.deleted_at IS NULL ";
@@ -428,13 +544,19 @@ final class DocumentService
         return "d.*, dc.category_code, dc.category_name, uploader.full_name uploaded_by_name, owner.full_name owner_name, GROUP_CONCAT(DISTINCT CONCAT(rec.source_module, '|', COALESCE(rec.source_entity_type,''), '|', rec.record_number) ORDER BY rec.record_number SEPARATOR ';;') related_records";
     }
 
-    private function filters(array $query): array
+    private function filters(array $query, bool $includeLegalDocuments = true): array
     {
         $where = ['d.deleted_at IS NULL'];
         $params = [];
+        if (!$includeLegalDocuments) {
+            $where[] = "NOT EXISTS (SELECT 1 FROM record_document rd_legal INNER JOIN record rec_legal ON rec_legal.record_id = rd_legal.record_id AND rec_legal.deleted_at IS NULL WHERE rd_legal.document_id = d.document_id AND rec_legal.source_module = 'legal_management')";
+        }
         if (($query['search'] ?? '') !== '') {
-            $where[] = '(d.document_number LIKE :search OR d.document_title LIKE :search OR d.document_description LIKE :search)';
-            $params['search'] = '%' . trim((string) $query['search']) . '%';
+            $where[] = '(d.document_number LIKE :search_document_number OR d.document_title LIKE :search_document_title OR d.document_description LIKE :search_document_description)';
+            $search = '%' . trim((string) $query['search']) . '%';
+            $params['search_document_number'] = $search;
+            $params['search_document_title'] = $search;
+            $params['search_document_description'] = $search;
         }
         foreach (['document_category_id' => 'd.document_category_id', 'confidentiality_level' => 'd.confidentiality_level', 'document_status' => 'd.document_status'] as $key => $column) {
             if (($query[$key] ?? '') !== '' && ($query[$key] ?? 'all') !== 'all') {
@@ -444,6 +566,16 @@ final class DocumentService
         }
 
         return [' WHERE ' . implode(' AND ', $where), $params];
+    }
+
+    private function canViewLegalDocuments(?array $user): bool
+    {
+        return $user === null || DocumentPolicy::hasPermission($user, 'legal.manage');
+    }
+
+    public function dashboardSummary(): array
+    {
+        return $this->summary();
     }
 
     private function summary(): array
@@ -611,6 +743,26 @@ final class DocumentService
             ]);
         } catch (Throwable $exception) {
             error_log('Document activity logging failed: ' . $exception::class);
+        }
+    }
+
+    private function markLinkedLegalSummariesStale(int $documentId, array $user): void
+    {
+        try {
+            $statement = $this->pdo->prepare("SELECT lm.legal_matter_id, lm.matter_number FROM record_document rd INNER JOIN record rec ON rec.record_id = rd.record_id AND rec.deleted_at IS NULL INNER JOIN legal_matter lm ON lm.matter_number = rec.source_entity_type AND lm.deleted_at IS NULL WHERE rd.document_id = :document_id AND rec.source_module = 'legal_management' AND lm.ai_summary_status IN ('READY','FAILED','NO_READABLE_SOURCE')");
+            $statement->execute(['document_id' => $documentId]);
+            foreach ($statement->fetchAll() as $matter) {
+                $this->pdo->prepare("UPDATE legal_matter SET ai_summary_status = 'STALE', updated_at = NOW() WHERE legal_matter_id = :id")->execute(['id' => (int) $matter['legal_matter_id']]);
+                $this->pdo->prepare('INSERT INTO legal_matter_history (legal_matter_id, event_type, from_status, to_status, description, metadata_json, actor_user_id, created_at) VALUES (:id, :event, NULL, NULL, :description, :metadata, :user_id, NOW())')->execute([
+                    'id' => (int) $matter['legal_matter_id'],
+                    'event' => 'LEGAL_AI_SUMMARY_STALE',
+                    'description' => 'Supporting document version changed. AI matter summary marked stale.',
+                    'metadata' => json_encode(['document_id' => $documentId], JSON_THROW_ON_ERROR),
+                    'user_id' => (int) $user['id'],
+                ]);
+            }
+        } catch (Throwable $exception) {
+            error_log('Legal AI stale marking failed: ' . $exception::class);
         }
     }
 

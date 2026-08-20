@@ -645,27 +645,55 @@ CREATE TABLE contract (
   CHECK(end_date>=start_date), CHECK(original_amount>=0 AND current_amount>=0)
 ) ENGINE=InnoDB;
 
-CREATE TABLE legal_case (
-  legal_case_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  case_number VARCHAR(60) NOT NULL UNIQUE, case_title VARCHAR(255) NOT NULL,
-  case_type VARCHAR(100) NOT NULL, case_description TEXT,
-  date_filed DATE, date_opened DATE NOT NULL, date_closed DATE,
-  case_status VARCHAR(30) NOT NULL DEFAULT 'OPEN', priority VARCHAR(30) NOT NULL DEFAULT 'NORMAL',
-  assigned_employee_reference_id BIGINT UNSIGNED NOT NULL, department_reference_id BIGINT UNSIGNED,
-  remarks TEXT, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, deleted_at DATETIME,
-  CONSTRAINT fk_legal_case_assignee FOREIGN KEY(assigned_employee_reference_id) REFERENCES employee_reference(employee_reference_id) ON DELETE RESTRICT,
-  CONSTRAINT fk_legal_case_department FOREIGN KEY(department_reference_id) REFERENCES department_reference(department_reference_id) ON DELETE SET NULL,
-  INDEX idx_legal_case_status(case_status)
+CREATE TABLE legal_matter (
+  legal_matter_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  matter_number VARCHAR(60) NOT NULL UNIQUE,
+  title VARCHAR(255) NOT NULL,
+  matter_type VARCHAR(50) NOT NULL,
+  summary TEXT NOT NULL,
+  priority VARCHAR(30) NOT NULL DEFAULT 'MEDIUM',
+  status VARCHAR(30) NOT NULL DEFAULT 'OPEN',
+  department_reference_id BIGINT UNSIGNED,
+  assigned_employee_reference_id BIGINT UNSIGNED,
+  reported_at DATE,
+  opened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  resolved_at DATETIME,
+  resolved_by_user_id BIGINT UNSIGNED,
+  resolution_summary TEXT,
+  closed_at DATETIME,
+  closed_by_user_id BIGINT UNSIGNED,
+  cancelled_at DATETIME,
+  cancelled_by_user_id BIGINT UNSIGNED,
+  cancellation_reason TEXT,
+  created_by_user_id BIGINT UNSIGNED,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME,
+  CONSTRAINT fk_legal_matter_department FOREIGN KEY(department_reference_id) REFERENCES department_reference(department_reference_id) ON DELETE SET NULL,
+  CONSTRAINT fk_legal_matter_assignee FOREIGN KEY(assigned_employee_reference_id) REFERENCES employee_reference(employee_reference_id) ON DELETE SET NULL,
+  CONSTRAINT fk_legal_matter_created_by FOREIGN KEY(created_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  CONSTRAINT fk_legal_matter_resolved_by FOREIGN KEY(resolved_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  CONSTRAINT fk_legal_matter_closed_by FOREIGN KEY(closed_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  CONSTRAINT fk_legal_matter_cancelled_by FOREIGN KEY(cancelled_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  INDEX idx_legal_matter_status(status),
+  INDEX idx_legal_matter_type(matter_type),
+  INDEX idx_legal_matter_priority(priority),
+  INDEX idx_legal_matter_updated(updated_at)
 ) ENGINE=InnoDB;
 
-CREATE TABLE legal_case_contract (
-  legal_case_contract_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  legal_case_id BIGINT UNSIGNED NOT NULL, contract_id BIGINT UNSIGNED NOT NULL,
-  relationship_type VARCHAR(100), remarks TEXT,
-  CONSTRAINT fk_legal_contract_case FOREIGN KEY(legal_case_id) REFERENCES legal_case(legal_case_id) ON DELETE CASCADE,
-  CONSTRAINT fk_legal_contract_contract FOREIGN KEY(contract_id) REFERENCES contract(contract_id) ON DELETE RESTRICT,
-  UNIQUE KEY uq_legal_case_contract(legal_case_id,contract_id)
+CREATE TABLE legal_matter_history (
+  legal_matter_history_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  legal_matter_id BIGINT UNSIGNED NOT NULL,
+  event_type VARCHAR(100) NOT NULL,
+  from_status VARCHAR(30),
+  to_status VARCHAR(30),
+  description TEXT NOT NULL,
+  metadata_json LONGTEXT,
+  actor_user_id BIGINT UNSIGNED,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_legal_matter_history_matter FOREIGN KEY(legal_matter_id) REFERENCES legal_matter(legal_matter_id) ON DELETE CASCADE,
+  CONSTRAINT fk_legal_matter_history_actor FOREIGN KEY(actor_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  INDEX idx_legal_matter_history_matter(legal_matter_id, created_at)
 ) ENGINE=InnoDB;
 
 -- SHARED WORKFLOW / DASHBOARD

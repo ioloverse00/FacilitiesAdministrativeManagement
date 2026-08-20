@@ -99,14 +99,14 @@
         if (!container) return;
 
         const toast = document.createElement('div');
-        toast.className = 'bg-surface text-on-surface px-5 py-3.5 rounded-2xl shadow-xl border border-outline-variant/40 flex items-center gap-3 transform translate-y-4 opacity-0 transition-all duration-300 pointer-events-auto';
-        toast.innerHTML = '<div class="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-sm font-bold">check</span></div><span class="text-sm font-medium"></span>';
-        toast.querySelector('span:last-child').textContent = toastMessage;
+        toast.className = 'fam-toast fam-toast-enter';
+        toast.innerHTML = '<span class="fam-toast-icon material-symbols-outlined" aria-hidden="true">check</span><span class="fam-toast-message"></span>';
+        toast.querySelector('.fam-toast-message').textContent = toastMessage;
         container.appendChild(toast);
         void toast.offsetWidth;
-        toast.classList.remove('translate-y-4', 'opacity-0');
+        toast.classList.remove('fam-toast-enter');
         setTimeout(() => {
-            toast.classList.add('translate-y-4', 'opacity-0');
+            toast.classList.add('fam-toast-enter');
             setTimeout(() => toast.remove(), 300);
         }, 3500);
     }

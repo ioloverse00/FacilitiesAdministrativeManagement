@@ -19,7 +19,7 @@
     data-breadcrumb-title="Visitor Management"
     data-active-nav="visitor-management"
     data-page-heading="Visitor Management"
-    data-page-description="Reception and security queue for verifying submitted visitors, processing check-ins, badges, and check-outs.">
+    data-page-description="Manage visitor arrivals, badge assignments, active visits, and check-outs.">
     <div id="app-shell" class="app-shell">
         <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
         <div class="app-main-panel">
@@ -30,14 +30,13 @@
                         <header class="facility-page-header">
                             <div class="facility-title-block">
                                 <h1>Visitor Management</h1>
-                                <p>Reception and security queue for verifying submitted visitors, processing check-ins, badges, and check-outs.</p>
+                                <p>Manage visitor arrivals, badge assignments, active visits, and check-outs.</p>
                                 <span id="visitor-updated" class="fam-last-updated">Last updated: Loading...</span>
                             </div>
                             <div class="facility-header-actions">
                                 <button id="visitor-refresh" class="btn-primary dashboard-action-button" type="button"><span class="material-symbols-outlined" aria-hidden="true">refresh</span>Refresh Queue</button>
-                                <a class="btn-secondary dashboard-action-button" href="visitor-scanner.html"><span class="material-symbols-outlined" aria-hidden="true">qr_code_scanner</span>Open Visitor Scanner</a>
+                                <a class="btn-secondary dashboard-action-button" href="visitor-scanner.html"><span class="material-symbols-outlined" aria-hidden="true">badge</span>Visitor Reception Console</a>
                                 <button id="visitor-export" class="btn-secondary dashboard-action-button" type="button"><span class="material-symbols-outlined" aria-hidden="true">download</span>Export</button>
-                                <button id="visitor-register-walkin" class="btn-secondary dashboard-action-button hidden" type="button" title="Manual Registration is for contingency use only when QR, kiosk, phone, or internet registration is unavailable."><span class="material-symbols-outlined" aria-hidden="true">edit_note</span>Manual Registration</button>
                             </div>
                         </header>
 
@@ -50,9 +49,10 @@
                                         <h2 id="visitor-table-title">Visitor Records</h2>
                                         <p id="visitor-table-count">Loading visitor records...</p>
                                     </div>
-                                    <div class="facility-header-controls visitor-search-actions">
+                                    <div class="facility-header-controls visitor-records-toolbar">
                                         <label class="facility-field facility-search-field"><span class="sr-only">Search visitors</span><input id="visitor-search" type="search" placeholder="Search visitors..."></label>
-                                        <button id="visitor-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Visitor type</span><select id="visitor-type-filter"><option value="all">All Types</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Status</span><select id="visitor-status-filter"><option value="all">All Statuses</option></select></label>
                                     </div>
                                 </div>
                                 <div id="visitor-loading-state" class="fam-state" aria-live="polite"><span class="material-symbols-outlined" aria-hidden="true">progress_activity</span><span>Loading visitor records...</span></div>
@@ -68,7 +68,7 @@
                                             <col class="table-col-status">
                                             <col class="table-col-actions">
                                         </colgroup>
-                                        <thead><tr><th><button type="button" class="facility-sort-button" data-visitor-sort="visitor_reference_number">Visitor Reference</button></th><th><button type="button" class="facility-sort-button" data-visitor-sort="full_name">Visitor</button></th><th data-column="visitorType"></th><th data-column="destination"></th><th>Time In</th><th>Time Out</th><th data-column="status"></th><th>Actions</th></tr></thead>
+                                        <thead><tr><th><button type="button" class="facility-sort-button" data-visitor-sort="visitor_reference_number">Visitor Reference</button></th><th><button type="button" class="facility-sort-button" data-visitor-sort="full_name">Visitor</button></th><th>Type</th><th>Destination</th><th>Time In</th><th>Time Out</th><th>Status</th><th>Actions</th></tr></thead>
                                         <tbody id="visitor-table"></tbody>
                                     </table>
                                 </div>

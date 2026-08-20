@@ -6,8 +6,10 @@ $user = currentApiUser();
 DocumentPolicy::requireAnyPermission($user, ['records.edit', 'records.create']);
 requireCsrfToken();
 try {
+    $documentId = idParam();
+    requireLegalDocumentAccessIfNeeded($documentId, $user);
     $file = $_FILES['file'] ?? [];
-    $item = documentService()->uploadVersion(idParam(), $_POST, is_array($file) ? $file : [], $user);
+    $item = documentService()->uploadVersion($documentId, $_POST, is_array($file) ? $file : [], $user);
     if ($item === null) jsonResponse(false, 'Document not found.', [], 404);
     jsonResponse(true, 'New document version uploaded.', ['item' => $item]);
 } catch (Throwable $e) {

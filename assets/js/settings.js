@@ -215,7 +215,7 @@
     const panels = {
         general() {
             return `${sectionHeader('General Settings', 'Configure basic operational preferences for the FAM subsystem.')}
-                ${sectionGroup('General Information', `<div class="admin-form-grid">${field('System Display Name', 'Facilities & Administrative Management')}${field('Organization Name', 'Moses Group of Companies')}${field('Organization Logo', 'Logo placeholder')}</div>`)}
+                ${sectionGroup('General Information', `<div class="admin-form-grid">${field('System Display Name', 'Facilities & Administrative Management')}${field('Organization Name', 'Great Solomon Manpower Services Inc.')}${field('Organization Logo', 'Logo placeholder')}</div>`)}
                 ${sectionGroup('Timezone & Localization', `<div class="admin-form-grid">${selectField('Default Timezone', 'Asia/Manila', ['Asia/Manila', 'UTC', 'Asia/Singapore'])}${selectField('Default Language', 'English', ['English', 'Filipino'])}${selectField('Date Format', 'MMM DD, YYYY', ['MMM DD, YYYY', 'YYYY-MM-DD', 'DD/MM/YYYY'])}${selectField('Time Format', '12-hour', ['12-hour', '24-hour'])}${selectField('Currency', 'PHP', ['PHP', 'USD'])}${selectField('Fiscal Year Start', 'January', ['January', 'April', 'July', 'October'])}</div>`)}
                 ${sectionGroup('Business Hours', `<div class="admin-form-grid">${field('Working Days', 'Monday to Friday')}${field('Business Hours Start', '8:00 AM')}${field('Business Hours End', '5:00 PM')}</div>`)}
                 ${sectionGroup('System Defaults', `<div class="admin-form-grid">${selectField('Default Landing Page', 'Dashboard', ['Dashboard', 'Reports & Analytics'])}</div>`)}`;

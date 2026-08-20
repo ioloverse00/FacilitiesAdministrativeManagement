@@ -244,6 +244,8 @@
         modal.hidden = false;
         const uploadAction = (can('records.edit') || can('records.create')) ? '<button class="btn-primary dashboard-action-button" type="button" data-document-version-from-details><span class="material-symbols-outlined" aria-hidden="true">upgrade</span>Upload New Version</button>' : '';
         const archiveAction = can('records.edit') && item.status !== 'ARCHIVED' ? '<button class="btn-secondary dashboard-action-button document-danger-action-button" type="button" data-document-archive-from-details><span class="material-symbols-outlined" aria-hidden="true">archive</span>Archive Document</button>' : '';
+        const documentInfo = detailGrid(`${detail('Document Number', item.documentNo)}${detail('Status', title(item.status))}${detail('Category', item.category)}${detail('Confidentiality', title(item.confidentiality))}${detail('Related To', item.relatedTo)}${detail('Current Version', `v${item.currentVersionNumber || current.versionNumber || 1}`)}${detail('Created By', item.createdBy)}${detail('Created At', fmt(item.createdAt))}${detail('Updated At', fmt(item.updatedAt))}${item.description ? detail('Description', item.description, 'detail-item--full') : ''}`);
+        const retentionInfo = item.retention ? detailGrid(`${detail('Record Number', item.retention.recordNo)}${detail('Schedule', item.retention.scheduleName)}${detail('Retention Start', item.retention.retentionStartDate)}${detail('Scheduled Review Date', item.retention.scheduledDispositionDate)}${detail('Record Status', title(item.retention.status))}${detail('Legal Hold', title(item.retention.legalHoldStatus))}`) : '';
         modal.innerHTML = `<div class="facility-details-modal-panel visitor-details-panel document-details-panel">
             <div class="facility-details-modal-header visitor-details-header document-details-header">
                 <div><p>Document Number</p><span class="facility-details-modal-request-number">${esc(item.documentNo)}</span><h2>${esc(item.title)}</h2></div>
@@ -251,9 +253,9 @@
             </div>
             <div class="facility-details-modal-body visitor-details-body document-details-body">
                 <div class="visitor-detail-accordion document-detail-accordion">
-                    <details class="visitor-detail-disclosure" open><summary>Document Information</summary>${detail('Document Number', item.documentNo)}${detail('Title', item.title)}${detail('Category', item.category)}${item.description ? detail('Description', item.description) : ''}${detail('Confidentiality', title(item.confidentiality))}${detail('Status', title(item.status))}${detail('Related To', item.relatedTo)}${detail('Created By', item.createdBy)}${detail('Created At', fmt(item.createdAt))}${detail('Updated At', fmt(item.updatedAt))}</details>
+                    <details class="visitor-detail-disclosure" open><summary>Document Information</summary>${documentInfo}</details>
                     <details class="visitor-detail-disclosure" open><summary>Current File</summary><div class="document-file-row"><div><span class="material-symbols-outlined document-file-icon" aria-hidden="true">${fileIcon(current)}</span><div><strong>${esc(current.fileName || 'File unavailable')}</strong><small>${esc(fileType(current))} | ${esc(size(current.fileSize))}</small><small>Version ${esc(String(item.currentVersionNumber || current.versionNumber || 1))}</small></div></div><div class="document-file-actions"><a href="${esc(api(`documents/view.php?id=${item.id}`))}" target="_blank" rel="noopener">View File</a><a href="${esc(api(`documents/download.php?id=${item.id}`))}">Download</a></div></div></details>
-                    ${item.retention ? `<details class="visitor-detail-disclosure"><summary>Retention</summary>${detail('Record Number', item.retention.recordNo)}${detail('Schedule', item.retention.scheduleName)}${detail('Retention Start', item.retention.retentionStartDate)}${detail('Scheduled Review Date', item.retention.scheduledDispositionDate)}${detail('Record Status', title(item.retention.status))}${detail('Legal Hold', title(item.retention.legalHoldStatus))}<p><a class="facility-text-button" href="../pages/records-retention.html?record_id=${esc(item.retention.recordId)}">Open retention record</a></p></details>` : ''}
+                    ${item.retention ? `<details class="visitor-detail-disclosure"><summary>Retention</summary>${retentionInfo}<p><a class="facility-text-button" href="../pages/records-retention.html?record_id=${esc(item.retention.recordId)}">Open retention record</a></p></details>` : ''}
                     ${(item.versions || []).length ? `<details class="visitor-detail-disclosure"><summary><span>Version History</span>${uploadAction ? '<button class="facility-text-button document-summary-action" type="button" data-document-version-from-details>Upload New Version</button>' : ''}</summary><div class="document-version-list">${(item.versions || []).map(versionRow).join('')}</div></details>` : ''}
                 </div>
             </div>
@@ -263,8 +265,12 @@
         modal.querySelector('[data-document-details-close]')?.focus();
     }
 
-    function detail(label, value) {
-        return value ? `<dl class="facility-detail-row"><dt>${esc(label)}</dt><dd>${esc(value)}</dd></dl>` : '';
+    function detail(label, value, className = '') {
+        return value ? `<dl class="facility-detail-row ${esc(className)}"><dt>${esc(label)}</dt><dd>${esc(value)}</dd></dl>` : '';
+    }
+
+    function detailGrid(content) {
+        return `<div class="detail-grid">${content}</div>`;
     }
 
     function versionRow(version) {

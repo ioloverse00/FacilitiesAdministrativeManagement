@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Reservations' . DIRECTORY_SEPARATOR . 'ReservationService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Visitors' . DIRECTORY_SEPARATOR . 'VisitorService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Documents' . DIRECTORY_SEPARATOR . 'DocumentService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'RecordsRetention' . DIRECTORY_SEPARATOR . 'RetentionService.php';
 
 final class LiveDataService
 {
@@ -10,29 +13,39 @@ final class LiveDataService
 
     public function dashboard(): array
     {
-        (new ReservationService($this->pdo))->reconcileExpiredApprovedReservations();
+        $reservations = new ReservationService($this->pdo);
+        $visitors = new VisitorService($this->pdo);
+        $documents = new DocumentService($this->pdo);
+        $retention = new RetentionService($this->pdo);
+        $reservationSummary = $reservations->dashboardSummary();
+        $visitorSummary = $visitors->dashboardSummary();
+        $documentSummary = $documents->dashboardSummary();
         return [
             'generatedAt' => date('c'),
             'alerts' => $this->alerts(),
             'kpis' => [
-                'facilityRequests' => $this->count('facility_request'),
-                'facilityOpen' => (int) $this->scalar("SELECT COUNT(*) FROM facility_request WHERE deleted_at IS NULL AND status NOT IN ('COMPLETED','VERIFIED','CLOSED','CANCELLED','REJECTED')"),
-                'maintenance' => $this->count('maintenance_work_order'),
-                'maintenanceOpen' => (int) $this->scalar("SELECT COUNT(*) FROM maintenance_work_order WHERE deleted_at IS NULL AND status NOT IN ('COMPLETED','VERIFIED','CANCELLED')"),
-                'assets' => $this->count('asset'),
-                'assetsAttention' => (int) $this->scalar("SELECT COUNT(*) FROM asset WHERE deleted_at IS NULL AND condition_status IN ('POOR','CRITICAL','FOR_INSPECTION')"),
-                'reservations' => $this->count('facility_reservation'),
-                'reservationsToday' => (int) $this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND DATE(start_datetime)=CURRENT_DATE() AND status IN ('SUBMITTED','APPROVED','CHECKED_IN','COMPLETED')"),
-                'procurement' => $this->count('procurement_request'),
-                'procurementOpen' => (int) $this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND status NOT IN ('COMPLETED','CANCELLED','REJECTED')"),
-                'records' => $this->count('record'),
-                'recordsDispositionDue' => (int) $this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND scheduled_disposition_date IS NOT NULL AND scheduled_disposition_date<=DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)"),
-                'overdueSla' => (int) $this->scalar("SELECT COUNT(*) FROM sla_tracking st INNER JOIN facility_request fr ON fr.facility_request_id=st.facility_request_id WHERE fr.deleted_at IS NULL AND fr.status NOT IN ('COMPLETED','VERIFIED','CLOSED','CANCELLED','REJECTED') AND (st.resolution_breached=1 OR st.resolution_due_at<NOW())")
+                'reservationsToday' => $reservationSummary['today'] ?? 0,
+                'reservationsPendingApproval' => $reservationSummary['pending_approval'] ?? 0,
+                'visitorsCheckedIn' => $visitorSummary['checked_in'] ?? 0,
+                'visitorsToday' => $visitorSummary['today'] ?? 0,
+                'activeDocuments' => $documentSummary['active'] ?? 0,
+                'recentDocuments' => $documentSummary['recent'] ?? 0,
+                'recordsDispositionDue' => RetentionService::countRecordsDueForReview($this->pdo),
             ],
-            'requestTrend' => $this->requestTrend(),
-            'requestStatus' => $this->groupRows('facility_request', 'status'),
-            'pendingActions' => $this->pendingTasks(),
-            'todaySchedule' => $this->todaySchedule(),
+            'charts' => [
+                'reservation_activity' => $reservations->lastSevenDaysActivity(),
+                'operational_overview' => [
+                    'labels' => ['Pending Reservations', 'Visitors Checked In', 'Retention Reviews Due'],
+                    'values' => [
+                        $reservationSummary['pending_approval'] ?? 0,
+                        $visitorSummary['checked_in'] ?? 0,
+                        RetentionService::countRecordsDueForReview($this->pdo),
+                    ],
+                ],
+            ],
+            'todaySchedule' => $reservations->todayOperationalSchedule(),
+            'visitorReceptionActivity' => $visitors->receptionActivity(),
+            'retentionAttention' => $retention->attentionQueue(),
             'recentActivities' => $this->recentActivities(),
             'requestActions' => []
         ];
@@ -183,13 +196,10 @@ final class LiveDataService
     private function assetSummary(): array { return ['total'=>$this->count('asset'),'available'=>(int)$this->scalar("SELECT COUNT(*) FROM asset WHERE deleted_at IS NULL AND lifecycle_status='AVAILABLE'"),'under_maintenance'=>(int)$this->scalar("SELECT COUNT(*) FROM asset WHERE deleted_at IS NULL AND lifecycle_status='UNDER_MAINTENANCE'"),'maintenance_due'=>(int)$this->scalar("SELECT COUNT(*) FROM asset WHERE deleted_at IS NULL AND next_maintenance_date IS NOT NULL AND next_maintenance_date<=DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)"),'needs_attention'=>(int)$this->scalar("SELECT COUNT(*) FROM asset WHERE deleted_at IS NULL AND condition_status IN ('POOR','CRITICAL','FOR_INSPECTION')")]; }
     private function reservationSummary(): array { return ['active'=>(int)$this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND status IN ('SUBMITTED','PENDING_APPROVAL','APPROVED','CHECKED_IN')"),'today'=>(int)$this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND DATE(start_datetime)=CURRENT_DATE()"),'pending_approval'=>(int)$this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND approval_status='PENDING'"),'conflicts'=>0]; }
     private function procurementSummary(): array { return ['open'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND status NOT IN ('COMPLETED','CANCELLED','REJECTED')"),'pending_approval'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND approval_status='PENDING'"),'integration_issues'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND integration_status IN ('FAILED','ERROR')"),'estimated_total'=>(float)$this->scalar("SELECT COALESCE(SUM(estimated_total),0) FROM procurement_request WHERE deleted_at IS NULL")]; }
-    private function recordSummary(): array { return ['total'=>$this->count('record'),'active'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND record_status='ACTIVE'"),'disposition_due'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND scheduled_disposition_date IS NOT NULL AND scheduled_disposition_date<=DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)"),'restricted'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND confidentiality_level IN ('CONFIDENTIAL','RESTRICTED')")]; }
+    private function recordSummary(): array { return ['total'=>$this->count('record'),'active'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND record_status='ACTIVE'"),'disposition_due'=>RetentionService::countRecordsDueForReview($this->pdo),'restricted'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND confidentiality_level IN ('CONFIDENTIAL','RESTRICTED')")]; }
 
     private function alerts(): array { return array_map(fn($r)=>['severity'=>$r['priority'],'message'=>$r['title'],'count'=>1,'href'=>$r['action_url']], $this->rows("SELECT priority,title,action_url FROM notification WHERE is_dismissed=0 AND is_read=0 ORDER BY created_at DESC LIMIT 5")); }
-    private function pendingTasks(): array { return $this->rows("SELECT task_number reference, task_title item, module_code module, priority, created_at submitted, due_at dueDate, task_status status FROM workflow_task WHERE task_status NOT IN ('COMPLETED','CANCELLED') ORDER BY due_at IS NULL, due_at ASC LIMIT 10"); }
-    private function todaySchedule(): array { return $this->rows("SELECT reservation_number reference, purpose title, start_datetime startsAt, end_datetime endsAt, status FROM facility_reservation WHERE deleted_at IS NULL AND DATE(start_datetime)=CURRENT_DATE() ORDER BY start_datetime LIMIT 10"); }
-    private function recentActivities(): array { return $this->rows("SELECT event_title activity, module_code module, entity_reference reference, occurred_at time, event_type status FROM activity_event WHERE module_code<>'AUTH' ORDER BY occurred_at DESC LIMIT 10"); }
-    private function requestTrend(): array { return $this->rows("SELECT DATE(created_at) date, COUNT(*) value FROM facility_request WHERE deleted_at IS NULL AND created_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) GROUP BY DATE(created_at) ORDER BY DATE(created_at)"); }
+    private function recentActivities(): array { return $this->rows("SELECT event_title activity, module_code module, entity_reference reference, occurred_at time, event_type status FROM activity_event WHERE module_code IN ('RESERVATIONS','VISITORS','documents','retention') ORDER BY occurred_at DESC LIMIT 10"); }
 
     private function shapeMaintenance(array $r): array { return ['id'=>(int)$r['maintenance_work_order_id'],'workOrderNo'=>$r['work_order_number'],'title'=>$r['problem_description'],'asset'=>$r['asset_name'] ?: null,'space'=>$r['space_name'],'building'=>$r['building_name'],'priority'=>$r['priority'],'status'=>$r['status'],'maintenanceType'=>$r['maintenance_type'],'assignedTo'=>$r['assigned_to_name'],'scheduledStart'=>$r['scheduled_start_at'],'scheduledEnd'=>$r['scheduled_end_at'],'createdAt'=>$r['created_at'],'facilityRequest'=>$r['facility_request_number']]; }
     private function shapeAsset(array $r): array { return ['id'=>(int)$r['asset_id'],'assetCode'=>$r['asset_code'],'propertyNumber'=>$r['property_number'],'assetName'=>$r['asset_name'],'category'=>$r['category_name'],'brand'=>$r['brand'],'model'=>$r['model'],'serialNumber'=>$r['serial_number'],'location'=>trim(($r['building_name']??'').' / '.($r['space_name']??''),' /'),'custodian'=>$r['custodian_name'],'condition'=>$r['condition_status'],'lifecycle'=>$r['lifecycle_status'],'nextMaintenance'=>$r['next_maintenance_date'],'supplier'=>$r['supplier_name'],'createdAt'=>$r['created_at']]; }

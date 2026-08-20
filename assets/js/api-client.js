@@ -50,8 +50,12 @@
         headers.set('Accept', 'application/json');
         const init = { method, credentials: 'same-origin', headers };
         if (options.body !== undefined && options.body !== null) {
-            headers.set('Content-Type', 'application/json');
-            init.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+            if (options.body instanceof FormData) {
+                init.body = options.body;
+            } else {
+                headers.set('Content-Type', 'application/json');
+                init.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+            }
         }
         if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && csrfToken) headers.set('X-CSRF-Token', csrfToken);
         let response;

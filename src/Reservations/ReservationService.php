@@ -436,6 +436,52 @@ final class ReservationService
         return ['facility_space_id'=>(int)$row['facility_space_id'],'start_datetime'=>$row['start_datetime'],'end_datetime'=>$row['end_datetime'],'setup_buffer_minutes'=>(int)$row['setup_buffer_minutes'],'cleanup_buffer_minutes'=>(int)$row['cleanup_buffer_minutes']];
     }
 
+    public function dashboardSummary(): array
+    {
+        $this->reconcileExpiredApprovedReservations();
+        return [
+            'today' => (int) $this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND DATE(start_datetime)=CURRENT_DATE() AND status NOT IN ('REJECTED','CANCELLED','NO_SHOW')"),
+            'pending_approval' => (int) $this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND status='SUBMITTED' AND approval_status='PENDING'"),
+        ];
+    }
+
+    public function todayOperationalSchedule(int $limit = 5): array
+    {
+        $this->reconcileExpiredApprovedReservations();
+        $limit = max(1, min(20, $limit));
+        return $this->query("SELECT r.reservation_number reference, r.purpose title, r.start_datetime startsAt, r.end_datetime endsAt, r.status, fs.space_name room FROM facility_reservation r INNER JOIN facility_space fs ON fs.facility_space_id=r.facility_space_id WHERE r.deleted_at IS NULL AND DATE(r.start_datetime)=CURRENT_DATE() AND r.status NOT IN ('REJECTED','CANCELLED','NO_SHOW') ORDER BY r.start_datetime LIMIT $limit");
+    }
+
+    public function lastSevenDaysActivity(): array
+    {
+        $this->reconcileExpiredApprovedReservations();
+        $timezone = new DateTimeZone('Asia/Manila');
+        $today = new DateTimeImmutable('today', $timezone);
+        $start = $today->modify('-6 days');
+        $rows = $this->query(
+            "SELECT DATE(start_datetime) activity_date, COUNT(*) total
+             FROM facility_reservation
+             WHERE deleted_at IS NULL
+               AND DATE(start_datetime) BETWEEN :start AND :end
+               AND status NOT IN ('REJECTED','CANCELLED','NO_SHOW')
+             GROUP BY DATE(start_datetime)",
+            ['start' => $start->format('Y-m-d'), 'end' => $today->format('Y-m-d')]
+        );
+        $counts = [];
+        foreach ($rows as $row) {
+            $counts[(string) $row['activity_date']] = (int) $row['total'];
+        }
+        $labels = [];
+        $values = [];
+        for ($day = 0; $day < 7; $day++) {
+            $date = $start->modify("+$day days");
+            $key = $date->format('Y-m-d');
+            $labels[] = $date->format('M d');
+            $values[] = $counts[$key] ?? 0;
+        }
+        return ['labels' => $labels, 'values' => $values];
+    }
+
     private function summary(): array
     {
         return ['active'=>(int)$this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND status IN ('SUBMITTED','APPROVED','CHECKED_IN')"),'today'=>(int)$this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND DATE(start_datetime)=CURRENT_DATE()"),'pending_approval'=>(int)$this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND status='SUBMITTED' AND approval_status='PENDING'"),'conflicts'=>0];

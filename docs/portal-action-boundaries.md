@@ -50,7 +50,9 @@ If the backend workflow is not implemented, the Admin Portal should hide the act
 
 Visitor Management is an Admin Portal module because reception and FAM staff own on-site intake, verification, badge issuance, review, check-in, check-out, and operational history.
 
-Allowed admin actions include registering a walk-in, recording an admin pre-registration, approving or rejecting a visit, verifying identity, issuing or returning a badge, cancelling an administrative visit record, and viewing visitor history.
+Allowed admin actions include reception visitor entry, manual ID verification, badge issuance, badge-based exit lookup, badge return and check-out, approving or rejecting queued legacy visits, cancelling an administrative visit record, and viewing visitor history.
 
-The Admin Portal must not expose public visitor self-registration, OTP verification, QR code generation/scanning, or anonymous visitor account flows. Public visitor self-registration is handled by `pages/visitor-registration.html` and the unauthenticated `api/public/visitors/*` endpoints; reception/security continue review, identity verification, badge issuance, check-in, and check-out in the Admin Portal.
+The active Phase 1 entry workflow is the authenticated Reception Console. Public visitor self-registration, OTP verification, QR pass generation, and QR scanner lookup remain compatibility/future-phase flows and must not be promoted as the primary Admin Portal workflow.
+
+The Admin Portal must not expose anonymous visitor account flows. Public visitor self-registration remains handled by `pages/visitor-registration.html` and the unauthenticated `api/public/visitors/*` endpoints when that flow is used.
 

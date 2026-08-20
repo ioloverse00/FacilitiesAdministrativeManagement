@@ -67,7 +67,7 @@
                                         </label>
                                         <label class="facility-field document-filter-field"><span class="sr-only">Schedule</span><select id="retention-schedule-filter"><option value="all">All Schedules</option></select></label>
                                         <label class="facility-field document-filter-field"><span class="sr-only">Status</span><select id="retention-status-filter"><option value="all">All Statuses</option></select></label>
-                                        <label class="facility-field document-filter-field"><span class="sr-only">Due state</span><select id="retention-due-filter"><option value="all">All Review States</option></select></label>
+                                        <!-- <label class="facility-field document-filter-field"><span class="sr-only">Due state</span><select id="retention-due-filter"><option value="all">All Review States</option></select></label> -->
                                         <label class="facility-field document-filter-field"><span class="sr-only">Hold</span><select id="retention-hold-filter"><option value="all">All Holds</option></select></label>
                                     </div>
                                 </div>
@@ -81,8 +81,7 @@
                                             <col class="retention-col-record">
                                             <col class="retention-col-category">
                                             <col class="retention-col-schedule">
-                                            <col class="retention-col-start">
-                                            <col class="retention-col-disposition">
+                                            <col class="retention-col-review">
                                             <col class="retention-col-hold">
                                             <col class="retention-col-status">
                                             <col class="retention-col-actions">
@@ -92,8 +91,7 @@
                                                 <th><button type="button" class="facility-sort-button" data-sort="title">Record</button></th>
                                                 <th><button type="button" class="facility-sort-button" data-sort="category">Category</button></th>
                                                 <th><button type="button" class="facility-sort-button" data-sort="schedule">Schedule</button></th>
-                                                <th><button type="button" class="facility-sort-button" data-sort="retention_start">Start</button></th>
-                                                <th><button type="button" class="facility-sort-button" data-sort="disposition_date">Review Date</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="disposition_date">Review</button></th>
                                                 <th>Hold</th>
                                                 <th><button type="button" class="facility-sort-button" data-sort="status">Status</button></th>
                                                 <th>Actions</th>

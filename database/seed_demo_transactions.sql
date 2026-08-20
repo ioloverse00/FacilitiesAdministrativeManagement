@@ -22,8 +22,8 @@ SET @records_emp := (SELECT employee_reference_id FROM employee_reference WHERE 
 DELETE FROM visitor_pass WHERE pass_number LIKE 'VP-2026-%';
 DELETE FROM visit WHERE visit_number LIKE 'VIS-2026-%';
 DELETE FROM visitor WHERE email_address LIKE '%@visitor.example-agency.test';
-DELETE FROM legal_case_contract WHERE legal_case_id IN (SELECT legal_case_id FROM legal_case WHERE case_number LIKE 'LC-2026-%');
-DELETE FROM legal_case WHERE case_number LIKE 'LC-2026-%';
+DELETE FROM legal_matter_history WHERE legal_matter_id IN (SELECT legal_matter_id FROM legal_matter WHERE matter_number LIKE 'LM-2026-%');
+DELETE FROM legal_matter WHERE matter_number LIKE 'LM-2026-%';
 DELETE FROM contract WHERE contract_number LIKE 'CON-2026-%';
 DELETE FROM record WHERE record_number LIKE 'REC-2026-%';
 DELETE FROM document_version WHERE document_id IN (SELECT document_id FROM document WHERE document_number LIKE 'DOC-2026-%');

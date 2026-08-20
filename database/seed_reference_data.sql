@@ -347,7 +347,7 @@ INSERT INTO system_setting (setting_key, setting_value, value_type, description,
 SELECT v.setting_key, v.setting_value, v.value_type, v.description, v.is_public, u.user_account_id
 FROM (
 SELECT 'system.display_name' setting_key,'ISMERS FAM' setting_value,'STRING' value_type,'System display name.' description,TRUE is_public UNION ALL
-SELECT 'organization.name','Moses Group of Companies','STRING','Organization name for demos.',TRUE UNION ALL
+SELECT 'organization.name','Great Solomon Manpower Services Inc.','STRING','Organization name for demos.',TRUE UNION ALL
 SELECT 'system.timezone','Asia/Manila','STRING','Default timezone.',TRUE UNION ALL
 SELECT 'system.language','en','STRING','Default language.',TRUE UNION ALL
 SELECT 'format.date','YYYY-MM-DD','STRING','Default date format.',TRUE UNION ALL

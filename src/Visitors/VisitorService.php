@@ -5,6 +5,7 @@ declare(strict_types=1);
 final class VisitorService
 {
     public const TYPES = ['APPLICANT','GUEST','VENDOR','CONTRACTOR','DELIVERY','WALK_IN','OTHER'];
+    private const RECEPTION_TYPES = ['APPLICANT','GUEST','CONTRACTOR','DELIVERY','OTHER'];
     public const STATUSES = ['PRE_REGISTERED','PENDING_REVIEW','APPROVED','REJECTED','ARRIVED','CHECKED_IN','CHECKED_OUT','NO_SHOW','CANCELLED','EXPIRED'];
     public const APPROVALS = ['PENDING','APPROVED','REJECTED','NOT_REQUIRED'];
     public const SOURCES = ['WALK_IN','PUBLIC_PRE_REGISTRATION','ADMIN_PRE_REGISTRATION'];
@@ -73,7 +74,68 @@ final class VisitorService
 
     public function options(array $user): array
     {
-        return ['visitor_types'=>self::TYPES,'visit_statuses'=>self::STATUSES,'approval_statuses'=>self::APPROVALS,'registration_sources'=>self::SOURCES,'identity_document_types'=>self::ID_TYPES,'departments'=>$this->rows("SELECT department_reference_id id, department_code code, department_name name FROM department_reference WHERE status='ACTIVE' ORDER BY department_name"),'host_employees'=>$this->rows("SELECT employee_reference_id id, employee_number, full_name, position_title FROM employee_reference WHERE employment_status='ACTIVE' AND deleted_at IS NULL ORDER BY full_name"),'facility_spaces'=>$this->rows("SELECT fs.facility_space_id id, fs.space_code code, fs.space_name name, b.building_name FROM facility_space fs LEFT JOIN building b ON b.building_id=fs.building_id WHERE fs.status='ACTIVE' AND fs.deleted_at IS NULL ORDER BY b.building_name, fs.space_name"),'available_badges'=>$this->rows("SELECT visitor_badge_id id, badge_number FROM visitor_badge WHERE badge_status='AVAILABLE' ORDER BY badge_number"),'permissions'=>$user['permissions'] ?? []];
+        return ['visitor_types'=>self::TYPES,'visit_statuses'=>self::STATUSES,'approval_statuses'=>self::APPROVALS,'registration_sources'=>self::SOURCES,'identity_document_types'=>self::ID_TYPES,'badge_statuses'=>['AVAILABLE','ISSUED','LOST','DAMAGED','DISABLED'],'departments'=>$this->rows("SELECT department_reference_id id, department_code code, department_name name FROM department_reference WHERE status='ACTIVE' ORDER BY department_name"),'host_employees'=>$this->rows("SELECT employee_reference_id id, employee_number, full_name, position_title FROM employee_reference WHERE employment_status='ACTIVE' AND deleted_at IS NULL ORDER BY full_name"),'facility_spaces'=>$this->rows("SELECT fs.facility_space_id id, fs.space_code code, fs.space_name name, b.building_name FROM facility_space fs LEFT JOIN building b ON b.building_id=fs.building_id WHERE fs.status='ACTIVE' AND fs.deleted_at IS NULL ORDER BY b.building_name, fs.space_name"),'available_badges'=>$this->rows("SELECT visitor_badge_id id, badge_number FROM visitor_badge WHERE badge_status='AVAILABLE' ORDER BY badge_number"),'permissions'=>$user['permissions'] ?? []];
+    }
+
+    public function createAndCheckIn(array $data, array $user): array
+    {
+        $errors = $this->validateReceptionEntry($data);
+        if ($errors) throw new InvalidArgumentException(json_encode($errors));
+        $this->pdo->beginTransaction();
+        try {
+            $this->assertNoActiveVisitForEmail($this->blankNull($data['email_address'] ?? null));
+            $visitorType = (string)$data['visitor_type'];
+            $visitorId = $this->createVisitor($data);
+            $reference = $this->nextReference();
+            $badgeId = (int)$data['badge_id'];
+            $stmt = $this->pdo->prepare("INSERT INTO visit (visit_number, visitor_id, visitor_type, host_employee_reference_id, destination_department_reference_id, destination_space_id, purpose, visit_description, scheduled_arrival, scheduled_departure, actual_time_in, actual_time_out, visit_status, approval_status, registration_source, company_or_school, identity_verified, identity_verified_at, identity_verified_by_user_id, visitor_badge_id, remarks, created_by_user_id, updated_by_user_id, created_at, updated_at) VALUES (:ref,:visitor_id,:visitor_type,:host,:department,:space,:purpose,:description,NOW(),NULL,NOW(),NULL,'CHECKED_IN','NOT_REQUIRED','WALK_IN',:company,1,NOW(),:verified_by,:badge_id,:remarks,:created_by,:updated_by,NOW(),NOW())");
+            $stmt->execute(['ref'=>$reference,'visitor_id'=>$visitorId,'visitor_type'=>$visitorType,'host'=>$this->nullableInt($data['host_employee_reference_id'] ?? null),'department'=>$this->nullableInt($data['destination_department_reference_id'] ?? null),'space'=>$this->nullableInt($data['facility_space_id'] ?? null),'purpose'=>trim((string)$data['visit_purpose']),'description'=>$this->blankNull($data['visit_description'] ?? null),'company'=>$this->blankNull($data['organization_name'] ?? null),'verified_by'=>(int)$user['id'],'badge_id'=>$badgeId,'remarks'=>$this->blankNull($data['remarks'] ?? 'Direct reception check-in.'),'created_by'=>(int)$user['id'],'updated_by'=>(int)$user['id']]);
+            $id = (int)$this->pdo->lastInsertId();
+            $this->issueBadge($badgeId, $id, $user);
+            $this->historyInsert($id, null, 'CHECKED_IN', 'VISITOR_RECEPTION_CHECKED_IN', $data['remarks'] ?? 'Visitor checked in from Reception Console.', $user);
+            $this->pdo->commit();
+            $this->telemetry('VISITOR_RECEPTION_CHECKED_IN', $id, $reference, $user, 'Visitor checked in from Reception Console.');
+            return $this->show($id) ?? ['id'=>$id, 'visitor_reference_number'=>$reference];
+        } catch (Throwable $e) { $this->pdo->rollBack(); throw $e; }
+    }
+
+    public function badgeLookup(string $badgeNumber): array
+    {
+        $badgeNumber = trim($badgeNumber);
+        if ($badgeNumber === '') throw new InvalidArgumentException(json_encode(['badge_number'=>'Enter a badge number.']));
+        $stmt = $this->pdo->prepare($this->baseSql()." WHERE bg.badge_number=:badge AND bg.badge_status='ISSUED' AND vi.visit_status='CHECKED_IN' AND vi.deleted_at IS NULL LIMIT 1");
+        $stmt->execute(['badge'=>$badgeNumber]);
+        $row = $stmt->fetch();
+        if (!is_array($row)) throw new DomainException('No checked-in visitor is assigned to this badge.');
+        return $this->safeBadgeAssignment($row);
+    }
+
+    public function issuedBadgeAssignments(): array
+    {
+        $stmt = $this->pdo->query($this->baseSql()." WHERE bg.badge_status='ISSUED' AND vi.visit_status='CHECKED_IN' AND vi.deleted_at IS NULL ORDER BY bg.badge_number");
+        return array_map(fn($row) => $this->safeBadgeAssignment($row), $stmt->fetchAll());
+    }
+
+    public function checkOutByBadge(string $badgeNumber, ?string $remarks, array $user): array
+    {
+        $badgeNumber = trim($badgeNumber);
+        if ($badgeNumber === '') throw new InvalidArgumentException(json_encode(['badge_number'=>'Enter a badge number.']));
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare("SELECT bg.*, vi.visit_id, vi.visit_number, vi.visit_status FROM visitor_badge bg INNER JOIN visit vi ON vi.visit_id=bg.issued_to_visit_id WHERE bg.badge_number=:badge FOR UPDATE");
+            $stmt->execute(['badge'=>$badgeNumber]);
+            $row = $stmt->fetch();
+            if (!is_array($row) || $row['badge_status'] !== 'ISSUED' || $row['visit_status'] !== 'CHECKED_IN') {
+                throw new DomainException('No checked-in visitor is assigned to this badge.');
+            }
+            $visitId = (int)$row['visit_id'];
+            $this->returnBadge((int)$row['visitor_badge_id'], $user);
+            $this->pdo->prepare("UPDATE visit SET visit_status='CHECKED_OUT', actual_time_out=NOW(), updated_by_user_id=:user_id, updated_at=NOW() WHERE visit_id=:id AND visit_status='CHECKED_IN'")->execute(['user_id'=>(int)$user['id'],'id'=>$visitId]);
+            $this->historyInsert($visitId, 'CHECKED_IN', 'CHECKED_OUT', 'VISITOR_BADGE_RETURNED_CHECKOUT', $remarks ?? 'Badge returned and visitor checked out.', $user);
+            $this->pdo->commit();
+            $this->telemetry('VISITOR_BADGE_RETURNED_CHECKOUT', $visitId, (string)$row['visit_number'], $user, 'Badge returned and visitor checked out.');
+            return $this->show($visitId) ?? [];
+        } catch (Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     public function createWalkIn(array $data, array $user): array
@@ -172,6 +234,24 @@ final class VisitorService
         $start=$this->dateValue($d['scheduled_start_at'] ?? null); $end=$this->dateValue($d['scheduled_end_at'] ?? null); if ($start && $end && strtotime($end) <= strtotime($start)) $e['scheduled_end_at']='End must be after start.';
         foreach(['destination_department_reference_id'=>['department_reference','department_reference_id'],'host_employee_reference_id'=>['employee_reference','employee_reference_id'],'facility_space_id'=>['facility_space','facility_space_id']] as $field=>$target) if (($d[$field] ?? '') !== '' && !$this->exists($target[0], $target[1], (int)$d[$field])) $e[$field]='Selected value is invalid.';
         if (($d['visitor_type'] ?? '') === 'APPLICANT' && empty($d['destination_department_reference_id']) && empty($d['host_employee_reference_id'])) $e['destination_department_reference_id']='Applicant visitors require a destination department or host.';
+        return $e;
+    }
+
+    private function validateReceptionEntry(array $d): array
+    {
+        $e = [];
+        if (trim((string)($d['full_name'] ?? '')) === '') $e['full_name'] = 'Visitor full name is required.';
+        if (!in_array((string)($d['visitor_type'] ?? ''), self::RECEPTION_TYPES, true)) $e['visitor_type'] = 'Select a valid visitor type.';
+        if (!in_array((string)($d['identification_type'] ?? ''), array_diff(self::ID_TYPES, ['NONE']), true)) $e['identification_type'] = 'ID type is required.';
+        if (trim((string)($d['visit_purpose'] ?? '')) === '') $e['visit_purpose'] = 'Purpose is required.';
+        if (empty($d['destination_department_reference_id']) && empty($d['facility_space_id'])) $e['destination'] = 'Select a department or facility/room for this visit.';
+        if (empty($d['badge_id'])) $e['badge_id'] = 'Select an available visitor badge.';
+        if (($d['email_address'] ?? '') !== '' && !filter_var((string)$d['email_address'], FILTER_VALIDATE_EMAIL)) $e['email_address'] = 'Enter a valid email address.';
+        if (($d['mobile_number'] ?? '') !== '' && !preg_match('/^[0-9+() .-]{7,30}$/', (string)$d['mobile_number'])) $e['mobile_number'] = 'Enter a valid mobile number.';
+        if (($d['identification_last4'] ?? '') !== '' && !preg_match('/^[A-Za-z0-9-]{1,16}$/', (string)$d['identification_last4'])) $e['identification_last4'] = 'Use up to 16 safe ID characters.';
+        foreach(['destination_department_reference_id'=>['department_reference','department_reference_id'],'host_employee_reference_id'=>['employee_reference','employee_reference_id'],'facility_space_id'=>['facility_space','facility_space_id'],'badge_id'=>['visitor_badge','visitor_badge_id']] as $field=>$target) {
+            if (($d[$field] ?? '') !== '' && !$this->exists($target[0], $target[1], (int)$d[$field])) $e[$field] = 'Selected value is invalid.';
+        }
         return $e;
     }
 
@@ -287,6 +367,21 @@ final class VisitorService
         ][$status] ?? 'Visitor Located';
     }
 
+    private function safeBadgeAssignment(array $row): array
+    {
+        $full = trim(($row['first_name'] ?? '').' '.($row['middle_name'] ?? '').' '.($row['last_name'] ?? ''));
+        return [
+            'visit_id'=>(int)$row['visit_id'],
+            'visitor_reference_number'=>$row['visit_number'],
+            'visitor_name'=>$full,
+            'badge_number'=>$row['badge_number'],
+            'purpose'=>$row['purpose'],
+            'destination'=>$row['department_name'] ?: ($row['space_name'] ?: 'Not assigned'),
+            'checked_in_at'=>$row['actual_time_in'],
+            'status'=>$row['visit_status'],
+        ];
+    }
+
     private function shape(array $r): array
     {
         $full = trim(($r['first_name'] ?? '').' '.($r['middle_name'] ?? '').' '.($r['last_name'] ?? ''));
@@ -305,7 +400,9 @@ final class VisitorService
     private function returnBadge(int $badgeId,array $user): void { $this->pdo->prepare("UPDATE visitor_badge SET badge_status='AVAILABLE', issued_to_visit_id=NULL, returned_at=NOW(), returned_to_user_id=:user WHERE visitor_badge_id=:id")->execute(['user'=>(int)$user['id'],'id'=>$badgeId]); }
     private function historyInsert(int $id,?string $old,string $new,string $event,?string $remarks,array $user): void { $this->pdo->prepare('INSERT INTO visitor_visit_history (visit_id,old_status,new_status,event_type,remarks,changed_by_user_id,changed_at) VALUES (:id,:old,:new,:event,:remarks,:user,NOW())')->execute(['id'=>$id,'old'=>$old,'new'=>$new,'event'=>$event,'remarks'=>$remarks,'user'=>(int)$user['id']]); }
     private function activity(int $id): array { return $this->rows("SELECT event_type,event_title,event_description,occurred_at FROM activity_event WHERE module_code='VISITORS' AND entity_type='visit' AND entity_id=:id ORDER BY occurred_at DESC LIMIT 10", ['id'=>$id]); }
-    private function summary(): array { return ['today'=>(int)$this->scalar("SELECT COUNT(*) FROM visit WHERE deleted_at IS NULL AND DATE(scheduled_arrival)=CURRENT_DATE()"),'pre_registered'=>(int)$this->scalar("SELECT COUNT(*) FROM visit WHERE deleted_at IS NULL AND visit_status='PRE_REGISTERED'"),'pending_review'=>(int)$this->scalar("SELECT COUNT(*) FROM visit WHERE deleted_at IS NULL AND visit_status='PENDING_REVIEW'"),'checked_in'=>(int)$this->scalar("SELECT COUNT(*) FROM visit WHERE deleted_at IS NULL AND visit_status='CHECKED_IN'"),'checked_out'=>(int)$this->scalar("SELECT COUNT(*) FROM visit WHERE deleted_at IS NULL AND visit_status='CHECKED_OUT'"),'applicants_today'=>(int)$this->scalar("SELECT COUNT(*) FROM visit vi JOIN visitor v ON v.visitor_id=vi.visitor_id WHERE vi.deleted_at IS NULL AND DATE(vi.scheduled_arrival)=CURRENT_DATE() AND COALESCE(vi.visitor_type,v.visitor_type)='APPLICANT'")]; }
+    public function dashboardSummary(): array { return $this->summary(); }
+    public function receptionActivity(int $limit = 5): array { $limit=max(1,min(20,$limit)); return $this->rows("SELECT event_title activity, entity_reference reference, occurred_at time, event_type status FROM activity_event WHERE module_code='VISITORS' AND event_type IN ('VISITOR_RECEPTION_CHECKED_IN','VISITOR_CHECKED_IN','VISITOR_CHECKED_OUT','VISITOR_BADGE_RETURNED_CHECKOUT') ORDER BY occurred_at DESC LIMIT $limit"); }
+    private function summary(): array { return ['today'=>(int)$this->scalar("SELECT COUNT(*) FROM visit WHERE deleted_at IS NULL AND DATE(scheduled_arrival)=CURRENT_DATE()"),'pre_registered'=>(int)$this->scalar("SELECT COUNT(*) FROM visit WHERE deleted_at IS NULL AND visit_status='PRE_REGISTERED'"),'pending_review'=>(int)$this->scalar("SELECT COUNT(*) FROM visit WHERE deleted_at IS NULL AND visit_status='PENDING_REVIEW'"),'checked_in'=>(int)$this->scalar("SELECT COUNT(*) FROM visit WHERE deleted_at IS NULL AND visit_status='CHECKED_IN'"),'checked_out_today'=>(int)$this->scalar("SELECT COUNT(*) FROM visit WHERE deleted_at IS NULL AND visit_status='CHECKED_OUT' AND DATE(actual_time_out)=CURRENT_DATE()"),'checked_out'=>(int)$this->scalar("SELECT COUNT(*) FROM visit WHERE deleted_at IS NULL AND visit_status='CHECKED_OUT'"),'available_badges'=>(int)$this->scalar("SELECT COUNT(*) FROM visitor_badge WHERE badge_status='AVAILABLE'"),'applicants_today'=>(int)$this->scalar("SELECT COUNT(*) FROM visit vi JOIN visitor v ON v.visitor_id=vi.visitor_id WHERE vi.deleted_at IS NULL AND DATE(vi.scheduled_arrival)=CURRENT_DATE() AND COALESCE(vi.visitor_type,v.visitor_type)='APPLICANT'")]; }
     private function telemetry(string $event,int $id,string $ref,array $user,string $title): void
     {
         try {

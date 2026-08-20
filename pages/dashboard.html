@@ -14,8 +14,8 @@
     <script src="../assets/js/layout.js" defer></script>
     <script src="../assets/js/table-audit.js" defer></script>
     <script src="../assets/vendor/chartjs/chart.umd.min.js" defer></script>
-    <script src="../assets/js/dashboard-service.js" defer></script>
     <script src="../assets/js/dashboard-charts.js" defer></script>
+    <script src="../assets/js/dashboard-service.js" defer></script>
     <script src="../assets/js/dashboard.js" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body"
@@ -55,78 +55,53 @@
                             <div id="dashboard-kpis" class="fam-kpi-grid" data-state-container aria-live="polite"></div>
                         </section>
 
-                        <section class="fam-section" aria-labelledby="trends-title">
+                        <section class="fam-section" aria-labelledby="insights-title">
                             <div class="fam-section-heading">
-                                <h2 id="trends-title">Operational Trends</h2>
+                                <h2 id="insights-title">Operational Insights</h2>
                             </div>
                             <div class="fam-chart-grid">
-                                <article class="fam-card fam-chart-card fam-chart-card-wide">
+                                <article class="fam-card fam-chart-card" aria-labelledby="reservation-activity-title">
                                     <div class="fam-card-header">
-                                        <h3>Requests and Work Orders Trend</h3>
-                                        <span class="fam-muted">Last 6 months</span>
+                                        <h3 id="reservation-activity-title">Reservation Activity &mdash; Last 7 Days</h3>
                                     </div>
-                                    <div id="requests-trend-state" class="fam-chart-state" aria-live="polite"></div>
+                                    <div id="reservation-activity-state" class="fam-chart-state" aria-live="polite"></div>
                                     <div class="fam-chart-box">
-                                        <canvas id="requests-trend-chart" aria-label="Line chart showing facility requests received, maintenance requests received, and requests completed over the last six months">Requests and work orders trend chart.</canvas>
+                                        <canvas id="reservation-activity-chart" aria-label="Reservation Activity - Last 7 Days" role="img">Reservation activity chart for the last 7 days.</canvas>
                                     </div>
                                 </article>
-                                <article class="fam-card fam-chart-card">
+                                <article class="fam-card fam-chart-card" aria-labelledby="operational-overview-title">
                                     <div class="fam-card-header">
-                                        <div>
-                                            <h3>Current Request Status</h3>
-                                            <p id="active-request-total" class="fam-muted">Active requests: Loading...</p>
-                                        </div>
+                                        <h3 id="operational-overview-title">Current Operational Overview</h3>
                                     </div>
-                                    <div id="request-status-state" class="fam-chart-state" aria-live="polite"></div>
+                                    <div id="operational-overview-state" class="fam-chart-state" aria-live="polite"></div>
                                     <div class="fam-chart-box">
-                                        <canvas id="request-status-chart" aria-label="Doughnut chart showing pending, assigned, in progress, scheduled, and overdue active requests">Current active request status chart.</canvas>
+                                        <canvas id="operational-overview-chart" aria-label="Current Operational Overview" role="img">Current operational overview chart.</canvas>
                                     </div>
                                 </article>
                             </div>
                         </section>
 
-                        <div class="fam-operations-grid">
-                            <section class="fam-section fam-pending-section" aria-labelledby="pending-title">
-                                <div class="fam-section-heading">
-                                    <h2 id="pending-title">Pending Actions</h2>
-                                    <a class="fam-link" href="../pages/reports.html">View All Pending Actions</a>
-                                </div>
-                                <div class="fam-card fam-table-card">
-                                    <div class="fam-table-scroll">
-                                        <table class="dashboard-pending-table">
-                                            <colgroup>
-                                                <col class="table-col-reference">
-                                                <col class="table-col-subject">
-                                                <col class="table-col-category">
-                                                <col class="table-col-priority">
-                                                <col class="table-col-datetime">
-                                                <col class="table-col-status">
-                                                <col class="table-col-actions">
-                                            </colgroup>
-                                            <thead>
-                                                <tr>
-                                                    <th scope="col">Reference</th>
-                                                    <th scope="col">Item</th>
-                                                    <th scope="col">Module</th>
-                                                    <th scope="col">Priority</th>
-                                                    <th scope="col">Submitted</th>
-                                                    <th scope="col">Status</th>
-                                                    <th scope="col">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="pending-actions" data-state-container aria-live="polite"></tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </section>
+                        <section class="fam-section" aria-labelledby="operations-title">
+                            <div class="fam-section-heading">
+                                <h2 id="operations-title">Operations</h2>
+                            </div>
+                            <div class="fam-operations-grid">
                             <section class="fam-section" aria-labelledby="schedule-title">
                                 <div class="fam-section-heading">
-                                    <h2 id="schedule-title">Today's Schedule</h2>
+                                    <h2 id="schedule-title">Today's Facilities Schedule</h2>
                                     <a class="fam-link" href="../pages/room-reservations.html">View Facilities Schedule</a>
                                 </div>
                                 <div id="today-schedule" class="fam-card fam-timeline" data-state-container aria-live="polite"></div>
                             </section>
-                        </div>
+                            <section class="fam-section" aria-labelledby="retention-attention-title">
+                                <div class="fam-section-heading">
+                                    <h2 id="retention-attention-title">Retention Attention Queue</h2>
+                                    <a class="fam-link" href="../pages/records-retention.html">Open Records Retention</a>
+                                </div>
+                                <div id="retention-attention" class="fam-card fam-activity-list" data-state-container aria-live="polite"></div>
+                            </section>
+                            </div>
+                        </section>
 
                         <section class="fam-section" aria-labelledby="activity-title">
                             <div class="fam-section-heading">

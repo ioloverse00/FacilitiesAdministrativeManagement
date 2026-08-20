@@ -6,6 +6,7 @@
         'due soon': 'fam-status-warning',
         'in progress': 'fam-status-progress',
         scheduled: 'fam-status-scheduled',
+        active: 'fam-status-progress',
         pending: 'fam-status-pending',
         completed: 'fam-status-completed',
         confirmed: 'fam-status-completed',
@@ -21,17 +22,16 @@
     };
 
     const iconMap = {
-        'Facility Requests': 'domain',
         'Facilities Reservation': 'meeting_room',
-        Maintenance: 'build',
-        'Maintenance Requests': 'build',
-        'Asset Management': 'inventory_2',
+        RESERVATIONS: 'meeting_room',
+        VISITORS: 'badge',
+        documents: 'folder',
+        retention: 'fact_check',
         'Room Reservations': 'meeting_room',
+        'Visitor Management': 'badge',
         'Document Management': 'folder',
         'Records Retention': 'fact_check',
-        'Records Retention & Compliance': 'fact_check',
-        Procurement: 'shopping_bag',
-        'Administrative Records': 'folder'
+        'Records Retention & Compliance': 'fact_check'
     };
 
     function escapeHtml(value) {
@@ -99,45 +99,42 @@
         `).join('');
     }
 
-    function renderCharts(data) {
-        const chartApi = window.FAMDashboardCharts;
-        const trendState = document.getElementById('requests-trend-state');
-        const trendCanvas = document.getElementById('requests-trend-chart');
-        const statusState = document.getElementById('request-status-state');
-        const statusCanvas = document.getElementById('request-status-chart');
-        const totalTarget = document.getElementById('active-request-total');
+    function renderChartState(targetId, message, icon = 'bar_chart') {
+        const target = document.getElementById(targetId);
+        if (!target) return;
+        target.innerHTML = message ? stateMessage(message, icon) : '';
+    }
 
-        chartApi?.destroyAllCharts();
+    function setChartVisibility(canvasId, isVisible) {
+        const box = document.getElementById(canvasId)?.closest('.fam-chart-box');
+        if (box) box.hidden = !isVisible;
+    }
 
-        if (!window.Chart || !chartApi) {
-            [trendState, statusState].forEach(state => { if (state) state.innerHTML = stateMessage('Unable to load chart library.', 'error'); });
-            return;
+    function renderCharts(charts) {
+        const chartTools = window.FAMDashboardCharts;
+        if (!chartTools) return;
+        chartTools.destroyAllCharts();
+
+        const reservationActivity = charts?.reservationActivity || {};
+        const reservationCanvas = document.getElementById('reservation-activity-chart');
+        if (!chartTools.hasValues(reservationActivity.values)) {
+            setChartVisibility('reservation-activity-chart', false);
+            renderChartState('reservation-activity-state', 'No reservation activity in the last 7 days.', 'event_busy');
+        } else {
+            setChartVisibility('reservation-activity-chart', true);
+            renderChartState('reservation-activity-state', '');
+            chartTools.createReservationActivityChart(reservationCanvas, reservationActivity);
         }
 
-        const trendValues = [
-            ...(data.requestTrend?.facilityRequests || []),
-            ...(data.requestTrend?.maintenanceRequests || []),
-            ...(data.requestTrend?.completedRequests || [])
-        ];
-        if (trendCanvas && trendState) {
-            if (chartApi.hasValues(trendValues)) {
-                trendState.innerHTML = '';
-                chartApi.createRequestsTrendChart(trendCanvas, data.requestTrend);
-            } else {
-                trendState.innerHTML = stateMessage('No request trend data available.', 'bar_chart');
-            }
-        }
-
-        const statusValues = (data.requestStatus || []).map(item => item.value);
-        const totalActive = statusValues.reduce((sum, value) => sum + Number(value || 0), 0);
-        if (totalTarget) totalTarget.textContent = `Active requests: ${totalActive}`;
-        if (statusCanvas && statusState) {
-            if (chartApi.hasValues(statusValues)) {
-                statusState.innerHTML = '';
-                chartApi.createRequestStatusChart(statusCanvas, data.requestStatus);
-            } else {
-                statusState.innerHTML = stateMessage('No active request status data available.', 'donut_large');
-            }
+        const operationalOverview = charts?.operationalOverview || {};
+        const overviewCanvas = document.getElementById('operational-overview-chart');
+        if (!chartTools.hasValues(operationalOverview.values)) {
+            setChartVisibility('operational-overview-chart', false);
+            renderChartState('operational-overview-state', 'No active operational items require attention.', 'check_circle');
+        } else {
+            setChartVisibility('operational-overview-chart', true);
+            renderChartState('operational-overview-state', '');
+            chartTools.createOperationalOverviewChart(overviewCanvas, operationalOverview);
         }
     }
 
@@ -153,33 +150,30 @@
                 <time>${escapeHtml(item.time)}</time>
                 <div>
                     <strong>${escapeHtml(item.activity)}</strong>
-                    <span>${escapeHtml(item.location)} Â· ${escapeHtml(item.module)}</span>
+                    <span>${escapeHtml(item.location)} · ${escapeHtml(item.module)}</span>
                 </div>
                 ${statusBadge(item.status)}
             </div>
         `).join('');
     }
 
-    function renderPendingActions(items) {
-        const target = document.getElementById('pending-actions');
+    function renderRetentionAttention(items) {
+        const target = document.getElementById('retention-attention');
         if (!target) return;
         if (!items?.length) {
-            target.innerHTML = `<tr><td colspan="7">${stateMessage('No pending actions require your review.', 'task_alt')}</td></tr>`;
-            window.FAMTableAudit?.check(target.closest('table'), 'dashboard-pending-table');
+            target.innerHTML = stateMessage('No retention records are due for review.', 'fact_check');
             return;
         }
         target.innerHTML = items.map(item => `
-            <tr>
-                <td><span class="table-cell-truncate" title="${escapeHtml(item.reference)}">${escapeHtml(item.reference)}</span></td>
-                <td><span class="table-cell-truncate" title="${escapeHtml(item.item)}">${escapeHtml(item.item)}</span></td>
-                <td><span class="table-cell-truncate" title="${escapeHtml(item.module)}">${escapeHtml(item.module)}</span></td>
-                <td>${statusBadge(item.priority)}</td>
-                <td><span class="table-cell-truncate" title="${escapeHtml(item.submitted)}">${escapeHtml(item.submitted)}</span></td>
-                <td>${statusBadge(item.status)}</td>
-                <td><a class="fam-table-action" href="${item.href}">${escapeHtml(item.action)}</a></td>
-            </tr>
+            <div class="fam-activity-item">
+                <span class="fam-activity-icon material-symbols-outlined" aria-hidden="true">fact_check</span>
+                <div>
+                    <strong>${escapeHtml(item.title || item.reference)}</strong>
+                    <span>${escapeHtml(item.reference)} · ${escapeHtml(item.schedule)} · ${escapeHtml(item.reviewDate || 'No review date')}</span>
+                </div>
+                ${statusBadge(item.status)}
+            </div>
         `).join('');
-        window.FAMTableAudit?.check(target.closest('table'), 'dashboard-pending-table');
     }
 
     function renderRecentActivity(items) {
@@ -194,9 +188,8 @@
                 <span class="fam-activity-icon material-symbols-outlined" aria-hidden="true">${iconMap[item.module] || 'notifications'}</span>
                 <div>
                     <strong>${escapeHtml(item.activity)}</strong>
-                    <span>${escapeHtml(item.module)} Â· ${escapeHtml(item.by)} Â· ${escapeHtml(item.time)}</span>
+                    <span>${escapeHtml(item.module)} · ${escapeHtml(item.by)} · ${escapeHtml(item.time)}</span>
                 </div>
-                ${item.status ? statusBadge(item.status) : ''}
             </div>
         `).join('');
     }
@@ -210,13 +203,17 @@
             document.getElementById('dashboard-last-updated').textContent = formatUpdatedAt(data.generatedAt);
             renderAlerts(data.alerts);
             renderKpis(data.kpis);
-            renderCharts(data);
-            renderPendingActions(data.pendingActions);
+            renderCharts(data.charts);
             renderTodaySchedule(data.todaySchedule);
+            renderRetentionAttention(data.retentionAttention);
             renderRecentActivity(data.recentActivities);
         } catch (error) {
             console.error(error);
             window.FAMDashboardCharts?.destroyAllCharts();
+            setChartVisibility('reservation-activity-chart', false);
+            setChartVisibility('operational-overview-chart', false);
+            renderChartState('reservation-activity-state', 'Unable to load dashboard activity.', 'error');
+            renderChartState('operational-overview-state', 'Unable to load dashboard activity.', 'error');
             document.querySelectorAll('[data-state-container]').forEach(container => {
                 container.innerHTML = stateMessage('Unable to load dashboard activity.', 'error');
             });
@@ -227,10 +224,6 @@
         initializeDashboard();
         document.getElementById('dashboard-refresh')?.addEventListener('click', initializeDashboard);
         window.addEventListener('fam:themechange', initializeDashboard);
-        window.addEventListener('resize', () => Object.values(window.FAMDashboardCharts?.chartInstances || {}).forEach(chart => chart?.resize()));
-        document.getElementById('desktop-sidebar-toggle')?.addEventListener('click', () => {
-            window.setTimeout(() => Object.values(window.FAMDashboardCharts?.chartInstances || {}).forEach(chart => chart?.resize()), 320);
-        });
     });
 })();
 

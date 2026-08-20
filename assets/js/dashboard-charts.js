@@ -56,45 +56,61 @@
         return Array.isArray(values) && values.some(value => Number(value) > 0);
     }
 
-    function createRequestsTrendChart(canvas, data) {
+    function createReservationActivityChart(canvas, data) {
         if (!canvas || !window.Chart || !data) return null;
-        destroyChart('requestsTrend');
+        destroyChart('reservationActivity');
         const colors = palette();
         const options = baseOptions();
-        options.scales.y.title = { display: true, text: 'Requests', color: colors.text };
-        chartInstances.requestsTrend = new Chart(canvas, {
-            type: 'line',
+        options.plugins.legend.display = false;
+        options.scales.y.title = { display: true, text: 'Reservations', color: colors.text };
+        options.plugins.tooltip.callbacks = {
+            label: context => `${context.parsed.y} ${Number(context.parsed.y) === 1 ? 'reservation' : 'reservations'}`
+        };
+        chartInstances.reservationActivity = new Chart(canvas, {
+            type: 'bar',
             data: {
                 labels: data.labels || [],
                 datasets: [
-                    { label: 'Facility requests received', data: data.facilityRequests || [], borderColor: colors.primary, backgroundColor: colors.primaryFill, tension: 0.3, fill: true, pointRadius: 3 },
-                    { label: 'Maintenance requests received', data: data.maintenanceRequests || [], borderColor: colors.amber, backgroundColor: cssVar('--color-warning-bg', 'rgba(217, 119, 6, 0.08)'), tension: 0.3, pointRadius: 3 },
-                    { label: 'Requests completed', data: data.completedRequests || [], borderColor: colors.green, backgroundColor: cssVar('--color-success-bg', 'rgba(22, 163, 74, 0.08)'), tension: 0.3, pointRadius: 3 }
+                    { label: 'Reservations', data: data.values || [], borderColor: colors.primary, backgroundColor: colors.primaryFill, borderRadius: 8, maxBarThickness: 42 }
                 ]
             },
             options
         });
-        return chartInstances.requestsTrend;
+        return chartInstances.reservationActivity;
     }
 
-    function createRequestStatusChart(canvas, data) {
-        if (!canvas || !window.Chart || !Array.isArray(data)) return null;
-        destroyChart('requestStatus');
+    function createOperationalOverviewChart(canvas, data) {
+        if (!canvas || !window.Chart || !data) return null;
+        destroyChart('operationalOverview');
         const colors = palette();
-        chartInstances.requestStatus = new Chart(canvas, {
-            type: 'doughnut',
+        const options = baseOptions();
+        options.indexAxis = 'y';
+        options.plugins.legend.display = false;
+        options.scales.x.title = { display: true, text: 'Items', color: colors.text };
+        options.plugins.tooltip.callbacks = {
+            label: context => `${context.label} - ${context.parsed.x}`
+        };
+        chartInstances.operationalOverview = new Chart(canvas, {
+            type: 'bar',
             data: {
-                labels: data.map(item => item.label),
+                labels: data.labels || [],
                 datasets: [{
-                    data: data.map(item => item.value),
-                    backgroundColor: [colors.slate, colors.primary, colors.teal, colors.amber, colors.rose],
-                    borderWidth: 2,
-                    borderColor: colors.surface
+                    label: 'Current workload',
+                    data: data.values || [],
+                    backgroundColor: [
+                        cssVar('--color-warning-bg', 'rgba(217, 119, 6, 0.10)'),
+                        colors.primaryFill,
+                        cssVar('--color-danger-bg', 'rgba(220, 38, 38, 0.08)')
+                    ],
+                    borderColor: [colors.amber, colors.primary, colors.rose],
+                    borderWidth: 1,
+                    borderRadius: 8,
+                    maxBarThickness: 34
                 }]
             },
-            options: { ...baseOptions(), cutout: '66%', scales: undefined }
+            options
         });
-        return chartInstances.requestStatus;
+        return chartInstances.operationalOverview;
     }
 
     function destroyAllCharts() {
@@ -104,8 +120,8 @@
     window.FAMDashboardCharts = {
         chartInstances,
         hasValues,
-        createRequestsTrendChart,
-        createRequestStatusChart,
+        createReservationActivityChart,
+        createOperationalOverviewChart,
         destroyAllCharts
     };
 })();

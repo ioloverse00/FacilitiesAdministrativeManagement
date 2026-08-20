@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>Visitor Scanner</title>
+    <title>Visitor Reception Console</title>
     <script src="../assets/js/theme.js"></script>
     <link href="../assets/css/app.css" rel="stylesheet">
     <script src="../assets/js/navigation.js" defer></script>
@@ -11,96 +11,110 @@
     <script src="../assets/js/profile-dropdown.js" defer></script>
     <script src="../assets/js/modal.js" defer></script>
     <script src="../assets/js/layout.js" defer></script>
-    <script src="../assets/vendor/jsqr/jsQR.js" defer></script>
+    <script src="../assets/vendor/tesseract/tesseract.min.js" defer></script>
     <script src="../assets/js/visitor-scanner.js" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body"
-    data-page-title="Visitor Scanner"
-    data-breadcrumb-title="Visitor Scanner"
+    data-page-title="Visitor Reception Console"
+    data-breadcrumb-title="Visitor Reception Console"
     data-active-nav="visitor-management"
-    data-page-heading="Visitor Scanner"
-    data-page-description="Scan a visitor pass QR code or enter the visitor reference manually.">
+    data-page-heading="Visitor Reception Console"
+    data-page-description="Verify visitor identification, assign an available badge, check visitors in, and process badge returns.">
     <div id="app-shell" class="app-shell">
         <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
         <div class="app-main-panel">
             <div id="app-header-slot" class="shrink-0"></div>
             <main id="app-content" class="app-main bg-surface-container-lowest">
-                <div id="page-content" class="app-page-content facility-requests-workspace visitor-scanner-workspace">
+                <div id="page-content" class="app-page-content facility-requests-workspace visitor-scanner-workspace visitor-reception-workspace">
                     <div class="facility-requests-shell">
                         <header class="facility-page-header">
                             <div class="facility-title-block">
-                                <h1>Visitor Scanner</h1>
-                                <p>Scan a visitor pass QR code or enter the visitor reference manually.</p>
+                                <h1>Visitor Reception Console</h1>
+                                <p>Verify visitor identification, assign an available badge, check visitors in, and process badge returns.</p>
                             </div>
                             <div class="facility-header-actions">
                                 <a class="btn-secondary dashboard-action-button" href="visitor-management.html"><span class="material-symbols-outlined" aria-hidden="true">list_alt</span>Back to Visitor Management</a>
                             </div>
                         </header>
 
-                        <div class="visitor-scanner-grid">
-                            <section class="facility-section scanner-panel" aria-labelledby="scanner-panel-title">
-                                <div class="facility-table-card scanner-card">
+                        <section class="reception-console-grid" aria-labelledby="entry-title">
+                            <div class="facility-table-card reception-card">
+                                <div class="scanner-card-header">
+                                    <div>
+                                        <h2 id="entry-title">New Visitor Entry</h2>
+                                        <p>Officer confirms identity, assigns a badge, and checks the visitor in immediately.</p>
+                                    </div>
+                                </div>
+                                <form id="visitor-entry-form" class="reception-form">
+                                    <div class="facility-form-error" data-entry-error hidden></div>
+                                    <section class="scanner-modal-section">
+                                        <h3>ID Verification</h3>
+                                        <div class="reception-id-scan-row">
+                                            <p class="scanner-dialog-copy">Scan an ID to assist with transcription, then verify details before check-in.</p>
+                                            <button class="btn-secondary dashboard-action-button" type="button" data-scan-id>
+                                                <span class="material-symbols-outlined" aria-hidden="true">photo_camera</span>
+                                                Scan ID
+                                            </button>
+                                        </div>
+                                        <div class="reception-id-confirmed" data-id-scan-confirmed hidden>
+                                            <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
+                                            ID details confirmed. Verify all visitor details before check-in.
+                                        </div>
+                                        <div class="facility-form-grid">
+                                            <label class="facility-field"><span>Visitor Full Name *</span><input name="full_name" autocomplete="name" required></label>
+                                            <label class="facility-field"><span>ID Type *</span><select name="identification_type" required data-id-type-select></select></label>
+                                            <label class="facility-field"><span>ID Last 4</span><input name="identification_last4" maxlength="16" placeholder="Optional"></label>
+                                            <label class="facility-field"><span>Organization</span><input name="organization_name" placeholder="Optional"></label>
+                                        </div>
+                                    </section>
+                                    <section class="scanner-modal-section">
+                                        <h3>Visit</h3>
+                                        <div class="facility-form-grid">
+                                            <label class="facility-field"><span>Visitor Type *</span><select name="visitor_type" required data-visitor-type-select></select></label>
+                                            <label class="facility-field"><span>Purpose *</span><input name="visit_purpose" required></label>
+                                            <label class="facility-field"><span>Department</span><select name="destination_department_reference_id" data-department-select></select></label>
+                                            <label class="facility-field"><span>Facility / Room</span><select name="facility_space_id" data-space-select></select></label>
+                                            <label class="facility-field"><span>Host / Person to Visit</span><select name="host_employee_reference_id" data-host-select></select></label>
+                                        </div>
+                                    </section>
+                                    <section class="scanner-modal-section">
+                                        <h3>Access</h3>
+                                        <div class="facility-form-grid">
+                                            <label class="facility-field"><span>Visitor Badge *</span><select name="badge_id" required data-badge-select></select></label>
+                                            <label class="facility-field"><span>Notes</span><input name="remarks" placeholder="Optional"></label>
+                                        </div>
+                                    </section>
+                                    <div class="facility-dialog-actions reception-inline-actions">
+                                        <button class="btn-secondary dashboard-action-button" type="reset">Clear</button>
+                                        <button class="btn-primary dashboard-action-button" type="submit"><span class="material-symbols-outlined" aria-hidden="true">login</span>Confirm & Check In</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="reception-side-column">
+                                <div class="facility-table-card reception-card reception-badge-return-card">
                                     <div class="scanner-card-header">
                                         <div>
-                                            <h2 id="scanner-panel-title">Scanner</h2>
-                                            <p>Camera scanning runs only in this browser. Frames are not uploaded.</p>
+                                            <h2>Badge Return / Checkout</h2>
+                                            <p>Select an issued badge to complete visitor checkout.</p>
                                         </div>
                                     </div>
-                                    <div class="scanner-camera-frame">
-                                        <video id="scanner-video" playsinline muted hidden></video>
-                                        <canvas id="scanner-canvas" hidden></canvas>
-                                        <div id="scanner-placeholder" class="scanner-empty-state">
-                                            <span class="material-symbols-outlined" aria-hidden="true">qr_code_scanner</span>
-                                            <strong>Ready to scan</strong>
-                                            <p>Start the camera and position the visitor QR code inside the frame.</p>
-                                        </div>
-                                        <div class="scanner-frame-guide" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-                                        <div class="scanner-scan-line" aria-hidden="true"></div>
-                                    </div>
-                                    <div id="scanner-status-card" class="scanner-status-card is-ready" aria-live="polite">
-                                        <span id="scanner-status-icon" class="material-symbols-outlined" aria-hidden="true">radio_button_checked</span>
-                                        <div>
-                                            <strong id="scanner-status">Ready to scan</strong>
-                                            <p id="camera-message">Use the camera or manual lookup to begin.</p>
-                                        </div>
-                                    </div>
-                                    <div class="scanner-controls">
-                                        <button id="start-camera" class="btn-primary dashboard-action-button" type="button"><span class="material-symbols-outlined" aria-hidden="true">photo_camera</span>Start Camera</button>
-                                        <button id="stop-camera" class="btn-primary dashboard-action-button" type="button" hidden><span class="material-symbols-outlined" aria-hidden="true">videocam_off</span>Stop Camera</button>
-                                        <button id="switch-camera" class="btn-secondary dashboard-action-button" type="button" hidden><span class="material-symbols-outlined" aria-hidden="true">cameraswitch</span>Switch Camera</button>
-                                        <button id="scan-again" class="btn-secondary dashboard-action-button" type="button" hidden><span class="material-symbols-outlined" aria-hidden="true">restart_alt</span>Scan Again</button>
-                                    </div>
-
-                                    <form id="manual-lookup-form" class="scanner-manual-form">
-                                        <div class="scanner-manual-copy">
-                                            <h3>Manual Lookup</h3>
-                                            <p>Use this when the camera is unavailable or the QR cannot be scanned.</p>
-                                        </div>
+                                    <form id="badge-return-form" class="reception-form">
                                         <label class="facility-field">
-                                            <span>Visitor Reference or QR Token</span>
-                                            <input id="manual-query" name="query" autocomplete="off" placeholder="VIS-2026-0001">
+                                            <span>Issued Badge *</span>
+                                            <select id="issued-badge-select" name="badge_number" required data-issued-badge-select></select>
                                         </label>
-                                        <button class="btn-secondary dashboard-action-button" type="submit"><span class="material-symbols-outlined" aria-hidden="true">search</span>Find Visitor</button>
+                                        <div id="badge-return-summary" class="reception-badge-summary" hidden></div>
                                     </form>
                                 </div>
-                            </section>
-
-                            <section class="facility-section resolved-panel" aria-labelledby="resolved-title">
-                                <div id="scanner-result" class="facility-table-card scanner-result-card" tabindex="-1">
-                                    <div class="fam-state">
-                                        <span class="material-symbols-outlined" aria-hidden="true">badge</span>
-                                        <span>No visitor selected.</span>
-                                    </div>
-                                </div>
-                            </section>
-                        </div>
-
-                        <div id="scanner-dialog" class="facility-dialog" hidden></div>
+                            </div>
+                        </section>
                     </div>
                 </div>
                 <div id="app-footer-slot" class="app-footer-slot"></div>
             </main>
         </div>
     </div>
+    <aside id="id-capture-dialog" class="facility-dialog id-capture-dialog" hidden aria-modal="true" aria-labelledby="id-capture-title"></aside>
 </body>
 </html>

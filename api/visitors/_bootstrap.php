@@ -5,8 +5,10 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . '_live_bootstrap.php';
 require_once dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Visitors' . DIRECTORY_SEPARATOR . 'VisitorPolicy.php';
 require_once dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Visitors' . DIRECTORY_SEPARATOR . 'VisitorService.php';
+require_once dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Visitors' . DIRECTORY_SEPARATOR . 'VisitorIdAnalysisService.php';
 
 function visitorService(): VisitorService { return new VisitorService(Database::connection()); }
+function visitorIdAnalysisService(): VisitorIdAnalysisService { return new VisitorIdAnalysisService(VisitorService::ID_TYPES); }
 function visitorId(): int { return idParam('id'); }
 function visitorValidation(Throwable $e): void
 {

@@ -7,6 +7,9 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATO
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Reservations' . DIRECTORY_SEPARATOR . 'ReservationService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Documents' . DIRECTORY_SEPARATOR . 'DocumentService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'RecordsRetention' . DIRECTORY_SEPARATOR . 'RetentionService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterSummaryService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterPartyService.php';
 
 function currentApiUser(): array
 {
@@ -45,6 +48,29 @@ function documentService(): DocumentService
 function retentionService(): RetentionService
 {
     return new RetentionService(Database::connection());
+}
+
+function legalMatterService(): LegalMatterService
+{
+    return new LegalMatterService(Database::connection());
+}
+
+function legalMatterSummaryService(): LegalMatterSummaryService
+{
+    return new LegalMatterSummaryService(Database::connection());
+}
+
+function legalMatterPartyService(): LegalMatterPartyService
+{
+    return new LegalMatterPartyService(Database::connection());
+}
+
+function requireLegalDocumentAccessIfNeeded(int $documentId, array $user): void
+{
+    $reference = documentService()->legalMatterReferenceForDocument($documentId);
+    if ($reference !== null) {
+        LegalPolicy::requirePermission($user, 'legal.manage');
+    }
 }
 
 function idParam(string $name = 'id'): int

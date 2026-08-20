@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Legal Management</title>
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/api-client.js" defer></script>
+    <script src="../assets/js/table-audit.js" defer></script>
+    <script src="../assets/js/legal-management.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Legal Management"
+    data-breadcrumb-title="Legal Management"
+    data-active-nav="legal-management"
+    data-page-heading="Legal Management"
+    data-page-description="Track and manage legal matters, assignments, status, and resolutions.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace legal-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header legal-page-header">
+                            <div class="facility-title-block">
+                                <h1>Legal Management</h1>
+                                <p>Track and manage legal matters, assignments, status, and resolutions.</p>
+                                <span id="legal-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="legal-refresh" class="fam-icon-button" type="button" aria-label="Refresh legal matters">
+                                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                                <button id="legal-new-matter" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">add_circle</span>
+                                    New Legal Matter
+                                </button>
+                            </div>
+                        </header>
+
+                        <section class="document-summary-strip legal-summary-strip" aria-label="Legal matter summary">
+                            <article><strong id="legal-open-count">0</strong><p>Open Matters</p></article>
+                            <article><strong id="legal-critical-count">0</strong><p>Critical Matters</p></article>
+                            <article><strong id="legal-review-count">0</strong><p>Under Review</p></article>
+                            <article><strong id="legal-resolved-count">0</strong><p>Resolved This Period</p></article>
+                        </section>
+
+                        <section class="facility-section" aria-labelledby="legal-table-title">
+                            <div class="facility-table-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="legal-table-title">Matter Queue</h2>
+                                        <p id="legal-table-count">Loading legal matters...</p>
+                                    </div>
+                                    <div class="facility-header-controls legal-controls">
+                                        <label class="facility-field facility-search-field"><span class="sr-only">Search</span><input id="legal-search" type="search" placeholder="Search matters..."></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Matter type</span><select id="legal-type-filter"><option value="all">All Types</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Priority</span><select id="legal-priority-filter"><option value="all">All Priorities</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Status</span><select id="legal-status-filter"><option value="all">All Statuses</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Department</span><select id="legal-department-filter"><option value="all">All Departments</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Assigned to</span><select id="legal-assignee-filter"><option value="all">All Assignees</option></select></label>
+                                    </div>
+                                </div>
+                                <div id="legal-loading-state" class="fam-state">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading legal matters...</span>
+                                </div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table legal-table">
+                                        <colgroup>
+                                            <col class="legal-col-matter">
+                                            <col class="legal-col-type">
+                                            <col class="legal-col-priority">
+                                            <col class="legal-col-status">
+                                            <col class="legal-col-assignee">
+                                            <col class="legal-col-updated">
+                                            <col class="legal-col-actions">
+                                        </colgroup>
+                                        <thead>
+                                            <tr>
+                                                <th><button type="button" class="facility-sort-button" data-sort="title">Matter</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="matter_type">Type</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="priority">Priority</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="status">Status</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="assigned_to">Assigned To</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="updated_at">Updated</button></th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="legal-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="legal-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                                <div class="facility-pagination" aria-label="Legal matters pagination">
+                                    <button id="legal-prev-page" class="facility-page-button" type="button">Previous</button>
+                                    <span id="legal-page-status">Page 1 of 1</span>
+                                    <button id="legal-next-page" class="facility-page-button" type="button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside id="legal-dialog" class="facility-dialog legal-dialog" hidden></aside>
+                        <aside id="legal-details-modal" class="facility-details-modal legal-details-modal" hidden></aside>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

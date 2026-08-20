@@ -229,8 +229,12 @@
         dialog.querySelector('input, select, textarea, button')?.focus();
     }
 
-    function detailsRow(label, value) {
-        return `<dl class="facility-detail-row"><dt>${esc(label)}</dt><dd>${esc(value || 'Not available')}</dd></dl>`;
+    function detailsRow(label, value, className = '') {
+        return `<dl class="facility-detail-row ${esc(className)}"><dt>${esc(label)}</dt><dd>${esc(value || 'Not available')}</dd></dl>`;
+    }
+
+    function detailsGrid(content) {
+        return `<div class="detail-grid">${content}</div>`;
     }
 
     async function openDetails(id) {
@@ -243,6 +247,8 @@
             const response = await window.FAMApi.request(api(`show.php?id=${encodeURIComponent(id)}`));
             const item = response.data?.item;
             const history = (item.history || []).map(row => `<li><strong>${esc(statusLabel(row.new_status))}</strong><span>${esc(fmt(row.changed_at))}</span>${row.change_reason ? `<p>${esc(row.change_reason)}</p>` : ''}</li>`).join('');
+            const requestDetails = detailsGrid(`${detailsRow('Status', statusLabel(item.status))}${detailsRow('Category', item.category?.name)}${detailsRow('Priority', title(item.priority))}${detailsRow('Location', item.location?.space_name)}${detailsRow('Submitted', fmt(item.created_at))}${detailsRow('Updated', fmt(item.updated_at))}`);
+            const scheduleDetails = detailsGrid(`${detailsRow('Preferred Schedule', fmt(item.lifecycle?.requested_completion_at))}${detailsRow('Completed At', fmt(item.lifecycle?.completed_at))}${detailsRow('Resolution Summary', item.lifecycle?.resolution_summary, 'detail-item--full')}`);
             dialog.innerHTML = `
                 <div class="facility-dialog-panel employee-request-details">
                     <div class="facility-details-modal-header">
@@ -255,9 +261,9 @@
                     </div>
                     <div class="facility-details-modal-body">
                         <div class="visitor-detail-accordion">
-                            <details class="visitor-detail-disclosure" open><summary>Request Details</summary>${detailsRow('Status', statusLabel(item.status))}${detailsRow('Category', item.category?.name)}${detailsRow('Priority', title(item.priority))}${detailsRow('Location', item.location?.space_name)}${detailsRow('Submitted', fmt(item.created_at))}${detailsRow('Updated', fmt(item.updated_at))}</details>
+                            <details class="visitor-detail-disclosure" open><summary>Request Details</summary>${requestDetails}</details>
                             <details class="visitor-detail-disclosure" open><summary>Description</summary><p>${esc(item.description || 'No description provided.')}</p></details>
-                            <details class="visitor-detail-disclosure"><summary>Schedule and Resolution</summary>${detailsRow('Preferred Schedule', fmt(item.lifecycle?.requested_completion_at))}${detailsRow('Completed At', fmt(item.lifecycle?.completed_at))}${detailsRow('Resolution Summary', item.lifecycle?.resolution_summary)}</details>
+                            <details class="visitor-detail-disclosure"><summary>Schedule and Resolution</summary>${scheduleDetails}</details>
                             <details class="visitor-detail-disclosure"><summary>Activity History</summary>${history ? `<ol class="facility-history-list visitor-activity-timeline">${history}</ol>` : '<p>No activity history recorded.</p>'}</details>
                         </div>
                     </div>

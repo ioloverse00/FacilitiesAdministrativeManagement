@@ -26,6 +26,14 @@
         return !!target.closest('.records-workspace, #document-dialog, #document-details-modal, [data-document-action], [data-document-menu-toggle]');
     }
 
+    function isRecordsRetentionTarget(target) {
+        return !!target.closest('.retention-workspace, #retention-dialog, #retention-details-modal, [data-retention-action], [data-retention-menu-toggle]');
+    }
+
+    function isLegalManagementTarget(target) {
+        return !!target.closest('.legal-workspace, #legal-dialog, #legal-details-modal, [data-legal-action], [data-legal-menu-toggle]');
+    }
+
     function actionLabel(target) {
         if (target.dataset.calendarReservation) return 'View Details';
         const explicit = target.dataset.requestAction
@@ -131,7 +139,7 @@
 
     function maybeHandle(event) {
         const target = event.target.closest('button, a');
-        if (!target || isFacilityRequestTarget(target) || isVisitorManagementTarget(target) || isRoomReservationTarget(target) || isDocumentManagementTarget(target)) return;
+        if (!target || isFacilityRequestTarget(target) || isVisitorManagementTarget(target) || isRoomReservationTarget(target) || isDocumentManagementTarget(target) || isRecordsRetentionTarget(target) || isLegalManagementTarget(target)) return;
         const label = actionLabel(target).toLowerCase();
         if (!viewActions.has(label)) return;
         event.preventDefault();
