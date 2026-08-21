@@ -58,6 +58,48 @@ The Legal AI prompt restricts output to factual, neutral administrative summariz
 
 Humans remain authoritative for matter classification, priority, assignment, status changes, legal conclusions, resolution, closure, legal hold decisions, and final interpretation of source documents.
 
+## Matter Responsibility Flow
+
+A FAM Facilitator or reporting user submits the Legal Matter with the required supporting evidence. New matters always begin as `OPEN` and `Unassigned`; the creator does not choose the responsible handler during matter creation.
+
+FAM Admin/Head users review the matter, AI-supported summary, parties, supporting documents, and action recommendations before explicitly assigning the responsible handler through the Assign Matter workflow. Assignment changes remain separate from matter editing so permissions and audit history stay clear.
+
+Matter Assignment and Action Assignment are intentionally separate:
+
+- Matter Assignment identifies the person responsible for handling the overall Legal Matter.
+- Action Assignment identifies the person responsible for completing one specific approved legal action.
+
+Existing assigned matters preserve their current assignment history. The unassigned-on-create rule applies only to newly created matters going forward.
+
+## Queue and Review Workflow
+
+The Matter Queue exposes contextual actions based on the current lifecycle status:
+
+- `OPEN`: `Review`, `Edit`, and `Cancel Matter`
+- `UNDER_REVIEW`: `Continue Review`, and `Cancel Matter` when permitted
+- `IN_PROGRESS`: `Continue Review`, and `Cancel Matter` when permitted
+- `RESOLVED`: `View Details`, and `Reopen Matter` when permitted
+- `CLOSED`: `View Details`, and `Reopen Matter` when permitted
+- `CANCELLED`: `View Details`
+
+`Review` is the formal review-start action. It transitions a matter from `OPEN` to `UNDER_REVIEW`, records the lifecycle history event, refreshes the queue, and opens the Legal Matter details modal for review.
+
+General matter editing is a pre-review correction workflow only. Once a matter is no longer `OPEN`, the update endpoint rejects generic edits with:
+
+`This legal matter is already under formal review. General matter details can no longer be edited through the pre-review correction workflow.`
+
+Assignment is handled inside the Legal Matter details modal, not from the queue action menu. The Assignment accordion shows the current handler and offers `Assign Matter` or `Reassign` to users with assignment permission.
+
+Lifecycle controls after review are also inside the details modal. `UNDER_REVIEW` matters can move to `IN_PROGRESS` through `Begin Processing`, but the server blocks that transition until a responsible handler is assigned:
+
+`Assign a responsible handler before beginning processing.`
+
+`IN_PROGRESS` matters can be resolved only when existing action guards pass. `RESOLVED` matters can be closed or reopened according to the existing lifecycle permissions and transition rules.
+
+`CLOSED` matters are immutable historical records. They may be viewed for audit, read-only review, supporting document viewing/downloading, AI summary inspection, parties, actions, assignment history, resolution data, and activity history. Ordinary mutation workflows are not allowed after closure, including matter edits, party changes, action changes, assignment changes, evidence additions, AI summary regeneration, party re-analysis, or action re-analysis.
+
+The only controlled exception is the existing authorized `Reopen Matter` lifecycle transition where current RBAC and lifecycle rules permit it. After a successful reopen, controls return according to the resulting matter status.
+
 ## Privacy Boundary
 
 AI-enabled summarization may transmit the content of linked supporting documents to the configured Gemini service. The request is minimized to the current Legal Matter's readable supporting documents only. It does not include unrelated repository files, other legal matters, user profile data, session data, or source documents from other modules.
@@ -111,3 +153,66 @@ Accepted suggestions become confirmed `legal_matter_party` records with `ai_sugg
 The Legal Matter details modal shows `Parties Involved` as a collapsed accordion below the always-visible AI Matter Summary and the expanded Matter Information section. Confirmed parties are shown separately from `AI Suggested Parties` so unreviewed AI output is never mistaken for an official matter party.
 
 Safe history events include `LEGAL_AI_PARTIES_ANALYZED`, `LEGAL_PARTY_ADDED`, `LEGAL_AI_PARTY_ACCEPTED`, `LEGAL_AI_PARTY_EDITED_ACCEPTED`, and `LEGAL_AI_PARTY_DISMISSED`. These events log workflow context without storing supporting document contents.
+
+## Phase 4: Actions, Deadlines, and AI Decision Support
+
+Legal Management stores official matter actions in `legal_matter_action`. AI-detected or AI-recommended action candidates are stored separately in `legal_matter_action_suggestion` until an authorized human reviews them.
+
+Official action types use the controlled taxonomy:
+
+- `REVIEW`
+- `FOLLOW_UP`
+- `DOCUMENT_SUBMISSION`
+- `DOCUMENT_REQUEST`
+- `MEETING`
+- `INSPECTION`
+- `COMPLIANCE`
+- `RESPONSE`
+- `OTHER`
+
+Stored action statuses are:
+
+- `PENDING`
+- `IN_PROGRESS`
+- `COMPLETED`
+- `CANCELLED`
+
+`OVERDUE` and `DUE_SOON` are derived display states only. They are not stored as canonical action statuses. An incomplete action is due soon when its due date falls within the next three calendar days.
+
+AI action suggestions identify the recommendation basis:
+
+- `SOURCE_DERIVED`: the supporting evidence explicitly states the action, obligation, response date, submission requirement, or deadline.
+- `AI_RECOMMENDED`: the evidence and matter metadata support a conservative internal follow-up action or target date, but the source does not create an explicit deadline.
+- `NO_DEADLINE`: no due date or useful target is supported.
+
+AI-recommended target dates use the FAM priority policy:
+
+- `CRITICAL`: 1 business day
+- `HIGH`: 2-3 business days
+- `MEDIUM`: 5 business days
+- `LOW`: 7-10 business days
+
+Gemini may recommend an urgency inside the applicable priority window, but backend logic computes the actual date deterministically using weekday-only business days. The current implementation does not include a holiday calendar.
+
+Authorized Legal/Admin users can:
+
+- manually add an action or deadline
+- edit an official action
+- start, complete, or cancel an action
+- re-analyze linked supporting evidence for action suggestions
+- accept an AI suggestion into an official action
+- dismiss an AI suggestion
+
+AI action analysis reads only current readable supporting documents linked to the selected Legal Matter, plus matter metadata such as type, priority, and existing actions/suggestions for duplicate avoidance. It creates pending suggestions, not official actions. The prompt must not invent legal obligations, statutory deadlines, court dates, hearings, sanctions, penalties, responsibility, liability, or conclusions.
+
+Accepted suggestions become official `legal_matter_action` records with `source = AI` only after Admin/Head review. The reviewer may edit the title, type, description, assignee, and due date before creating the official action. Dismissed suggestions remain non-authoritative and suppress the same unchanged suggestion from immediately returning during re-analysis.
+
+AI suggestions alone do not block resolution or closure. Only official `PENDING` and `IN_PROGRESS` actions are tracked for due soon/overdue behavior and resolution guards.
+
+Legal matters cannot be resolved or closed while official actions remain `PENDING` or `IN_PROGRESS`. The server blocks the transition with:
+
+`Complete or cancel all open legal actions before resolving this matter.`
+
+The Legal Matter details modal shows `Actions & Deadlines` as a collapsed accordion below `Parties Involved` and above assignment/supporting document sections. The AI Matter Summary remains always visible, and Matter Information remains the only expanded accordion by default.
+
+Safe history events include `LEGAL_ACTION_ADDED`, `LEGAL_ACTION_UPDATED`, `LEGAL_ACTION_STARTED`, `LEGAL_ACTION_COMPLETED`, `LEGAL_ACTION_CANCELLED`, `LEGAL_AI_ACTIONS_ANALYZED`, `LEGAL_AI_ACTION_SUGGESTED`, `LEGAL_AI_ACTION_ACCEPTED`, and `LEGAL_AI_ACTION_DISMISSED`. These events log workflow context without storing supporting document contents.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'LegalMatterSummaryService.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'LegalMatterPartyService.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'LegalMatterActionService.php';
 
 final class LegalPolicy
 {
@@ -58,11 +59,13 @@ final class LegalMatterService
 
     private readonly DocumentService $documentService;
     private readonly LegalMatterPartyService $partyService;
+    private readonly LegalMatterActionService $actionService;
 
     public function __construct(private readonly PDO $pdo, ?DocumentService $documentService = null)
     {
         $this->documentService = $documentService ?? new DocumentService($pdo);
         $this->partyService = new LegalMatterPartyService($pdo, $this->documentService);
+        $this->actionService = new LegalMatterActionService($pdo);
     }
 
     public function list(array $query): array
@@ -120,6 +123,8 @@ final class LegalMatterService
         $item['supportingDocuments'] = $this->documentService->listRelated('LEGAL_MANAGEMENT', $item['matterNo']);
         $item['parties'] = $this->partyService->partiesForMatter($id);
         $item['partySuggestions'] = [];
+        $item['actions'] = $this->actionService->actionsForMatter($id);
+        $item['actionSuggestions'] = $this->actionService->suggestionsForMatter($id);
         $item['history'] = $this->history($id);
         return $item;
     }
@@ -142,6 +147,8 @@ final class LegalMatterService
             ], $this->rows("SELECT e.employee_reference_id, e.employee_number, e.full_name, d.department_name FROM employee_reference e LEFT JOIN department_reference d ON d.department_reference_id = e.department_reference_id WHERE e.employment_status = 'ACTIVE' ORDER BY e.full_name")),
             'party_roles' => LegalMatterPartyService::PARTY_ROLES,
             'party_types' => LegalMatterPartyService::PARTY_TYPES,
+            'action_types' => LegalMatterActionService::ACTION_TYPES,
+            'action_statuses' => LegalMatterActionService::STATUSES,
             'visitors' => array_map(fn (array $row): array => [
                 'id' => (int) $row['visitor_id'],
                 'name' => trim((string) $row['full_name']),
@@ -157,7 +164,7 @@ final class LegalMatterService
         $this->pdo->beginTransaction();
         try {
             $number = $this->nextMatterNumber();
-            $statement = $this->pdo->prepare('INSERT INTO legal_matter (matter_number, title, matter_type, summary, initial_note, priority, status, department_reference_id, assigned_employee_reference_id, reported_at, opened_at, created_by_user_id, created_at, updated_at) VALUES (:matter_number, :title, :matter_type, :summary, :initial_note, :priority, \'OPEN\', :department_id, :assigned_id, :reported_at, NOW(), :user_id, NOW(), NOW())');
+            $statement = $this->pdo->prepare('INSERT INTO legal_matter (matter_number, title, matter_type, summary, initial_note, priority, status, department_reference_id, assigned_employee_reference_id, reported_at, opened_at, created_by_user_id, created_at, updated_at) VALUES (:matter_number, :title, :matter_type, :summary, :initial_note, :priority, \'OPEN\', :department_id, NULL, :reported_at, NOW(), :user_id, NOW(), NOW())');
             $statement->execute([
                 'matter_number' => $number,
                 'title' => $clean['title'],
@@ -166,15 +173,11 @@ final class LegalMatterService
                 'initial_note' => $clean['initial_note'],
                 'priority' => $clean['priority'],
                 'department_id' => $clean['department_reference_id'],
-                'assigned_id' => $clean['assigned_employee_reference_id'],
                 'reported_at' => $clean['reported_at'],
                 'user_id' => $userId,
             ]);
             $id = (int) $this->pdo->lastInsertId();
             $this->historyEvent($id, 'LEGAL_MATTER_CREATED', null, 'OPEN', "Legal matter $number created.", [], $userId);
-            if ($clean['assigned_employee_reference_id'] !== null) {
-                $this->historyEvent($id, 'LEGAL_MATTER_ASSIGNED', null, null, 'Legal matter assigned.', ['assigned_employee_reference_id' => $clean['assigned_employee_reference_id']], $userId);
-            }
             $this->activity('LEGAL_MATTER_CREATED', 'Legal Matter Created', "Legal matter $number created.", $id, $number, $user);
             $this->pdo->commit();
             return $this->show($id) ?? ['id' => $id, 'matterNo' => $number];
@@ -190,6 +193,7 @@ final class LegalMatterService
         if ($matter === null) {
             return null;
         }
+        $this->assertNotClosed($matter);
 
         $this->documentService->validateLegalEvidenceFile($file);
         $legalDefaults = $this->documentService->legalCategoryDefaults();
@@ -222,8 +226,11 @@ final class LegalMatterService
         if ($before === null) {
             return null;
         }
-        if (in_array($before['status'], ['CLOSED', 'CANCELLED'], true)) {
-            throw new InvalidArgumentException(json_encode(['status' => 'Closed or cancelled matters cannot be edited.'], JSON_THROW_ON_ERROR));
+        if ($before['status'] === 'CLOSED') {
+            throw new InvalidArgumentException(json_encode(['status' => 'This legal matter is closed and is read-only.'], JSON_THROW_ON_ERROR));
+        }
+        if ($before['status'] !== 'OPEN') {
+            throw new InvalidArgumentException(json_encode(['status' => 'This legal matter is already under formal review. General matter details can no longer be edited through the pre-review correction workflow.'], JSON_THROW_ON_ERROR));
         }
         $clean = $this->validateMatter($data, false);
         $this->pdo->beginTransaction();
@@ -254,6 +261,7 @@ final class LegalMatterService
         if ($before === null) {
             return null;
         }
+        $this->assertNotClosed($before);
         if ($before['status'] === 'CANCELLED') {
             throw new InvalidArgumentException(json_encode(['status' => 'Cancelled matters cannot be reassigned.'], JSON_THROW_ON_ERROR));
         }
@@ -294,12 +302,18 @@ final class LegalMatterService
         if (!in_array($next, self::TRANSITIONS[$current] ?? [], true)) {
             throw new InvalidArgumentException(json_encode(['status' => "Cannot move matter from $current to $next."], JSON_THROW_ON_ERROR));
         }
+        if ($action === 'start_processing' && ($item['assignedEmployeeId'] ?? null) === null) {
+            throw new InvalidArgumentException(json_encode(['assigned_employee_reference_id' => 'Assign a responsible handler before beginning processing.'], JSON_THROW_ON_ERROR));
+        }
         $reason = $requiredField !== null ? $this->text($data[$requiredField] ?? '', 2000) : $this->text($data['remarks'] ?? '', 1000);
         if ($requiredField !== null && $reason === '') {
             throw new InvalidArgumentException(json_encode([$requiredField => 'Enter the required reason or summary.'], JSON_THROW_ON_ERROR));
         }
         if ($next === 'CLOSED' && $current !== 'RESOLVED') {
             throw new InvalidArgumentException(json_encode(['status' => 'Only resolved matters can be closed.'], JSON_THROW_ON_ERROR));
+        }
+        if (in_array($next, ['RESOLVED', 'CLOSED'], true) && $this->actionService->hasOpenActions($id)) {
+            throw new InvalidArgumentException(json_encode(['actions' => 'Complete or cancel all open legal actions before resolving this matter.'], JSON_THROW_ON_ERROR));
         }
 
         $this->pdo->beginTransaction();
@@ -349,13 +363,12 @@ final class LegalMatterService
         $type = strtoupper($this->text($data['matter_type'] ?? '', 50));
         $priority = strtoupper($this->text($data['priority'] ?? 'MEDIUM', 30));
         $departmentId = $this->optionalId($data['department_reference_id'] ?? null);
-        $assignedId = $creating ? $this->optionalId($data['assigned_employee_reference_id'] ?? null) : null;
+        $assignedId = null;
         $reportedAt = $this->date($data['reported_at'] ?? null);
         if ($title === '') $errors['title'] = 'Enter a legal matter title.';
         if (!in_array($type, self::TYPES, true)) $errors['matter_type'] = 'Choose a valid matter type.';
         if (!in_array($priority, self::PRIORITIES, true)) $errors['priority'] = 'Choose a valid priority.';
         if ($departmentId !== null) $this->assertDepartment($departmentId);
-        if ($assignedId !== null) $this->assertEmployee($assignedId);
         if ($errors) {
             throw new InvalidArgumentException(json_encode($errors, JSON_THROW_ON_ERROR));
         }
@@ -451,13 +464,20 @@ final class LegalMatterService
     {
         return match ($status) {
             'OPEN' => ['view', 'edit', 'assign', 'start_review', 'cancel'],
-            'UNDER_REVIEW' => ['view', 'edit', 'assign', 'start_processing', 'cancel'],
-            'IN_PROGRESS' => ['view', 'edit', 'assign', 'resolve', 'cancel'],
+            'UNDER_REVIEW' => ['view', 'assign', 'start_processing', 'cancel'],
+            'IN_PROGRESS' => ['view', 'assign', 'resolve', 'cancel'],
             'RESOLVED' => ['view', 'assign', 'close', 'reopen'],
             'CLOSED' => ['view', 'reopen'],
             'CANCELLED' => ['view'],
             default => ['view'],
         };
+    }
+
+    private function assertNotClosed(array $matter): void
+    {
+        if (($matter['status'] ?? '') === 'CLOSED') {
+            throw new InvalidArgumentException(json_encode(['status' => 'This legal matter is closed and is read-only.'], JSON_THROW_ON_ERROR));
+        }
     }
 
     private function history(int $id): array

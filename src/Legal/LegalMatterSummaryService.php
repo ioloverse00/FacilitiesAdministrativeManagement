@@ -19,6 +19,7 @@ final class LegalMatterSummaryService
         if ($matter === null) {
             return null;
         }
+        $this->assertMatterNotClosed($matter);
 
         $sources = $this->readableSources($matter);
         if (!$sources) {
@@ -75,6 +76,7 @@ final class LegalMatterSummaryService
         if ($matter === null) {
             return null;
         }
+        $this->assertMatterNotClosed($matter);
 
         $sources = $this->readableSources($matter);
         if (!$sources) {
@@ -98,6 +100,7 @@ final class LegalMatterSummaryService
         if ($matter === null || !in_array((string) ($matter['ai_summary_status'] ?? ''), ['READY', 'FAILED', 'NO_READABLE_SOURCE'], true)) {
             return;
         }
+        $this->assertMatterNotClosed($matter);
 
         $sources = $this->readableSources($matter);
         $fingerprint = $sources ? $this->fingerprint($sources) : null;
@@ -129,6 +132,13 @@ final class LegalMatterSummaryService
         $statement->execute(['id' => $matterId]);
         $row = $statement->fetch();
         return is_array($row) ? $row : null;
+    }
+
+    private function assertMatterNotClosed(array $matter): void
+    {
+        if (($matter['status'] ?? '') === 'CLOSED') {
+            throw new InvalidArgumentException(json_encode(['status' => 'This legal matter is closed and is read-only.'], JSON_THROW_ON_ERROR));
+        }
     }
 
     private function readableSources(array $matter): array

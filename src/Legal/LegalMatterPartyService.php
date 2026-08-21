@@ -68,6 +68,7 @@ final class LegalMatterPartyService
         if ($matter === null) {
             return null;
         }
+        $this->assertMatterNotClosed($matter);
         $clean = $this->validateParty($data);
         if ($this->duplicatePartyExists($matterId, $clean)) {
             throw new InvalidArgumentException(json_encode(['party' => 'This party already exists for this matter.'], JSON_THROW_ON_ERROR));
@@ -113,6 +114,7 @@ final class LegalMatterPartyService
         if ($party === null) {
             return null;
         }
+        $this->assertMatterNotClosed($this->matter($matterId));
         $clean = $this->validateParty($data);
         if ($this->duplicatePartyExists($matterId, $clean, $partyId)) {
             throw new InvalidArgumentException(json_encode(['party' => 'This party already exists for this matter.'], JSON_THROW_ON_ERROR));
@@ -141,6 +143,7 @@ final class LegalMatterPartyService
         if ($party === null) {
             return null;
         }
+        $this->assertMatterNotClosed($this->matter($matterId));
         $reason = $this->nullableText($data['reason'] ?? null, 255);
         if (($party['party_source'] ?? '') === 'AI' && $reason === null) {
             throw new InvalidArgumentException(json_encode(['reason' => 'Enter a short dismissal reason.'], JSON_THROW_ON_ERROR));
@@ -161,6 +164,7 @@ final class LegalMatterPartyService
         if ($suggestion === null) {
             return null;
         }
+        $this->assertMatterNotClosed($this->matter((int) $suggestion['legal_matter_id']));
         $payload = [
             'party_role' => $data['party_role'] ?? $suggestion['suggested_party_role'],
             'party_type' => $data['party_type'] ?? $suggestion['suggested_party_type'],
@@ -186,6 +190,7 @@ final class LegalMatterPartyService
         if ($suggestion === null) {
             return null;
         }
+        $this->assertMatterNotClosed($this->matter((int) $suggestion['legal_matter_id']));
         $this->markSuggestion($suggestionId, 'DISMISSED', (int) $user['id'], null);
         $this->history((int) $suggestion['legal_matter_id'], 'LEGAL_AI_PARTY_DISMISSED', 'AI party suggestion dismissed.', ['suggestion_id' => $suggestionId], $user);
         return $this->matterWithParties((int) $suggestion['legal_matter_id']);
@@ -197,6 +202,7 @@ final class LegalMatterPartyService
         if ($matter === null) {
             return null;
         }
+        $this->assertMatterNotClosed($matter);
         $sources = $this->readableSources($matter);
         if (!$sources) {
             $this->history($matterId, 'LEGAL_AI_PARTIES_ANALYZED', 'AI party analysis skipped because no readable supporting documents were available.', ['suggestion_count' => 0], $user);
@@ -613,6 +619,13 @@ final class LegalMatterPartyService
         $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM `$table` WHERE `$key` = :id AND $extra");
         $stmt->execute(['id' => $id]);
         return (int) $stmt->fetchColumn() > 0;
+    }
+
+    private function assertMatterNotClosed(?array $matter): void
+    {
+        if (($matter['status'] ?? '') === 'CLOSED') {
+            throw new InvalidArgumentException(json_encode(['status' => 'This legal matter is closed and is read-only.'], JSON_THROW_ON_ERROR));
+        }
     }
 
     private function rows(string $sql, array $params = []): array { $stmt = $this->pdo->prepare($sql); $stmt->execute($params); return $stmt->fetchAll(); }

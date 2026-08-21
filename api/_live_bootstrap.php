@@ -10,6 +10,8 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATO
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterSummaryService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterPartyService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterActionService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterActionExtractionService.php';
 
 function currentApiUser(): array
 {
@@ -63,6 +65,16 @@ function legalMatterSummaryService(): LegalMatterSummaryService
 function legalMatterPartyService(): LegalMatterPartyService
 {
     return new LegalMatterPartyService(Database::connection());
+}
+
+function legalMatterActionService(): LegalMatterActionService
+{
+    return new LegalMatterActionService(Database::connection());
+}
+
+function legalMatterActionExtractionService(): LegalMatterActionExtractionService
+{
+    return new LegalMatterActionExtractionService(Database::connection());
 }
 
 function requireLegalDocumentAccessIfNeeded(int $documentId, array $user): void

@@ -105,20 +105,31 @@
 
     function actions(row) {
         const allowed = new Set(row.allowedActions || ['view']);
-        const items = [`<button type="button" data-legal-action="view" data-legal-id="${row.id}">View Details</button>`];
-        if (allowed.has('edit') && can('legal.edit')) items.push(`<button type="button" data-legal-action="edit" data-legal-id="${row.id}">Edit</button>`);
-        if (allowed.has('assign') && can('legal.assign')) items.push(`<button type="button" data-legal-action="assign" data-legal-id="${row.id}">Assign</button>`);
-        const lifecycle = [
-            ['start_review', 'Start Review', 'legal.resolve'],
-            ['start_processing', 'Start Processing', 'legal.resolve'],
-            ['resolve', 'Resolve Matter', 'legal.resolve'],
-            ['close', 'Close Matter', 'legal.close'],
-            ['reopen', 'Reopen Matter', 'legal.resolve'],
-            ['cancel', 'Cancel Matter', 'legal.manage'],
-        ];
-        lifecycle.forEach(([key, label, permission]) => {
-            if (allowed.has(key) && (can(permission) || can('legal.manage'))) items.push(`<button type="button" class="${key === 'cancel' ? 'document-danger-action' : ''}" data-legal-action="${key}" data-legal-id="${row.id}">${label}</button>`);
-        });
+        const status = String(row.status || '').toUpperCase();
+        const items = [];
+        const add = (key, label, permission = '', danger = false) => {
+            if (!allowed.has(key) && key !== 'continue_review') return;
+            if (permission && !can(permission) && !can('legal.manage')) return;
+            const action = key === 'continue_review' ? 'view' : key;
+            items.push(`<button type="button" class="${danger ? 'document-danger-action' : ''}" data-legal-action="${action}" data-legal-id="${row.id}">${label}</button>`);
+        };
+
+        if (status === 'OPEN') {
+            add('start_review', 'Review', 'legal.resolve');
+            add('edit', 'Edit', 'legal.edit');
+            add('cancel', 'Cancel Matter', 'legal.manage', true);
+        } else if (status === 'UNDER_REVIEW' || status === 'IN_PROGRESS') {
+            add('continue_review', 'Continue Review');
+            add('cancel', 'Cancel Matter', 'legal.manage', true);
+        } else {
+            add('view', 'View Details');
+            if (status === 'RESOLVED' || status === 'CLOSED' || status === 'CANCELLED') {
+                add('reopen', 'Reopen Matter', 'legal.resolve');
+            }
+        }
+        if (!items.length) {
+            items.push(`<button type="button" data-legal-action="view" data-legal-id="${row.id}">View Details</button>`);
+        }
         const menuId = `legal-menu-${row.id}`;
         return `<button class="facility-action-toggle" type="button" aria-label="Open legal matter actions" aria-expanded="false" data-legal-menu-toggle="${menuId}"><span class="material-symbols-outlined" aria-hidden="true">more_vert</span></button><div id="${menuId}" class="facility-action-dropdown legal-action-dropdown hidden" role="menu">${items.join('')}</div>`;
     }
@@ -157,6 +168,10 @@
         return (items || []).map(value => `<option value="${esc(value)}" ${String(value) === String(selected || '') ? 'selected' : ''}>${esc(title(value))}</option>`).join('');
     }
 
+    function actionTypeOptions(selected = '') {
+        return (state.options.action_types || []).map(value => `<option value="${esc(value)}" ${String(value) === String(selected || '') ? 'selected' : ''}>${esc(title(value))}</option>`).join('');
+    }
+
     function departmentOptions(selected = '') {
         return `<option value="">Not applicable</option>` + (state.options.departments || []).map(item => `<option value="${esc(item.id)}" ${String(item.id) === String(selected || '') ? 'selected' : ''}>${esc(item.name)}</option>`).join('');
     }
@@ -193,9 +208,11 @@
 
     function legalDetailsHtml(item) {
         const matterInfo = detailGrid(`${detail('Matter No.', item.matterNo)}${detail('Status', title(item.status))}${detail('Type', title(item.matterType))}${detail('Priority', title(item.priority))}${detail('Department', item.department || 'Not applicable')}${detail('Reported', fmtDate(item.reportedAt))}${detail('Title', item.title, 'detail-item--full')}${detail('Initial Note / Description', item.initialNote || item.summary || 'Not applicable', 'detail-item--full')}`);
-        const assignment = detailGrid(`${detail('Assigned To', item.assignedTo || 'Unassigned')}${detail('Opened', fmt(item.openedAt))}${detail('Created By', item.createdBy || 'System')}${detail('Created', fmt(item.createdAt))}${detail('Updated', fmt(item.updatedAt))}`);
+        const assignment = assignmentDetailsHtml(item);
         const partyCount = (item.parties || []).length;
         const parties = partiesHtml2(item);
+        const actionsCount = (item.actions || []).length + (item.actionSuggestions || []).length;
+        const actions = actionsDeadlinesHtml(item);
         const supportingDocuments = supportingDocumentsHtml(item);
         const resolution = resolutionHtml(item);
         return `<div class="facility-details-modal-panel visitor-details-panel legal-details-panel">
@@ -208,14 +225,45 @@
                 <div class="visitor-detail-accordion legal-detail-accordion">
                     <details class="visitor-detail-disclosure" open><summary>Matter Information</summary>${matterInfo}</details>
                     <details class="visitor-detail-disclosure"><summary>Parties Involved (${partyCount})</summary>${parties}</details>
+                    <details class="visitor-detail-disclosure"><summary>Actions &amp; Deadlines (${actionsCount})</summary>${actions}</details>
                     <details class="visitor-detail-disclosure"><summary>Assignment</summary>${assignment}</details>
                     <details class="visitor-detail-disclosure"><summary>Supporting Documents</summary>${supportingDocuments}</details>
                     <details class="visitor-detail-disclosure"><summary>Resolution</summary>${resolution}</details>
                     <details class="visitor-detail-disclosure"><summary>Activity History</summary>${history(item.history || [])}</details>
                 </div>
             </div>
-            <div class="facility-dialog-actions"><div></div><button class="btn-secondary dashboard-action-button" type="button" data-legal-details-close>Done</button></div>
+            <div class="facility-dialog-actions"><div class="legal-details-workflow-actions">${detailsWorkflowActions(item)}</div><button class="btn-secondary dashboard-action-button" type="button" data-legal-details-close>Done</button></div>
         </div>`;
+    }
+
+    function isMatterReadOnly(item) {
+        return String(item?.status || '').toUpperCase() === 'CLOSED';
+    }
+
+    function assignmentDetailsHtml(item) {
+        const content = detailGrid(`${detail('Assigned To', item.assignedTo || 'Unassigned')}${detail('Opened', fmt(item.openedAt))}${detail('Created By', item.createdBy || 'System')}${detail('Created', fmt(item.createdAt))}${detail('Updated', fmt(item.updatedAt))}`);
+        const action = can('legal.assign') && !isMatterReadOnly(item) && item.status !== 'CANCELLED'
+            ? `<div class="legal-assignment-footer"><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="assign" data-legal-id="${esc(item.id)}">${item.assignedEmployeeId ? 'Reassign' : 'Assign Matter'}</button></div>`
+            : '';
+        return `<div class="legal-assignment-section">${content}${action}</div>`;
+    }
+
+    function detailsWorkflowActions(item) {
+        const status = String(item.status || '').toUpperCase();
+        const allowed = new Set(item.allowedActions || []);
+        const buttons = [];
+        const add = (key, label, permission, primary = true) => {
+            if (!allowed.has(key)) return;
+            if (permission && !can(permission) && !can('legal.manage')) return;
+            buttons.push(`<button class="${primary ? 'btn-primary' : 'btn-secondary'} dashboard-action-button" type="button" data-legal-action="${key}" data-legal-id="${esc(item.id)}">${label}</button>`);
+        };
+        if (status === 'UNDER_REVIEW') add('start_processing', 'Begin Processing', 'legal.resolve');
+        if (status === 'IN_PROGRESS') add('resolve', 'Resolve Matter', 'legal.resolve');
+        if (status === 'RESOLVED') {
+            add('close', 'Close Matter', 'legal.close');
+            add('reopen', 'Reopen Matter', 'legal.resolve', false);
+        }
+        return buttons.join('');
     }
 
     function partiesHtml(item) {
@@ -247,7 +295,7 @@
 
     function partiesHtml2(item) {
         const parties = item.parties || [];
-        const canManage = can('legal.manage');
+        const canManage = can('legal.manage') && !isMatterReadOnly(item);
         const addAction = canManage ? `<button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="add-party" data-legal-id="${esc(item.id)}">Add Party</button>` : '';
         const analyzeAction = canManage ? `<button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="reanalyze-parties" data-legal-id="${esc(item.id)}">Re-analyze Parties</button>` : '';
         const bottomActions = canManage ? `<div class="legal-party-footer">${addAction}${analyzeAction}</div>` : '';
@@ -260,8 +308,8 @@
 
     function partyEntryHtml(item, party) {
         const organization = party.organization || party.subtitle || '';
-        const provenance = party.source === 'AI' || party.aiSuggested ? '<small>AI Extracted</small>' : '';
-        const actions = can('legal.manage') ? `<div class="legal-party-actions">
+        const provenance = party.source === 'AI' || party.aiSuggested ? '<small class="legal-ai-provenance">AI Extracted</small>' : '';
+        const actions = can('legal.manage') && !isMatterReadOnly(item) ? `<div class="legal-party-actions">
             <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="edit-party" data-legal-id="${esc(item.id)}" data-party-id="${esc(party.id)}">Edit</button>
             <button class="btn-secondary dashboard-action-button document-danger-action" type="button" data-legal-action="dismiss-party" data-legal-id="${esc(item.id)}" data-party-id="${esc(party.id)}">Dismiss</button>
         </div>` : '';
@@ -276,6 +324,71 @@
                 ${actions}
             </div>
         </article>`;
+    }
+
+    function actionsDeadlinesHtml(item) {
+        const legalActions = item.actions || [];
+        const suggestions = item.actionSuggestions || [];
+        const canManage = can('legal.manage') && !isMatterReadOnly(item);
+        const visibleRows = [
+            ...legalActions.map(action => actionEntryHtml(item, action)),
+            ...suggestions.map(suggestion => actionSuggestionHtml(item, suggestion)),
+        ];
+        const rows = visibleRows.length ? `<div class="legal-action-list">${visibleRows.join('')}</div>` : '<p class="legal-empty-note">No legal actions or recommendations available.</p>';
+        const footer = canManage ? `<div class="legal-party-footer"><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="add-action" data-legal-id="${esc(item.id)}">Add Action</button><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="reanalyze-actions" data-legal-id="${esc(item.id)}">Re-analyze Actions</button></div>` : '';
+        return `<div class="legal-actions-section">
+            ${rows}
+            ${footer}
+        </div>`;
+    }
+
+    function actionEntryHtml(item, action) {
+        const active = !['COMPLETED', 'CANCELLED'].includes(action.status);
+        const canManage = can('legal.manage') && !isMatterReadOnly(item);
+        const actionButtons = canManage ? `<div class="legal-party-actions">
+            ${active ? `<button class="btn-secondary dashboard-action-button" type="button" data-legal-action="edit-action" data-legal-id="${esc(item.id)}" data-action-id="${esc(action.id)}">Edit</button>` : ''}
+            ${action.status === 'PENDING' ? `<button class="btn-secondary dashboard-action-button" type="button" data-legal-action="start-action" data-legal-id="${esc(item.id)}" data-action-id="${esc(action.id)}">Start</button>` : ''}
+            ${active ? `<button class="btn-secondary dashboard-action-button" type="button" data-legal-action="complete-action" data-legal-id="${esc(item.id)}" data-action-id="${esc(action.id)}">Complete</button><button class="btn-secondary dashboard-action-button document-danger-action" type="button" data-legal-action="cancel-action" data-legal-id="${esc(item.id)}" data-action-id="${esc(action.id)}">Cancel</button>` : ''}
+        </div>` : '';
+        return `<article class="legal-action-entry">
+            <div class="legal-party-summary">
+                <div class="legal-party-copy">
+                    <strong>${esc(action.title)}</strong>
+                    <span>${esc(title(action.actionType))}${action.dueAt ? ` &middot; Due ${esc(fmt(action.dueAt))}` : ' &middot; No due date'}</span>
+                    <small class="legal-action-basis">${esc(title(action.displayStatus || action.status))}</small>
+                    ${action.assignedTo ? `<small>Assigned to ${esc(action.assignedTo)}</small>` : ''}
+                    ${action.source === 'AI' ? `<small>AI-assisted / confirmed${action.deadlineBasis ? ` &middot; ${esc(actionBasisLabel(action.deadlineBasis))}` : ''}</small>` : ''}
+                </div>
+                ${actionButtons ? `<div class="legal-action-side">${actionButtons}</div>` : ''}
+            </div>
+        </article>`;
+    }
+
+    function actionSuggestionHtml(item, suggestion) {
+        const basis = suggestion.deadlineBasis || suggestion.dateBasis || 'NO_DEADLINE';
+        const targetLabel = basis === 'SOURCE_DERIVED' ? 'Due' : 'Suggested target';
+        const basisLabel = actionBasisLabel(basis);
+        const actions = can('legal.manage') && !isMatterReadOnly(item) ? `<div class="legal-party-actions">
+            <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="review-action-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Review &amp; Add</button>
+            <button class="btn-secondary dashboard-action-button document-danger-action" type="button" data-legal-action="dismiss-action-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Dismiss</button>
+        </div>` : '';
+        return `<article class="legal-action-entry">
+            <div class="legal-party-summary">
+                <div class="legal-party-copy">
+                    <strong>${esc(suggestion.title)}</strong>
+                    <span>${esc(title(suggestion.actionType))}${suggestion.dueAt ? ` &middot; ${targetLabel} ${esc(fmt(suggestion.dueAt))}` : ' &middot; No suggested target'}</span>
+                    <small class="legal-action-basis">${esc(basisLabel)}</small>
+                </div>
+                ${actions}
+            </div>
+        </article>`;
+    }
+
+    function actionBasisLabel(value) {
+        const basis = String(value || '').toUpperCase();
+        if (basis === 'SOURCE_DERIVED') return 'Source-derived deadline';
+        if (basis === 'AI_RECOMMENDED') return 'AI Recommended';
+        return 'No deadline basis';
     }
 
     function uniquePartySuggestions(suggestions) {
@@ -326,7 +439,7 @@
     function aiSummaryHtml(item) {
         const status = item.aiSummaryStatus || 'NOT_REQUESTED';
         const docs = item.supportingDocuments || [];
-        const canRegenerate = docs.length > 0 && can('records.view') && (can('legal.edit') || can('legal.manage'));
+        const canRegenerate = docs.length > 0 && !isMatterReadOnly(item) && can('records.view') && (can('legal.edit') || can('legal.manage'));
         const button = canRegenerate ? `<button class="btn-secondary dashboard-action-button legal-ai-summary-action" type="button" data-legal-action="regenerate-summary" data-legal-id="${esc(item.id)}">Regenerate AI Summary</button>` : '';
         let content = '';
         if (status === 'READY') {
@@ -360,7 +473,7 @@
 
     function supportingDocumentsHtml(item) {
         const docs = item.supportingDocuments || [];
-        const canAttach = can('records.create') && (can('legal.edit') || can('legal.manage'));
+        const canAttach = !isMatterReadOnly(item) && can('records.create') && (can('legal.edit') || can('legal.manage'));
         const attachButton = canAttach ? `<button class="btn-secondary dashboard-action-button legal-attach-button" type="button" data-legal-action="attach-document" data-legal-id="${esc(item.id)}">Add Supporting Document</button>` : '';
         if (!docs.length) {
             return `<div class="legal-supporting-documents-empty"><p class="legal-empty-note">No supporting documents attached.</p>${attachButton}</div>`;
@@ -442,7 +555,6 @@
                     <label class="facility-field"><span>Matter Type *</span><select name="matter_type" required>${(state.options.types || []).map(value => `<option value="${esc(value)}" ${value === item?.matterType ? 'selected' : ''}>${esc(title(value))}</option>`).join('')}</select></label>
                     <label class="facility-field"><span>Priority *</span><select name="priority" required>${(state.options.priorities || []).map(value => `<option value="${esc(value)}" ${value === (item?.priority || 'MEDIUM') ? 'selected' : ''}>${esc(title(value))}</option>`).join('')}</select></label>
                     <label class="facility-field"><span>Department</span><select name="department_reference_id">${departmentOptions(item?.departmentId || '')}</select></label>
-                    ${!editing ? `<label class="facility-field"><span>Assigned To</span><select name="assigned_employee_reference_id">${employeeOptions(item?.assignedEmployeeId || '')}</select></label>` : ''}
                     <label class="facility-field"><span>Reported Date</span><input name="reported_at" type="date" value="${esc(item?.reportedAt || '')}"></label>
                 </div>
                 <label class="facility-field document-full-field"><span>Initial Note / Description</span><textarea name="initial_note" rows="5" placeholder="Optional">${esc(item?.initialNote || item?.summary || '')}</textarea></label>
@@ -517,6 +629,47 @@
         </form>`;
         document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
         syncPartyForm(modal.querySelector('[data-party-type]'));
+    }
+
+    function openActionForm(item, action = null, suggestion = null) {
+        const modal = moveToTopLayer(qs('#legal-dialog'));
+        const editingAction = Boolean(action);
+        const reviewingSuggestion = Boolean(suggestion);
+        const source = action || suggestion || {};
+        const basis = source.deadlineBasis || source.dateBasis || '';
+        const suggestionMeta = reviewingSuggestion ? `<div class="legal-recommendation-meta">
+            <div><strong>Recommendation Basis</strong><span>${esc(actionBasisLabel(basis))}</span></div>
+            ${source.recommendationReason ? `<div><strong>Recommendation Reason</strong><span>${esc(source.recommendationReason)}</span></div>` : ''}
+            ${source.sourceDocument ? `<div><strong>Source Document</strong><span>${esc(source.sourceDocument)}</span></div>` : ''}
+            ${source.sourceContext ? `<div><strong>Source Context</strong><span>${esc(source.sourceContext)}</span></div>` : ''}
+        </div>` : '';
+        state.lastFocus = document.activeElement;
+        modal.hidden = false;
+        modal.innerHTML = `<form class="facility-dialog-panel legal-form legal-action-form" data-legal-form="${editingAction ? 'update-action' : reviewingSuggestion ? 'accept-action-suggestion' : 'add-action'}" data-action-id="${esc(action?.id || '')}" data-suggestion-id="${esc(suggestion?.id || '')}">
+            <div class="facility-details-modal-header"><div><p>Legal Management</p><span class="facility-details-modal-request-number">${esc(item.matterNo)}</span><h2>${editingAction ? 'Edit Legal Action' : reviewingSuggestion ? 'Review & Add Action' : 'Add Legal Action'}</h2></div><button class="facility-details-modal-close" type="button" data-legal-dialog-close aria-label="Close form">&times;</button></div>
+            <div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-legal-error></div><section class="document-form-section">
+                <h3>${esc(item.title)}</h3>
+                <div class="document-form-grid">
+                    ${field('title', 'Action Title *', source.title || '', 'text', true)}
+                    <label class="facility-field"><span>Action Type *</span><select name="action_type" required>${actionTypeOptions(source.actionType || 'REVIEW')}</select></label>
+                    <label class="facility-field"><span>Assigned To</span><select name="assigned_employee_reference_id">${employeeOptions(source.assignedEmployeeId || '')}</select></label>
+                    <label class="facility-field"><span>Due Date</span><input name="due_at" type="datetime-local" value="${esc(dateTimeInputValue(source.dueAt || ''))}"></label>
+                </div>
+                <label class="facility-field document-full-field"><span>Description</span><textarea name="description" rows="4">${esc(source.description || '')}</textarea></label>
+                ${reviewingSuggestion ? `<input type="hidden" name="deadline_basis" value="${esc(basis)}"><input type="hidden" name="recommendation_reason" value="${esc(source.recommendationReason || '')}">${suggestionMeta}` : ''}
+            </section></div>
+            <div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-legal-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">${editingAction ? 'Save Action' : reviewingSuggestion ? 'Add Official Action' : 'Add Action'}</button></div>
+        </form>`;
+        document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
+        modal.querySelector('input[name="title"]')?.focus();
+    }
+
+    function dateTimeInputValue(value) {
+        if (!value) return '';
+        const date = new Date(String(value).replace(' ', 'T'));
+        if (Number.isNaN(date.getTime())) return '';
+        const pad = number => String(number).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
     }
 
     function syncPartyForm(select) {
@@ -627,16 +780,18 @@
         const path = type === 'create' ? 'legal/create.php' : type === 'edit' ? `legal/update.php?id=${id}` : type === 'attach-document' ? `legal/attach-document.php?id=${id}` : `legal/assign.php?id=${id}`;
         const suggestionId = form.dataset.suggestionId;
         const partyId = form.dataset.partyId;
+        const actionId = form.dataset.actionId;
         const partyPath = type === 'add-party' ? `legal/add-party.php?id=${id}` : type === 'update-party' ? `legal/update-party.php?matter_id=${id}&party_id=${partyId}` : type === 'accept-party-suggestion' ? `legal/accept-party-suggestion.php?suggestion_id=${suggestionId}&matter_id=${id}` : '';
+        const actionPath = type === 'add-action' ? `legal/add-action.php?id=${id}` : type === 'update-action' ? `legal/update-action.php?matter_id=${id}&action_id=${actionId}` : type === 'accept-action-suggestion' ? `legal/accept-action-suggestion.php?matter_id=${id}&suggestion_id=${suggestionId}` : '';
         if (type === 'create' && !validateCreateEvidence(form)) return;
         const body = ['create', 'attach-document'].includes(type) ? formDataPayload(form) : formPayload(form);
         setSubmitting(form, true);
         try {
-            const payload = await window.FAMApi.request(api(partyPath || path), { method: 'POST', body });
+            const payload = await window.FAMApi.request(api(actionPath || partyPath || path), { method: 'POST', body });
             const createdId = Number(payload.data?.item?.id || 0);
             closeDialog();
             const partial = payload.data?.attachment_errors?.length;
-            window.FAMModal?.showToast?.(partial ? payload.message : type === 'create' ? 'Legal matter created.' : type === 'edit' ? 'Legal matter updated.' : type === 'attach-document' ? 'Supporting document attached.' : type.includes('party') ? 'Party updated.' : 'Legal matter assigned.');
+            window.FAMModal?.showToast?.(partial ? payload.message : type === 'create' ? 'Legal matter created.' : type === 'edit' ? 'Legal matter updated.' : type === 'attach-document' ? 'Supporting document attached.' : type.includes('party') ? 'Party updated.' : type.includes('action') ? 'Legal action updated.' : 'Legal matter assigned.');
             await load();
             if (type === 'create' && createdId) triggerInitialSummary(createdId);
             if (id && qs('#legal-details-modal')?.hidden === false) await openDetails(id);
@@ -651,8 +806,8 @@
         const item = await fetchItem(id);
         state.activeItem = item;
         const config = {
-            start_review: { title: 'Start Review', confirmLabel: 'Start Review' },
-            start_processing: { title: 'Start Processing', confirmLabel: 'Start Processing' },
+            start_review: { title: 'Review Legal Matter', confirmLabel: 'Start Review' },
+            start_processing: { title: 'Begin Processing', confirmLabel: 'Begin Processing' },
             close: { title: 'Close Matter', confirmLabel: 'Close Matter' },
             resolve: { title: 'Resolve Matter', prompt: 'Enter the resolution summary.', inputLabel: 'Resolution Summary', confirmLabel: 'Resolve Matter', field: 'resolution_summary' },
             cancel: { title: 'Cancel Matter', prompt: 'Enter the cancellation reason.', inputLabel: 'Cancellation Reason', confirmLabel: 'Cancel Matter', field: 'cancellation_reason' },
@@ -670,7 +825,7 @@
         await window.FAMApi.request(api(`legal/transition.php?id=${id}`), { method: 'POST', body });
         window.FAMModal?.showToast?.('Legal matter updated.');
         await load();
-        if (qs('#legal-details-modal')?.hidden === false) await openDetails(id);
+        if (action === 'start_review' || qs('#legal-details-modal')?.hidden === false) await openDetails(id);
     }
 
     function bind() {
@@ -709,6 +864,14 @@
             if (type === 'accept-party-suggestion') acceptPartySuggestion(id, Number(action.dataset.suggestionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to accept party suggestion.'));
             if (type === 'dismiss-party-suggestion') dismissPartySuggestion(id, Number(action.dataset.suggestionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to dismiss party suggestion.'));
             if (type === 'reanalyze-parties') reanalyzeParties(id).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to analyze parties.'));
+            if (type === 'add-action') fetchItem(id).then(item => { state.activeItem = item; openActionForm(item); }).catch(console.error);
+            if (type === 'edit-action') fetchItem(id).then(item => { state.activeItem = item; openActionForm(item, (item.actions || []).find(record => Number(record.id) === Number(action.dataset.actionId))); }).catch(console.error);
+            if (type === 'review-action-suggestion') fetchItem(id).then(item => { state.activeItem = item; openActionForm(item, null, (item.actionSuggestions || []).find(record => Number(record.id) === Number(action.dataset.suggestionId))); }).catch(console.error);
+            if (type === 'dismiss-action-suggestion') dismissActionSuggestion(id, Number(action.dataset.suggestionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to dismiss action suggestion.'));
+            if (type === 'reanalyze-actions') reanalyzeActions(id).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to analyze actions.'));
+            if (type === 'start-action') startAction(id, Number(action.dataset.actionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to start action.'));
+            if (type === 'complete-action') completeAction(id, Number(action.dataset.actionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to complete action.'));
+            if (type === 'cancel-action') cancelAction(id, Number(action.dataset.actionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to cancel action.'));
             if (type === 'regenerate-summary') regenerateSummary(id).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to refresh AI summary.'));
             if (['start_review', 'start_processing', 'resolve', 'close', 'cancel', 'reopen'].includes(type)) transition(id, type).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to update matter.'));
         });
@@ -744,6 +907,48 @@
         window.FAMModal?.showToast?.('AI party suggestions updated.');
         await load();
         if (qs('#legal-details-modal')?.hidden === false) await openDetails(id);
+    }
+
+    async function reanalyzeActions(id) {
+        if (!await window.FAMModal.confirm('Analyze linked supporting documents for action and deadline suggestions?', { title: 'Re-analyze Actions', confirmLabel: 'Analyze' })) return;
+        await window.FAMApi.request(api(`legal/analyze-actions.php?id=${id}`), { method: 'POST', body: {} });
+        window.FAMModal?.showToast?.('AI action suggestions updated.');
+        await load();
+        if (qs('#legal-details-modal')?.hidden === false) await openDetails(id);
+    }
+
+    async function dismissActionSuggestion(matterId, suggestionId) {
+        const reason = await window.FAMModal.prompt('Why should this action suggestion be dismissed?', '', { title: 'Dismiss Action Suggestion', inputLabel: 'Dismissal Reason', confirmLabel: 'Dismiss' });
+        if (reason === null) return;
+        await window.FAMApi.request(api(`legal/dismiss-action-suggestion.php?matter_id=${matterId}&suggestion_id=${suggestionId}`), { method: 'POST', body: { reason } });
+        window.FAMModal?.showToast?.('Action suggestion dismissed.');
+        await load();
+        if (qs('#legal-details-modal')?.hidden === false) await openDetails(matterId);
+    }
+
+    async function startAction(matterId, actionId) {
+        if (!await window.FAMModal.confirm('Start this legal action?', { title: 'Start Action', confirmLabel: 'Start' })) return;
+        await window.FAMApi.request(api(`legal/start-action.php?matter_id=${matterId}&action_id=${actionId}`), { method: 'POST', body: {} });
+        window.FAMModal?.showToast?.('Legal action started.');
+        await load();
+        if (qs('#legal-details-modal')?.hidden === false) await openDetails(matterId);
+    }
+
+    async function completeAction(matterId, actionId) {
+        if (!await window.FAMModal.confirm('Mark this legal action as completed?', { title: 'Complete Action', confirmLabel: 'Complete' })) return;
+        await window.FAMApi.request(api(`legal/complete-action.php?matter_id=${matterId}&action_id=${actionId}`), { method: 'POST', body: {} });
+        window.FAMModal?.showToast?.('Legal action completed.');
+        await load();
+        if (qs('#legal-details-modal')?.hidden === false) await openDetails(matterId);
+    }
+
+    async function cancelAction(matterId, actionId) {
+        const reason = await window.FAMModal.prompt('Why should this legal action be cancelled?', '', { title: 'Cancel Action', inputLabel: 'Cancellation Reason', confirmLabel: 'Cancel Action' });
+        if (reason === null) return;
+        await window.FAMApi.request(api(`legal/cancel-action.php?matter_id=${matterId}&action_id=${actionId}`), { method: 'POST', body: { cancellation_reason: reason } });
+        window.FAMModal?.showToast?.('Legal action cancelled.');
+        await load();
+        if (qs('#legal-details-modal')?.hidden === false) await openDetails(matterId);
     }
 
     async function acceptPartySuggestion(matterId, suggestionId) {
