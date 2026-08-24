@@ -5,6 +5,9 @@ declare(strict_types=1);
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'LegalMatterSummaryService.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'LegalMatterPartyService.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'LegalMatterActionService.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'LegalMatterAiAnalysisService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Documents' . DIRECTORY_SEPARATOR . 'ContractMetadataExtractionService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Organization' . DIRECTORY_SEPARATOR . 'FamEmployeeEligibilityService.php';
 
 final class LegalPolicy
 {
@@ -60,12 +63,14 @@ final class LegalMatterService
     private readonly DocumentService $documentService;
     private readonly LegalMatterPartyService $partyService;
     private readonly LegalMatterActionService $actionService;
+    private readonly FamEmployeeEligibilityService $employeeEligibility;
 
-    public function __construct(private readonly PDO $pdo, ?DocumentService $documentService = null)
+    public function __construct(private readonly PDO $pdo, ?DocumentService $documentService = null, ?FamEmployeeEligibilityService $employeeEligibility = null)
     {
         $this->documentService = $documentService ?? new DocumentService($pdo);
         $this->partyService = new LegalMatterPartyService($pdo, $this->documentService);
-        $this->actionService = new LegalMatterActionService($pdo);
+        $this->employeeEligibility = $employeeEligibility ?? new FamEmployeeEligibilityService($pdo);
+        $this->actionService = new LegalMatterActionService($pdo, $this->employeeEligibility);
     }
 
     public function list(array $query): array
@@ -126,6 +131,9 @@ final class LegalMatterService
         $item['actions'] = $this->actionService->actionsForMatter($id);
         $item['actionSuggestions'] = $this->actionService->suggestionsForMatter($id);
         $item['history'] = $this->history($id);
+        $item['aiSummaryFailureReason'] = $this->latestAiSummaryFailureReason($id);
+        $item['aiPartiesStatus'] = $this->latestAiSectionStatus($id, 'parties');
+        $item['aiActionsStatus'] = $this->latestAiSectionStatus($id, 'actions');
         return $item;
     }
 
@@ -144,7 +152,9 @@ final class LegalMatterService
                 'name' => (string) $row['full_name'],
                 'employeeNo' => (string) $row['employee_number'],
                 'department' => (string) ($row['department_name'] ?? ''),
-            ], $this->rows("SELECT e.employee_reference_id, e.employee_number, e.full_name, d.department_name FROM employee_reference e LEFT JOIN department_reference d ON d.department_reference_id = e.department_reference_id WHERE e.employment_status = 'ACTIVE' ORDER BY e.full_name")),
+            ], $this->rows("SELECT e.employee_reference_id, e.employee_number, e.full_name, d.department_name FROM employee_reference e LEFT JOIN department_reference d ON d.department_reference_id = e.department_reference_id WHERE e.employment_status = 'ACTIVE' AND e.deleted_at IS NULL ORDER BY e.full_name")),
+            'legal_matter_handlers' => $this->employeeEligibility->famInternalHandlers(),
+            'legal_action_assignees' => $this->employeeEligibility->crossDepartmentContacts(),
             'party_roles' => LegalMatterPartyService::PARTY_ROLES,
             'party_types' => LegalMatterPartyService::PARTY_TYPES,
             'action_types' => LegalMatterActionService::ACTION_TYPES,
@@ -213,6 +223,22 @@ final class LegalMatterService
         $documentNo = (string) ($document['documentNo'] ?? 'document');
         $this->historyEvent($id, 'LEGAL_DOCUMENT_ATTACHED', null, null, "Supporting document $documentNo attached.", ['document_id' => $document['id'] ?? null, 'document_number' => $documentNo], (int) $user['id']);
         $this->activity('LEGAL_DOCUMENT_ATTACHED', 'Legal Document Attached', "Supporting document $documentNo attached.", $id, $matter['matterNo'], $user);
+        if (($matter['matterType'] ?? '') === 'CONTRACT_RELATED' && !empty($document['id'])) {
+            try {
+                $metadataDocument = (new ContractMetadataExtractionService($this->pdo, $this->documentService))->analyze((int) $document['id'], $user);
+                $metadataStatus = (string) ($metadataDocument['contractMetadataStatus'] ?? '');
+                if ($metadataStatus === 'UNAVAILABLE') {
+                    $this->historyEvent($id, 'LEGAL_CONTRACT_METADATA_UNAVAILABLE', null, null, "Contract metadata analysis could not be completed for supporting document $documentNo.", ['document_id' => $document['id'], 'document_number' => $documentNo], (int) $user['id']);
+                    $this->activity('LEGAL_CONTRACT_METADATA_UNAVAILABLE', 'Contract Metadata Unavailable', "Contract metadata analysis could not be completed for $documentNo.", $id, $matter['matterNo'], $user);
+                } else {
+                    $this->historyEvent($id, 'LEGAL_CONTRACT_METADATA_ANALYZED', null, null, "Contract metadata analyzed for supporting document $documentNo.", ['document_id' => $document['id'], 'document_number' => $documentNo], (int) $user['id']);
+                    $this->activity('LEGAL_CONTRACT_METADATA_ANALYZED', 'Contract Metadata Analyzed', "Contract metadata analyzed for $documentNo.", $id, $matter['matterNo'], $user);
+                }
+            } catch (Throwable) {
+                $this->historyEvent($id, 'LEGAL_CONTRACT_METADATA_UNAVAILABLE', null, null, "Contract metadata analysis could not be completed for supporting document $documentNo.", ['document_id' => $document['id'], 'document_number' => $documentNo], (int) $user['id']);
+                $this->activity('LEGAL_CONTRACT_METADATA_UNAVAILABLE', 'Contract Metadata Unavailable', "Contract metadata analysis could not be completed for $documentNo.", $id, $matter['matterNo'], $user);
+            }
+        }
         if ($markAiSummaryStale) {
             (new LegalMatterSummaryService($this->pdo, $this->documentService))->markStaleIfReady($id, $user);
         }
@@ -266,9 +292,7 @@ final class LegalMatterService
             throw new InvalidArgumentException(json_encode(['status' => 'Cancelled matters cannot be reassigned.'], JSON_THROW_ON_ERROR));
         }
         $employeeId = $this->optionalId($data['assigned_employee_reference_id'] ?? null);
-        if ($employeeId !== null) {
-            $this->assertEmployee($employeeId);
-        }
+        $this->employeeEligibility->assertFamInternalHandler($employeeId);
         $this->pdo->beginTransaction();
         try {
             $this->pdo->prepare('UPDATE legal_matter SET assigned_employee_reference_id = :employee_id, updated_at = NOW() WHERE legal_matter_id = :id AND deleted_at IS NULL')->execute(['employee_id' => $employeeId, 'id' => $id]);
@@ -437,6 +461,9 @@ final class LegalMatterService
             'aiSummaryProvider' => (string) ($row['ai_summary_provider'] ?? ''),
             'aiSummaryModel' => (string) ($row['ai_summary_model'] ?? ''),
             'aiSummarySourceFingerprint' => (string) ($row['ai_summary_source_fingerprint'] ?? ''),
+            'aiSummaryFailureReason' => '',
+            'aiPartiesStatus' => 'NOT_REQUESTED',
+            'aiActionsStatus' => 'NOT_REQUESTED',
             'priority' => (string) $row['priority'],
             'status' => $status,
             'departmentId' => $row['department_reference_id'] === null ? null : (int) $row['department_reference_id'],
@@ -458,6 +485,75 @@ final class LegalMatterService
             'updatedAt' => (string) ($row['updated_at'] ?? ''),
             'allowedActions' => $this->allowedActions($status),
         ];
+    }
+
+    private function latestAiSummaryFailureReason(int $matterId): string
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT metadata_json
+             FROM legal_matter_history
+             WHERE legal_matter_id = :id AND event_type = 'LEGAL_AI_SUMMARY_FAILED'
+             ORDER BY legal_matter_history_id DESC
+             LIMIT 1"
+        );
+        $statement->execute(['id' => $matterId]);
+        $row = $statement->fetch();
+        if (!$row) {
+            return '';
+        }
+        $metadata = json_decode((string) ($row['metadata_json'] ?? ''), true);
+        $reason = is_array($metadata) ? (string) ($metadata['reason'] ?? '') : '';
+        return preg_match('/^[A-Z0-9_]+$/', $reason) ? $reason : '';
+    }
+
+    private function latestAiSectionStatus(int $matterId, string $section): string
+    {
+        $events = $section === 'actions'
+            ? ['LEGAL_AI_ACTIONS_PENDING', 'LEGAL_AI_ACTIONS_ANALYZED', 'LEGAL_AI_ANALYSIS_STARTED', 'LEGAL_AI_ANALYSIS_COMPLETED', 'LEGAL_AI_ANALYSIS_FAILED']
+            : ['LEGAL_AI_PARTIES_PENDING', 'LEGAL_AI_PARTIES_ANALYZED', 'LEGAL_AI_PARTIES_FAILED', 'LEGAL_AI_ANALYSIS_STARTED', 'LEGAL_AI_ANALYSIS_COMPLETED', 'LEGAL_AI_ANALYSIS_FAILED'];
+        $placeholders = implode(',', array_fill(0, count($events), '?'));
+        $statement = $this->pdo->prepare(
+            "SELECT event_type, description, metadata_json
+             FROM legal_matter_history
+             WHERE legal_matter_id = ? AND event_type IN ($placeholders)
+             ORDER BY legal_matter_history_id DESC
+             LIMIT 1"
+        );
+        $statement->execute(array_merge([$matterId], $events));
+        $row = $statement->fetch();
+        if (!is_array($row)) {
+            return 'NOT_REQUESTED';
+        }
+        $event = (string) ($row['event_type'] ?? '');
+        $metadata = json_decode((string) ($row['metadata_json'] ?? ''), true);
+        $reason = is_array($metadata) ? strtoupper((string) ($metadata['reason'] ?? '')) : '';
+        $hasFailureReason = $reason !== '';
+        if (str_ends_with($event, '_PENDING')) {
+            return 'PENDING';
+        }
+        if ($event === 'LEGAL_AI_ANALYSIS_STARTED') {
+            return 'PENDING';
+        }
+        if ($event === 'LEGAL_AI_ANALYSIS_FAILED') {
+            return $reason !== '' && str_contains($reason, 'TIMEOUT') ? 'TIMEOUT' : (($reason !== '' && (str_contains($reason, 'RATE_LIMIT') || str_contains($reason, 'QUOTA'))) ? 'RATE_LIMITED' : 'FAILED');
+        }
+        if ($event === 'LEGAL_AI_ANALYSIS_COMPLETED' && is_array($metadata ?? null)) {
+            $statuses = is_array($metadata['section_statuses'] ?? null) ? $metadata['section_statuses'] : [];
+            $sectionStatus = strtoupper((string)($statuses[$section] ?? ''));
+            if (in_array($sectionStatus, ['PENDING','READY','EMPTY','TIMEOUT','RATE_LIMITED','FAILED'], true)) {
+                return $sectionStatus;
+            }
+        }
+        if ($hasFailureReason && str_contains($reason, 'TIMEOUT')) {
+            return 'TIMEOUT';
+        }
+        if ($hasFailureReason && (str_contains($reason, 'RATE_LIMIT') || str_contains($reason, 'QUOTA') || $reason === 'GEMINI_HTTP_429')) {
+            return 'RATE_LIMITED';
+        }
+        if ($event === 'LEGAL_AI_PARTIES_FAILED' || $hasFailureReason || str_contains(strtolower((string) ($row['description'] ?? '')), 'could not be completed')) {
+            return 'FAILED';
+        }
+        return 'READY';
     }
 
     private function allowedActions(string $status): array

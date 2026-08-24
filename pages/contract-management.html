@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Contract Management</title>
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/api-client.js" defer></script>
+    <script src="../assets/js/table-audit.js" defer></script>
+    <script src="../assets/js/contract-management.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Contract Management"
+    data-breadcrumb-title="Contract Management"
+    data-active-nav="contract-management"
+    data-page-heading="Contract Management"
+    data-page-description="Manage contract records, lifecycle actions, documents, and history.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace contract-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header contract-page-header">
+                            <div class="facility-title-block">
+                                <h1>Contract Management</h1>
+                                <p>Manage contract records, lifecycle actions, documents, and history.</p>
+                                <span id="contract-updated" class="fam-last-updated">Last updated: Loading...</span>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button id="contract-refresh" class="fam-icon-button" type="button" aria-label="Refresh contracts">
+                                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                                <button id="contract-new" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">add_circle</span>
+                                    New Contract
+                                </button>
+                            </div>
+                        </header>
+
+                        <section class="document-summary-strip contract-summary-strip" aria-label="Contract summary">
+                            <article><strong id="contract-total-count">0</strong><p>Total Contracts</p></article>
+                            <article><strong id="contract-active-count">0</strong><p>Active</p></article>
+                            <article><strong id="contract-expiring-count">0</strong><p>Expiring Soon</p></article>
+                            <article><strong id="contract-pending-count">0</strong><p>Pending Review / Approval</p></article>
+                        </section>
+
+                        <section class="facility-section" aria-labelledby="contract-table-title">
+                            <div class="facility-table-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="contract-table-title">Contract Register</h2>
+                                        <p id="contract-table-count">Loading contracts...</p>
+                                    </div>
+                                    <div class="facility-header-controls contract-controls">
+                                        <label class="facility-field facility-search-field"><span class="sr-only">Search</span><input id="contract-search" type="search" placeholder="Search contracts..."></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Status</span><select id="contract-status-filter"><option value="all">All Statuses</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Type</span><select id="contract-type-filter"><option value="all">All Types</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Department</span><select id="contract-department-filter"><option value="all">All Departments</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Administrator</span><select id="contract-handler-filter"><option value="all">All Administrators</option></select></label>
+                                        <label class="facility-field document-filter-field"><span class="sr-only">Expiry</span><select id="contract-expiry-filter"><option value="all">All Expiry States</option><option value="expiring_soon">Expiring Soon</option></select></label>
+                                    </div>
+                                </div>
+                                <div id="contract-loading-state" class="fam-state">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading contracts...</span>
+                                </div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table contract-table">
+                                        <thead>
+                                            <tr>
+                                                <th><button type="button" class="facility-sort-button" data-sort="contract_number">Contract</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="title">Title</button></th>
+                                                <th>Counterparty</th>
+                                                <th>Department</th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="end_date">End Date</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="status">Status</button></th>
+                                                <th>Administrator</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="contract-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="contract-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
+                                <div class="facility-pagination" aria-label="Contract pagination">
+                                    <button id="contract-prev-page" class="facility-page-button" type="button">Previous</button>
+                                    <span id="contract-page-status">Page 1 of 1</span>
+                                    <button id="contract-next-page" class="facility-page-button" type="button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <aside id="contract-dialog" class="facility-dialog contract-dialog" hidden></aside>
+                        <aside id="contract-details-modal" class="facility-details-modal contract-details-modal" hidden></aside>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

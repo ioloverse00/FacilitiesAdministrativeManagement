@@ -14,46 +14,39 @@
     <script src="../../assets/js/employee/portal.js" defer></script>
     <script src="../../assets/js/employee/facility-requests.js" defer></script>
 </head>
-<body class="app-body bg-background text-on-background font-body employee-portal-body" data-active-nav="employee-facility-requests" data-page-title="My Facility Requests" data-page-heading="My Facility Requests" data-page-description="View and track the facility requests you submitted.">
-    <div id="app-shell" class="app-shell"><div id="app-sidebar-slot" class="app-sidebar-slot"></div><div class="app-main-panel"><div id="app-header-slot" class="shrink-0"></div><main id="app-content" class="app-main bg-surface-container-lowest"><div id="page-content" class="app-page-content employee-workspace"><div class="employee-shell">
-        <header class="facility-page-header employee-request-page-header"><div class="facility-title-block"><h1 id="page-heading">My Facility Requests</h1><p id="page-description">View and track the facility requests you submitted.</p></div><div class="facility-header-actions"><button id="employee-submit-request" class="btn-primary dashboard-action-button" type="button"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Submit Facility Request</button></div></header>
-        <section class="fam-section" aria-labelledby="employee-active-requests-title">
-            <div class="fam-section-heading employee-section-heading">
-                <h2 id="employee-active-requests-title">Active Requests</h2>
-                <p>Requests currently moving through the workflow.</p>
+<body class="app-body bg-background text-on-background font-body employee-portal-body"
+    data-active-nav="employee-facility-requests"
+    data-page-title="My Facility Requests"
+    data-page-heading="My Facility Requests"
+    data-page-description="Submit and track service requests for facilities support.">
+    <div id="app-shell" class="app-shell"><div id="app-sidebar-slot" class="app-sidebar-slot"></div><div class="app-main-panel"><div id="app-header-slot" class="shrink-0"></div><main id="app-content" class="app-main bg-surface-container-lowest"><div id="page-content" class="app-page-content employee-workspace"><div class="employee-shell facility-requests-shell">
+        <header class="facility-page-header employee-request-page-header">
+            <div class="facility-title-block">
+                <h1 id="page-heading">My Facility Requests</h1>
+                <p id="page-description">Submit and track facility service requests.</p>
             </div>
-            <div id="employee-active-requests" class="employee-active-list" aria-live="polite"></div>
+            <div class="facility-header-actions">
+                <button id="employee-new-facility-request" class="btn-primary dashboard-action-button" type="button"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>New Request</button>
+            </div>
+        </header>
+
+        <section class="visitor-summary-strip employee-summary-strip" aria-label="Request summary">
+            <span><strong id="employee-request-open-count">0</strong> Open Requests</span>
+            <span><strong id="employee-request-total-count">0</strong> Total Requests</span>
+            <span id="employee-request-scope" aria-live="polite">Only requests linked to your employee account appear here.</span>
         </section>
-        <section class="facility-section" aria-labelledby="my-requests-title">
+
+        <section class="facility-section" aria-labelledby="employee-facility-requests-title">
             <div class="facility-table-card employee-records-card">
                 <div class="employee-records-header">
-                    <div>
-                        <h2 id="my-requests-title">Request History</h2>
-                        <p>Track the facility requests you submitted.</p>
+                    <div><h2 id="employee-facility-requests-title">Request History</h2><p id="employee-request-count">Loading facility requests...</p></div>
+                    <div class="employee-records-toolbar">
+                        <label class="facility-field facility-search-field"><span class="sr-only">Search my facility requests</span><input id="employee-facility-request-search" type="search" placeholder="Search my requests..."></label>
+                        <label class="facility-field facility-filter-field"><span class="sr-only">Filter request status</span><select id="employee-facility-request-status"><option value="">All Statuses</option></select></label>
                     </div>
                 </div>
-                <div class="employee-records-toolbar" aria-label="Request filters">
-                    <label class="employee-search-field">
-                        <span class="sr-only">Search my facility requests</span>
-                        <span class="material-symbols-outlined" aria-hidden="true">search</span>
-                        <input id="employee-request-search" type="search" placeholder="Search my requests...">
-                    </label>
-                    <label class="employee-status-filter">
-                        <span class="sr-only">Filter by status</span>
-                        <select id="employee-request-status">
-                            <option value="">All Statuses</option>
-                            <option value="SUBMITTED">Submitted</option>
-                            <option value="PENDING_APPROVAL">Pending Review</option>
-                            <option value="APPROVED">Approved</option>
-                            <option value="ASSIGNED">Assigned</option>
-                            <option value="IN_PROGRESS">In Progress</option>
-                            <option value="COMPLETED">Completed</option>
-                            <option value="REJECTED">Rejected</option>
-                            <option value="CANCELLED">Cancelled</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="facility-table-scroll employee-records-table-wrap"><table class="facility-data-table employee-data-table"><colgroup><col class="employee-col-request"><col class="employee-col-subject"><col class="employee-col-category"><col class="employee-col-priority"><col class="employee-col-status"><col class="employee-col-updated"><col class="employee-col-actions"></colgroup><thead><tr><th scope="col">Request No.</th><th scope="col">Subject</th><th scope="col">Category</th><th scope="col">Priority</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead><tbody id="employee-facility-requests-body" aria-live="polite"></tbody></table></div>
+                <div id="employee-facility-request-loading" class="fam-state" aria-live="polite"><span class="material-symbols-outlined" aria-hidden="true">progress_activity</span><span>Loading facility requests...</span></div>
+                <div class="facility-table-scroll employee-records-table-wrap"><table class="facility-data-table employee-data-table"><thead><tr><th scope="col">Request No.</th><th scope="col">Subject</th><th scope="col">Category</th><th scope="col">Facility</th><th scope="col">Priority</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead><tbody id="employee-facility-requests-body" aria-live="polite"></tbody></table></div>
                 <div id="employee-facility-requests-cards" class="employee-mobile-record-list" aria-live="polite"></div>
             </div>
         </section>

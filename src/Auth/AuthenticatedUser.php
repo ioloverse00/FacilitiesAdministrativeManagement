@@ -12,7 +12,8 @@ final class AuthenticatedUser
     public function __construct(
         private readonly array $profile,
         private readonly array $roles,
-        private readonly array $permissions
+        private readonly array $permissions,
+        private readonly array $persona
     ) {
     }
 
@@ -32,6 +33,7 @@ final class AuthenticatedUser
             'department' => $this->profile['department'],
             'roles' => $this->roles,
             'permissions' => $this->permissions,
+            'persona' => $this->persona,
         ];
     }
 }

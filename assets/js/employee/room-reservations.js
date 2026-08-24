@@ -1,5 +1,5 @@
 (function () {
-    const state = { context: null, options: null, rows: [], calendarEvents: [], calendarRoom: '', calendarView: 'month', calendarAnchor: new Date(), selectedDate: new Date(), calendarError: '', search: '', status: '', timer: null, resizeTimer: null, availabilityTimer: null, detailsTimer: null, currentDetailsId: null, lastFocus: null };
+    const state = { context: null, options: null, rows: [], calendarEvents: [], calendarRoom: '', calendarView: 'month', calendarAnchor: new Date(), selectedDate: new Date(), calendarError: '', search: '', status: '', timer: null, resizeTimer: null, availabilityTimer: null, detailsTimer: null, currentDetailsId: null, lastFocus: null, aiJobs: new Set() };
     const qs = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const title = value => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -219,7 +219,7 @@
         return `<tr>
             <td><button class="facility-link-button table-cell-primary" type="button" data-open-reservation="${esc(item.id)}">${esc(item.reservationNo)}</button></td>
             <td><span class="table-cell-truncate" title="${esc(item.room)}">${esc(item.room || 'Not available')}</span></td>
-            <td><span class="table-cell-truncate" title="${esc(item.purpose)}">${esc(item.purpose || 'Not available')}</span></td>
+            <td><span class="table-cell-truncate" title="${esc(title(item.reservationType || 'MEETING'))}">${esc(title(item.reservationType || 'MEETING'))}</span></td>
             <td>${esc(fmtDate(item.start))}</td>
             <td>${esc(fmtTime(item.start))} - ${esc(fmtTime(item.end))}</td>
             <td>${badge(item)}</td>
@@ -245,7 +245,7 @@
                 <dl class="employee-record-meta">
                     <div><dt>Date</dt><dd>${esc(fmtDate(item.start))}</dd></div>
                     <div><dt>Time</dt><dd>${esc(fmtTime(item.start))} - ${esc(fmtTime(item.end))}</dd></div>
-                    <div><dt>Purpose</dt><dd>${esc(item.purpose || 'Not available')}</dd></div>
+                    <div><dt>Type</dt><dd>${esc(title(item.reservationType || 'MEETING'))}</dd></div>
                 </dl>
                 <div class="employee-record-card-actions">
                     <div class="facility-action-menu">
@@ -299,7 +299,7 @@
                 <div class="employee-next-card-top"><span class="employee-card-kicker">Room Reservation</span>${badge(item)}</div>
                 <h3>${esc(item.room || 'Room reservation')}</h3>
                 <p class="employee-next-meta">${esc(fmtDate(item.start))} &middot; ${esc(fmtTime(item.start))} - ${esc(fmtTime(item.end))}</p>
-                <p>${esc(item.purpose || 'No purpose provided.')}</p>
+                <p>${esc(title(item.reservationType || 'MEETING'))}</p>
                 ${helper ? `<p class="employee-next-helper">${esc(helper)}</p>` : ''}
             </div>
             <div class="employee-next-actions">${actions}</div>
@@ -360,9 +360,8 @@
         });
     }
 
-    function requesterSummary() {
-        const c = state.context || {};
-        return `<div class="employee-requester-summary" aria-label="Requester information"><span><strong>${esc(c.full_name || 'Employee')}</strong><small>${esc([c.employee_number, c.department?.name || c.department?.code].filter(Boolean).join(' - '))}</small></span><span>${esc(c.email || 'Email not available')}</span></div>`;
+    function requestLetterUpload() {
+        return `<label class="facility-field document-file-field employee-request-letter-field"><span>Request Letter <b aria-hidden="true">*</b></span><input name="request_letter" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" required><small>Allowed: PDF, PNG, JPG/JPEG up to 10 MB each.</small></label>`;
     }
 
     function openForm(prefill = {}) {
@@ -374,10 +373,9 @@
             <div class="facility-details-modal-header"><div><p>Employee Portal</p><h2 id="reservation-form-title">Request Room</h2></div><button class="facility-details-modal-close" type="button" data-close-dialog aria-label="Close reservation form">&times;</button></div>
             <div class="employee-reservation-form-body">
                 <div class="facility-form-error" data-form-error hidden></div>
-                ${requesterSummary()}
                 <section class="employee-form-section"><h3>Room</h3><label class="facility-field"><span>Room <b aria-hidden="true">*</b></span><select name="facility_space_id" required><option value="">Select room</option>${optionList(state.options?.facility_spaces)}</select></label><p class="fam-muted" data-room-summary>Select a room to view capacity and location.</p></section>
                 <section class="employee-form-section"><h3>Schedule</h3><div class="facility-form-grid"><label class="facility-field"><span>Date <b aria-hidden="true">*</b></span><input name="date" type="date" required></label><label class="facility-field"><span>Start Time <b aria-hidden="true">*</b></span><input name="start_time" type="time" required></label><label class="facility-field"><span>End Time <b aria-hidden="true">*</b></span><input name="end_time" type="time" required></label></div><p class="reservation-availability-state" data-availability-state aria-live="polite">Choose a room and schedule to check availability.</p></section>
-                <section class="employee-form-section"><h3>Reservation Details</h3><div class="facility-form-grid"><label class="facility-field"><span>Purpose <b aria-hidden="true">*</b></span><input name="purpose" required maxlength="255"></label><label class="facility-field"><span>Expected Attendees <b aria-hidden="true">*</b></span><input name="expected_attendees" type="number" min="1" value="1" required></label><label class="facility-field"><span>Reservation Type</span><select name="reservation_type"><option value="MEETING">Meeting</option><option value="TRAINING">Training</option><option value="EVENT">Event</option><option value="OTHER">Other</option></select></label></div><label class="facility-field"><span>Setup Requirements</span><textarea name="setup_requirements" rows="3" placeholder="Optional"></textarea></label></section>
+                <section class="employee-form-section"><h3>Reservation Details</h3><div class="facility-form-grid"><label class="facility-field"><span>Expected Attendees <b aria-hidden="true">*</b></span><input name="expected_attendees" type="number" min="1" value="1" required></label><label class="facility-field"><span>Reservation Type</span><select name="reservation_type"><option value="MEETING">Meeting</option><option value="TRAINING">Training</option><option value="EVENT">Event</option><option value="OTHER">Other</option></select></label></div>${requestLetterUpload()}</section>
             </div>
             <div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-close-dialog>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Submit Reservation</button></div>
         </form>`;
@@ -390,17 +388,22 @@
         dialog.querySelector('select, input, textarea, button')?.focus();
     }
 
-    function formPayload(form) {
-        const data = Object.fromEntries(new FormData(form).entries());
-        return {
+    function formPayload(form, multipart = false) {
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        const payload = {
             facility_space_id: data.facility_space_id,
             start_datetime: data.date && data.start_time ? `${data.date}T${data.start_time}` : '',
             end_datetime: data.date && data.end_time ? `${data.date}T${data.end_time}` : '',
-            purpose: data.purpose,
             expected_attendees: data.expected_attendees,
-            reservation_type: data.reservation_type || 'MEETING',
-            setup_requirements: data.setup_requirements || ''
+            reservation_type: data.reservation_type || 'MEETING'
         };
+        if (!multipart) return payload;
+        const body = new FormData();
+        Object.entries(payload).forEach(([key, value]) => body.append(key, value ?? ''));
+        const file = form.querySelector('[name="request_letter"]')?.files?.[0];
+        if (file) body.append('request_letter', file);
+        return body;
     }
 
     function scheduleValidationMessage(payload) {
@@ -485,10 +488,11 @@
         button.disabled = true;
         form.querySelector('[data-form-error]').hidden = true;
         try {
-            const response = await window.FAMApi.request(api('create.php'), { method: 'POST', body: payload });
+            const response = await window.FAMApi.request(api('create.php'), { method: 'POST', body: formPayload(form, true) });
             closeDialog();
             await load();
             window.FAMModal?.showToast(`Reservation ${response.data?.item?.reservationNo || ''} submitted for review.`);
+            triggerRequestSummary(response.data?.item?.id);
             await openDetails(response.data?.item?.id);
         } catch (error) {
             setErrors(form, error);
@@ -497,8 +501,37 @@
         }
     }
 
+    async function triggerRequestSummary(id) {
+        if (!id || state.aiJobs.has(String(id))) return;
+        state.aiJobs.add(String(id));
+        try {
+            const response = await window.FAMApi.request(api(`create.php?id=${encodeURIComponent(id)}&analyze_ai=1`), { method: 'POST', body: {} });
+            const item = response.data?.item;
+            if (item?.id) {
+                state.rows = state.rows.map(row => String(row.id) === String(item.id) ? item : row);
+                if (String(state.currentDetailsId || '') === String(item.id)) refreshDetails(item.id).catch(console.error);
+            }
+        } catch (error) {
+            console.warn('Reservation AI summary unavailable:', error.message || error);
+        } finally {
+            state.aiJobs.delete(String(id));
+        }
+    }
+
     function detail(label, value, className = '') { return `<dl class="facility-detail-row ${esc(className)}"><dt>${esc(label)}</dt><dd>${esc(value || 'Not available')}</dd></dl>`; }
     function detailGrid(content) { return `<div class="detail-grid">${content}</div>`; }
+    function aiSummary(item) {
+        const ai = item.ai_request_summary || {};
+        if (String(ai.status || '').toUpperCase() === 'READY' && ai.summary) return esc(ai.summary);
+        if (['FAILED', 'NO_READABLE_SOURCE', 'TIMEOUT', 'RATE_LIMITED'].includes(String(ai.status || '').toUpperCase())) return 'AI summary is unavailable. The request letter remains available for review.';
+        if (String(ai.status || '').toUpperCase() === 'PENDING') return 'AI summary is still being prepared.';
+        return 'AI summary is not available for this reservation.';
+    }
+    function requestLetterLinks(item, base = 'request-letter.php') {
+        if (!item.request_letter) return '<p>No request letter is attached to this reservation.</p>';
+        const id = encodeURIComponent(item.id);
+        return `<div class="document-file-actions"><a href="${esc(api(`${base}?id=${id}&mode=view`))}" target="_blank" rel="noopener">View</a><a href="${esc(api(`${base}?id=${id}&mode=download`))}" target="_blank" rel="noopener">Download</a></div><p class="fam-muted">${esc(item.request_letter.fileName || 'Request letter')}</p>`;
+    }
     function actionHelper(item) {
         if (item.allowed_actions?.check_in_not_yet) return `<p class="fam-muted employee-reservation-action-note">Check-in will be available 30 minutes before your reservation.</p>`;
         if (item.allowed_actions?.check_in_ended) return `<p class="fam-muted employee-reservation-action-note">The check-in period has ended.</p>`;
@@ -514,13 +547,15 @@
     }
     function renderDetails(dialog, item) {
         const history = (item.history || []).map(row => `<li><strong>${esc(title(row.new_status))}</strong><span>${esc(fmtDateTime(row.changed_at))}</span>${row.change_reason ? `<p>${esc(row.change_reason)}</p>` : ''}</li>`).join('');
-        const reservationDetails = detailGrid(`${detail('Reservation Number', item.reservationNo)}${detail('Status', statusLabel(item))}${detail('Approval Status', title(item.approval))}${detail('Expected Attendees', item.attendees)}${detail('Purpose', item.purpose, 'detail-item--full')}${detail('Setup Requirements', item.lifecycle?.setup_requirements, 'detail-item--full')}${detail('Cancellation / Rejection Reason', item.lifecycle?.cancellation_reason || item.lifecycle?.remarks, 'detail-item--full')}`);
+        const reservationDetails = detailGrid(`${detail('Reservation Number', item.reservationNo)}${detail('Status', statusLabel(item))}${detail('Approval Status', title(item.approval))}${detail('Expected Attendees', item.attendees)}${detail('Reservation Type', title(item.reservationType || 'MEETING'))}${detail('Setup Requirements', item.lifecycle?.setup_requirements, 'detail-item--full')}${detail('Cancellation / Rejection Reason', item.lifecycle?.cancellation_reason || item.lifecycle?.remarks, 'detail-item--full')}`);
         const scheduleRoom = detailGrid(`${detail('Room', item.room)}${detail('Building', item.building)}${detail('Date', fmtDate(item.start))}${detail('Start Time', fmtTime(item.start))}${detail('End Time', fmtTime(item.end))}${detail('Approved At', fmtDateTime(item.lifecycle?.approved_at))}${detail('Check In Time', fmtDateTime(item.lifecycle?.checked_in_at))}${detail('Check Out Time', fmtDateTime(item.lifecycle?.checked_out_at))}`);
         dialog.innerHTML = `<div class="facility-dialog-panel employee-request-details">
             <div class="facility-details-modal-header"><div><p>My Room Reservations</p><span class="facility-details-modal-request-number">${esc(item.reservationNo)}</span><h2>${esc(item.room || 'Reservation Details')}</h2></div><button class="facility-details-modal-close" type="button" data-close-dialog aria-label="Close reservation details">&times;</button></div>
             <div class="facility-details-modal-body"><div class="visitor-detail-accordion">
                 <details class="visitor-detail-disclosure" open><summary>Reservation Details</summary>${reservationDetails}</details>
                 <details class="visitor-detail-disclosure" open><summary>Schedule and Room</summary>${scheduleRoom}</details>
+                <details class="visitor-detail-disclosure" open><summary>AI Request Summary</summary><p>${aiSummary(item)}</p></details>
+                <details class="visitor-detail-disclosure" open><summary>Request Letter</summary>${requestLetterLinks(item)}</details>
                 <details class="visitor-detail-disclosure"><summary>Activity History</summary>${history ? `<ol class="facility-history-list visitor-activity-timeline">${history}</ol>` : '<p>No activity history recorded.</p>'}</details>
             </div></div>
             ${workflowActions(item)}

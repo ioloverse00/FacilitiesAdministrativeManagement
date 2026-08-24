@@ -20,6 +20,7 @@ CREATE TABLE department_reference (
   external_department_id VARCHAR(100) NOT NULL,
   department_code VARCHAR(50) NOT NULL,
   department_name VARCHAR(150) NOT NULL,
+  department_head_employee_reference_id BIGINT UNSIGNED NULL,
   source_system VARCHAR(50) NOT NULL DEFAULT 'HRIS',
   sync_status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
   last_synced_at DATETIME, external_updated_at DATETIME,
@@ -27,7 +28,8 @@ CREATE TABLE department_reference (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_department_external(source_system,external_department_id),
-  UNIQUE KEY uq_department_code(source_system,department_code)
+  UNIQUE KEY uq_department_code(source_system,department_code),
+  INDEX idx_department_head_employee(department_head_employee_reference_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE employee_reference (
@@ -579,6 +581,7 @@ CREATE TABLE retention_schedule (
   retention_schedule_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   schedule_code VARCHAR(50) NOT NULL UNIQUE, schedule_name VARCHAR(200) NOT NULL,
   record_category VARCHAR(150) NOT NULL, retention_trigger VARCHAR(100) NOT NULL,
+  retention_trigger_basis VARCHAR(50),
   retention_period_value INT UNSIGNED NOT NULL, retention_period_unit VARCHAR(20) NOT NULL,
   disposition_action VARCHAR(50) NOT NULL, legal_basis TEXT, description TEXT,
   status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE', effective_date DATE NOT NULL
@@ -592,7 +595,10 @@ CREATE TABLE record (
   originating_department_reference_id BIGINT UNSIGNED,
   record_owner_employee_reference_id BIGINT UNSIGNED NOT NULL,
   source_module VARCHAR(50), source_entity_type VARCHAR(100), source_entity_id BIGINT UNSIGNED,
-  record_date DATE NOT NULL, retention_start_date DATE NOT NULL, scheduled_disposition_date DATE,
+  record_date DATE NOT NULL, retention_start_date DATE NOT NULL,
+  retention_trigger_basis VARCHAR(50), retention_trigger_date DATE,
+  policy_eligibility_date DATE, administrative_review_date_override DATE,
+  scheduled_disposition_date DATE, retention_trigger_state VARCHAR(30) NOT NULL DEFAULT 'WAITING_FOR_TRIGGER',
   record_status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE', confidentiality_level VARCHAR(30) NOT NULL DEFAULT 'INTERNAL',
   created_by_user_id BIGINT UNSIGNED, updated_by_user_id BIGINT UNSIGNED,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -629,11 +635,16 @@ CREATE TABLE contract (
   contract_number VARCHAR(60) NOT NULL UNIQUE, contract_type_id BIGINT UNSIGNED NOT NULL,
   contract_title VARCHAR(255) NOT NULL, contract_description TEXT,
   supplier_reference_id BIGINT UNSIGNED, budget_reference_id BIGINT UNSIGNED,
+  procurement_request_id BIGINT UNSIGNED, purchase_order_reference_id BIGINT UNSIGNED,
   contract_owner_employee_reference_id BIGINT UNSIGNED NOT NULL,
-  start_date DATE NOT NULL, end_date DATE NOT NULL,
+  owning_department_reference_id BIGINT UNSIGNED, fam_handler_employee_reference_id BIGINT UNSIGNED,
+  start_date DATE NOT NULL, executed_date DATE, effective_date DATE, end_date DATE NOT NULL,
+  termination_date DATE, termination_reason TEXT,
   original_amount DECIMAL(18,2) NOT NULL DEFAULT 0, current_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
   currency_code CHAR(3) NOT NULL DEFAULT 'PHP', contract_status VARCHAR(30) NOT NULL DEFAULT 'DRAFT',
-  notice_period_days INT UNSIGNED,
+  notice_period_days INT UNSIGNED, renewal_type VARCHAR(20) NOT NULL DEFAULT 'NONE',
+  renewal_decision_date DATE, renewed_from_contract_id BIGINT UNSIGNED, risk_level VARCHAR(20),
+  created_by_user_id BIGINT UNSIGNED, updated_by_user_id BIGINT UNSIGNED,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at DATETIME,
@@ -641,8 +652,115 @@ CREATE TABLE contract (
   CONSTRAINT fk_contract_supplier FOREIGN KEY(supplier_reference_id) REFERENCES supplier_reference(supplier_reference_id) ON DELETE SET NULL,
   CONSTRAINT fk_contract_budget FOREIGN KEY(budget_reference_id) REFERENCES budget_reference(budget_reference_id) ON DELETE SET NULL,
   CONSTRAINT fk_contract_owner FOREIGN KEY(contract_owner_employee_reference_id) REFERENCES employee_reference(employee_reference_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_contract_department FOREIGN KEY(owning_department_reference_id) REFERENCES department_reference(department_reference_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_handler FOREIGN KEY(fam_handler_employee_reference_id) REFERENCES employee_reference(employee_reference_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_procurement_request FOREIGN KEY(procurement_request_id) REFERENCES procurement_request(procurement_request_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_purchase_order FOREIGN KEY(purchase_order_reference_id) REFERENCES purchase_order_reference(purchase_order_reference_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_renewed_from FOREIGN KEY(renewed_from_contract_id) REFERENCES contract(contract_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_created_by FOREIGN KEY(created_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_updated_by FOREIGN KEY(updated_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
   INDEX idx_contract_status(contract_status), INDEX idx_contract_end(end_date),
+  INDEX idx_contract_department(owning_department_reference_id), INDEX idx_contract_handler(fam_handler_employee_reference_id),
+  INDEX idx_contract_procurement_request(procurement_request_id), INDEX idx_contract_purchase_order(purchase_order_reference_id),
+  INDEX idx_contract_renewed_from(renewed_from_contract_id),
   CHECK(end_date>=start_date), CHECK(original_amount>=0 AND current_amount>=0)
+) ENGINE=InnoDB;
+
+CREATE TABLE contract_party (
+  contract_party_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  contract_id BIGINT UNSIGNED NOT NULL,
+  party_role VARCHAR(40) NOT NULL,
+  supplier_reference_id BIGINT UNSIGNED,
+  department_reference_id BIGINT UNSIGNED,
+  employee_reference_id BIGINT UNSIGNED,
+  external_party_name VARCHAR(255),
+  external_organization_name VARCHAR(255),
+  contact_information VARCHAR(255),
+  is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+  status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME,
+  CONSTRAINT fk_contract_party_contract FOREIGN KEY(contract_id) REFERENCES contract(contract_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_contract_party_supplier FOREIGN KEY(supplier_reference_id) REFERENCES supplier_reference(supplier_reference_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_party_department FOREIGN KEY(department_reference_id) REFERENCES department_reference(department_reference_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_party_employee FOREIGN KEY(employee_reference_id) REFERENCES employee_reference(employee_reference_id) ON DELETE SET NULL,
+  INDEX idx_contract_party_contract(contract_id), INDEX idx_contract_party_role(party_role),
+  INDEX idx_contract_party_supplier(supplier_reference_id), INDEX idx_contract_party_status(status)
+) ENGINE=InnoDB;
+
+CREATE TABLE contract_obligation (
+  contract_obligation_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  contract_id BIGINT UNSIGNED NOT NULL,
+  obligation_type VARCHAR(50) NOT NULL, title VARCHAR(255) NOT NULL, description TEXT,
+  responsible_party_type VARCHAR(30) NOT NULL DEFAULT 'OTHER',
+  responsible_employee_reference_id BIGINT UNSIGNED,
+  responsible_department_reference_id BIGINT UNSIGNED,
+  responsible_supplier_reference_id BIGINT UNSIGNED,
+  source_clause_reference VARCHAR(100), due_date DATE, recurrence_rule VARCHAR(255),
+  status VARCHAR(30) NOT NULL DEFAULT 'PENDING', completed_at DATETIME,
+  completion_document_id BIGINT UNSIGNED, waiver_reason TEXT,
+  created_by_user_id BIGINT UNSIGNED, updated_by_user_id BIGINT UNSIGNED,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME,
+  CONSTRAINT fk_contract_obligation_contract FOREIGN KEY(contract_id) REFERENCES contract(contract_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_contract_obligation_employee FOREIGN KEY(responsible_employee_reference_id) REFERENCES employee_reference(employee_reference_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_obligation_department FOREIGN KEY(responsible_department_reference_id) REFERENCES department_reference(department_reference_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_obligation_supplier FOREIGN KEY(responsible_supplier_reference_id) REFERENCES supplier_reference(supplier_reference_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_obligation_document FOREIGN KEY(completion_document_id) REFERENCES document(document_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_obligation_created_by FOREIGN KEY(created_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_obligation_updated_by FOREIGN KEY(updated_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  INDEX idx_contract_obligation_contract(contract_id), INDEX idx_contract_obligation_due(due_date),
+  INDEX idx_contract_obligation_status(status)
+) ENGINE=InnoDB;
+
+CREATE TABLE contract_amendment (
+  contract_amendment_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  contract_id BIGINT UNSIGNED NOT NULL,
+  amendment_number VARCHAR(80) NOT NULL UNIQUE,
+  amendment_type VARCHAR(40) NOT NULL, description TEXT, reason TEXT,
+  proposed_date DATE NOT NULL, approved_date DATE, effective_date DATE,
+  status VARCHAR(30) NOT NULL DEFAULT 'DRAFT',
+  value_delta DECIMAL(18,2), resulting_current_amount DECIMAL(18,2), end_date_change DATE,
+  document_id BIGINT UNSIGNED, approval_request_id BIGINT UNSIGNED,
+  created_by_user_id BIGINT UNSIGNED, updated_by_user_id BIGINT UNSIGNED,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME,
+  CONSTRAINT fk_contract_amendment_contract FOREIGN KEY(contract_id) REFERENCES contract(contract_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_contract_amendment_document FOREIGN KEY(document_id) REFERENCES document(document_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_amendment_approval FOREIGN KEY(approval_request_id) REFERENCES approval_request(approval_request_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_amendment_created_by FOREIGN KEY(created_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_amendment_updated_by FOREIGN KEY(updated_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  INDEX idx_contract_amendment_contract(contract_id), INDEX idx_contract_amendment_status(status)
+) ENGINE=InnoDB;
+
+CREATE TABLE contract_renewal_event (
+  contract_renewal_event_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  contract_id BIGINT UNSIGNED NOT NULL,
+  renewal_decision VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+  decision_date DATE, new_end_date DATE, amendment_id BIGINT UNSIGNED,
+  notes TEXT, created_by_user_id BIGINT UNSIGNED, updated_by_user_id BIGINT UNSIGNED,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_contract_renewal_contract FOREIGN KEY(contract_id) REFERENCES contract(contract_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_contract_renewal_amendment FOREIGN KEY(amendment_id) REFERENCES contract_amendment(contract_amendment_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_renewal_created_by FOREIGN KEY(created_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  CONSTRAINT fk_contract_renewal_updated_by FOREIGN KEY(updated_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  INDEX idx_contract_renewal_contract(contract_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE contract_history (
+  contract_history_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  contract_id BIGINT UNSIGNED NOT NULL,
+  event_type VARCHAR(100) NOT NULL, event_description TEXT NOT NULL,
+  from_status VARCHAR(30), to_status VARCHAR(30),
+  actor_user_id BIGINT UNSIGNED, event_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  metadata_json LONGTEXT, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_contract_history_contract FOREIGN KEY(contract_id) REFERENCES contract(contract_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_contract_history_actor FOREIGN KEY(actor_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
+  INDEX idx_contract_history_contract(contract_id), INDEX idx_contract_history_event_at(event_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE legal_matter (
@@ -650,6 +768,7 @@ CREATE TABLE legal_matter (
   matter_number VARCHAR(60) NOT NULL UNIQUE,
   title VARCHAR(255) NOT NULL,
   matter_type VARCHAR(50) NOT NULL,
+  contract_id BIGINT UNSIGNED,
   summary TEXT NOT NULL,
   priority VARCHAR(30) NOT NULL DEFAULT 'MEDIUM',
   status VARCHAR(30) NOT NULL DEFAULT 'OPEN',
@@ -669,6 +788,7 @@ CREATE TABLE legal_matter (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at DATETIME,
+  CONSTRAINT fk_legal_matter_contract FOREIGN KEY(contract_id) REFERENCES contract(contract_id) ON DELETE SET NULL,
   CONSTRAINT fk_legal_matter_department FOREIGN KEY(department_reference_id) REFERENCES department_reference(department_reference_id) ON DELETE SET NULL,
   CONSTRAINT fk_legal_matter_assignee FOREIGN KEY(assigned_employee_reference_id) REFERENCES employee_reference(employee_reference_id) ON DELETE SET NULL,
   CONSTRAINT fk_legal_matter_created_by FOREIGN KEY(created_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
@@ -677,9 +797,14 @@ CREATE TABLE legal_matter (
   CONSTRAINT fk_legal_matter_cancelled_by FOREIGN KEY(cancelled_by_user_id) REFERENCES user_account(user_account_id) ON DELETE SET NULL,
   INDEX idx_legal_matter_status(status),
   INDEX idx_legal_matter_type(matter_type),
+  INDEX idx_legal_matter_contract(contract_id),
   INDEX idx_legal_matter_priority(priority),
   INDEX idx_legal_matter_updated(updated_at)
 ) ENGINE=InnoDB;
+
+ALTER TABLE department_reference
+  ADD CONSTRAINT fk_department_head_employee FOREIGN KEY(department_head_employee_reference_id)
+    REFERENCES employee_reference(employee_reference_id) ON UPDATE CASCADE ON DELETE SET NULL;
 
 CREATE TABLE legal_matter_history (
   legal_matter_history_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

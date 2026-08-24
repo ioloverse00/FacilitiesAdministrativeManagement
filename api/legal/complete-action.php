@@ -8,7 +8,7 @@ requireCsrfToken();
 try {
     $matterId = idParam('matter_id');
     $actionId = idParam('action_id');
-    $result = legalMatterActionService()->completeAction($matterId, $actionId, $user);
+    $result = legalMatterActionService()->completeAction($matterId, $actionId, readJsonBody(), $user);
     if ($result === null) {
         jsonResponse(false, 'Legal action not found.', [], 404);
     }

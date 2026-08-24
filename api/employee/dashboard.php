@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . DIRECTORY_SEPARATOR . '_bootstrap.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'approvals' . DIRECTORY_SEPARATOR . '_bootstrap.php';
 require_once dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Reservations' . DIRECTORY_SEPARATOR . 'ReservationService.php';
 
 requireMethod('GET');
@@ -20,11 +21,6 @@ $scalar = static function (string $sql, array $params) use ($pdo): int {
     return (int) $statement->fetchColumn();
 };
 
-$openRequests = $scalar(
-    "SELECT COUNT(*) FROM facility_request WHERE requested_by_employee_reference_id = :employee_id AND deleted_at IS NULL AND status NOT IN ('COMPLETED','VERIFIED','CLOSED','CANCELLED')",
-    ['employee_id' => $employeeId]
-);
-
 $upcomingReservations = $scalar(
     "SELECT COUNT(*) FROM facility_reservation WHERE requested_by_employee_reference_id = :employee_id AND deleted_at IS NULL AND start_datetime >= NOW() AND status NOT IN ('REJECTED','CANCELLED','COMPLETED','NO_SHOW')",
     ['employee_id' => $employeeId]
@@ -40,25 +36,10 @@ $unreadNotifications = $scalar(
     ['user_id' => $userId]
 );
 
+$assignedTasks = employeeApprovalList($user);
+
 $activityStatement = $pdo->prepare(
-    "SELECT entity_type, entity_id, event, reference, subject, status, occurred_at FROM (
-        SELECT
-            'facility_request' entity_type,
-            facility_request_id entity_id,
-            CASE
-                WHEN status IN ('COMPLETED','VERIFIED','CLOSED') THEN 'Completed request'
-                WHEN status='CANCELLED' THEN 'Cancelled request'
-                WHEN created_at=updated_at THEN 'Submitted request'
-                ELSE 'Status changed'
-            END event,
-            request_number reference,
-            subject,
-            status,
-            COALESCE(completed_at,cancelled_at,updated_at,created_at) occurred_at
-        FROM facility_request
-        WHERE requested_by_employee_reference_id = :employee_id_a AND deleted_at IS NULL
-        UNION ALL
-        SELECT
+    "SELECT
             'facility_reservation' entity_type,
             facility_reservation_id entity_id,
             CASE
@@ -75,12 +56,11 @@ $activityStatement = $pdo->prepare(
             status,
             COALESCE(checked_out_at,checked_in_at,approved_at,updated_at,created_at) occurred_at
         FROM facility_reservation
-        WHERE requested_by_employee_reference_id = :employee_id_b AND deleted_at IS NULL
-    ) recent
+        WHERE requested_by_employee_reference_id = :employee_id AND deleted_at IS NULL
      ORDER BY occurred_at DESC
      LIMIT 6"
 );
-$activityStatement->execute(['employee_id_a' => $employeeId, 'employee_id_b' => $employeeId]);
+$activityStatement->execute(['employee_id' => $employeeId]);
 $recentActivity = array_map(static function (array $row): array {
     return [
         'entity_type' => (string) $row['entity_type'],
@@ -97,11 +77,12 @@ jsonResponse(true, 'Employee dashboard loaded.', [
     'dashboard' => [
         'generated_at' => date('c'),
         'counts' => [
-            'open_facility_requests' => $openRequests,
             'upcoming_reservations' => $upcomingReservations,
             'pending_reservations' => $pendingReservations,
             'unread_notifications' => $unreadNotifications,
+            'pending_tasks' => count($assignedTasks),
         ],
+        'assigned_tasks' => array_slice($assignedTasks, 0, 3),
         'recent_activity' => $recentActivity,
     ],
 ]);

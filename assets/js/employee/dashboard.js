@@ -5,18 +5,12 @@
         const target = document.getElementById('employee-summary-cards');
         if (!target) return;
         const cards = [
-            ['domain', 'My Open Facility Requests', counts.open_facility_requests],
-            ['event_available', 'Upcoming Reservations', counts.upcoming_reservations],
-            ['hourglass_top', 'Pending Reservations', counts.pending_reservations]
+            [counts.pending_tasks, `Pending Task${Number(counts.pending_tasks || 0) === 1 ? '' : 's'}`],
+            [counts.upcoming_reservations, 'Upcoming Reservations'],
+            [counts.pending_reservations, 'Pending Reservations']
         ];
-        target.innerHTML = cards.map(([icon, label, value]) => `
-            <article class="fam-card employee-summary-card">
-                <span class="material-symbols-outlined" aria-hidden="true">${icon}</span>
-                <div>
-                    <strong>${fmtCount(value)}</strong>
-                    <p>${label}</p>
-                </div>
-            </article>
+        target.innerHTML = cards.map(([value, label]) => `
+            <span><strong>${fmtCount(value)}</strong> ${esc(label)}</span>
         `).join('');
         const badge = document.getElementById('notification-unread-count');
         const unread = Number(counts.unread_notifications || 0);
@@ -39,10 +33,29 @@
         `;
     }
 
-    function renderAttention(counts, reservation) {
+    function taskLabel(item) {
+        if (item.module === 'contract_management' && item.entity_type === 'contract') return 'Approve Contract';
+        return title(item.title || 'Assigned Task');
+    }
+
+    function taskCopy(item) {
+        return [item.contract?.number || item.entity_reference, item.step_name].filter(Boolean).join(' - ');
+    }
+
+    function renderAttention(counts, reservation, tasks = []) {
         const target = document.getElementById('employee-attention-list');
         if (!target) return;
         const items = [];
+        if (tasks.length) {
+            const first = tasks[0];
+            items.push(attentionCard(
+                'task_alt',
+                taskLabel(first),
+                taskCopy(first),
+                `tasks.html?task=${encodeURIComponent(first.task_id)}`,
+                'Review Task'
+            ));
+        }
         if (reservation?.allowed_actions?.check_out) {
             items.push(attentionCard('logout', 'Room is checked in', `${reservation.room || 'Room reservation'} is active.`, `room-reservations.html?reservation=${encodeURIComponent(reservation.id)}`, 'Check Out'));
         } else if (reservation?.allowed_actions?.check_in) {
@@ -51,15 +64,12 @@
         if (Number(counts.pending_reservations || 0) > 0) {
             items.push(attentionCard('pending_actions', `${fmtCount(counts.pending_reservations)} pending room request${Number(counts.pending_reservations) === 1 ? '' : 's'}`, 'Waiting for admin review.', 'room-reservations.html'));
         }
-        if (Number(counts.open_facility_requests || 0) > 0) {
-            items.push(attentionCard('task_alt', `${fmtCount(counts.open_facility_requests)} open facility request${Number(counts.open_facility_requests) === 1 ? '' : 's'}`, 'Track current request progress.', 'facility-requests.html'));
-        }
         if (Number(counts.unread_notifications || 0) > 0) {
             items.push(attentionCard('notifications', `${fmtCount(counts.unread_notifications)} unread update${Number(counts.unread_notifications) === 1 ? '' : 's'}`, 'Review recent request and reservation changes.', 'notifications.html', 'View'));
         }
         target.innerHTML = items.length
             ? items.slice(0, 4).join('')
-            : window.FAMEmployeePortal.emptyState('task_alt', 'All clear', 'No request or reservation needs action right now.');
+            : window.FAMEmployeePortal.emptyState('task_alt', 'All clear', 'Nothing needs your attention right now.');
     }
 
     function fmt(value) {
@@ -165,12 +175,11 @@
         const activity = document.getElementById('employee-recent-activity');
         if (!activity) return;
         if (!items?.length) {
-            activity.innerHTML = window.FAMEmployeePortal.emptyState('history', 'No recent activity', 'Your recent request and reservation activity will appear here.');
+            activity.innerHTML = window.FAMEmployeePortal.emptyState('history', 'No recent activity', 'Your recent requests, reservations, and assigned task activity will appear here.');
             return;
         }
         const itemHref = item => {
             if (item.entity_type === 'facility_reservation') return `room-reservations.html?reservation=${encodeURIComponent(item.entity_id)}`;
-            if (item.entity_type === 'facility_request') return `facility-requests.html?request=${encodeURIComponent(item.entity_id)}`;
             return '';
         };
         activity.innerHTML = `
@@ -199,7 +208,7 @@
         document.getElementById('employee-welcome-name').textContent = window.FAMEmployeePortal.text(context?.full_name, 'Employee');
         document.getElementById('employee-welcome-department').textContent = window.FAMEmployeePortal.text(context?.department?.name || context?.department?.code, 'Department not available');
         const reservation = nextReservation(reservations.data?.items || []);
-        renderAttention(dashboard?.counts || {}, reservation);
+        renderAttention(dashboard?.counts || {}, reservation, dashboard?.assigned_tasks || []);
         renderNextUp(reservation);
         renderCards(dashboard?.counts || {});
         renderActivity(dashboard?.recent_activity || []);

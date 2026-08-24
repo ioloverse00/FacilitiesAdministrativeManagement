@@ -326,7 +326,10 @@ SQL);
             ],
         ];
 
-        return new AuthenticatedUser($profile, $this->loadRoles($userId), $this->loadPermissions($userId));
+        $roles = $this->loadRoles($userId);
+        $permissions = $this->loadPermissions($userId);
+
+        return new AuthenticatedUser($profile, $roles, $permissions, PersonaService::classify($this->pdo, $profile, $roles, $permissions));
     }
 
     /**

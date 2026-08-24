@@ -11,7 +11,7 @@ This document records which FAM module owns each operational data area so future
 | Visitor Management | `visitor`, `visit`, `visitor_badge`, `visitor_visit_history`, `visitor_sequence`, `visitor_registration_challenge` | `employee_reference`, `department_reference`, `facility_space`, `activity_event`, `audit_log` | Owns visitor intake, public pre-registration handoff, review, identity verification, check-in/out, badge issue/return, and visitor history. Employee accounts are not created for visitors. |
 | Procurement | `procurement_request`, procurement items and procurement history | `facility_request`, `maintenance_work_order`, `budget_reference`, `supplier_reference`, `inventory_item_reference` | Owns procurement coordination records. |
 | Document Management | `document`, `document_version`, document categories, current document metadata | `record`, `record_document`, `department_reference`, `employee_reference` | Owns official FAM document storage, classification, versioning, retrieval, and logical archive behavior. |
-| Records Retention & Compliance | `record`, `record_document`, `retention_schedule` | `document`, `department_reference`, `employee_reference`, `audit_log`, `activity_event` | Owns retention schedule assignment, server-calculated disposition dates, compliance review, legal holds, archive state, and logical disposition. Documents and versions remain owned by Document Management; physical deletion is not part of retention disposition. |
+| Records Retention & Compliance | `record`, `record_document`, `retention_schedule` | `document`, source module records, `department_reference`, `employee_reference`, `audit_log`, `activity_event` | Owns retention schedule assignment, controlled trigger basis, authoritative trigger-date resolution, policy eligibility dates, effective review dates, legal holds, archive state, and logical disposition. Documents and versions remain owned by Document Management; physical deletion is not part of retention disposition. |
 | Reports | Aggregated read models only | All operational modules | Reports should read from source modules and avoid owning transactional data. |
 | Employee Portal | Requester-facing views over employee-owned records | `user_account`, `employee_reference`, `facility_request`, `facility_reservation`, `notification` | Does not own separate transactional tables. It filters module records through the authenticated employee identity. |
 
@@ -69,3 +69,13 @@ The following built/supporting features are preserved for direct access, integra
 - Employee Portal reservation pages must filter by `facility_reservation.requested_by_employee_reference_id`.
 - Normal reservations originate from the Employee Portal. Admins review, approve, reject, monitor, cancel administratively, and mark no-show exceptions.
 - Employee self check-in/check-out is ownership-scoped and writes to the same `facility_reservation` and `reservation_history` records.
+
+## Records Retention Ownership Rules
+
+- `retention_schedule.retention_trigger_basis` is the controlled trigger taxonomy used by the backend calculation engine.
+- `record.retention_trigger_date` is the authoritative business-event date, not necessarily the document date.
+- `record.policy_eligibility_date` preserves the original policy-calculated eligibility date.
+- `record.administrative_review_date_override` represents an authorized review postponement.
+- `record.scheduled_disposition_date` remains the effective review date for compatibility with existing queue/list behavior.
+- Records with missing business-event triggers remain `WAITING_FOR_TRIGGER`; source modules are not rebuilt or reactivated merely to satisfy retention.
+- Legal Hold takes precedence over disposition regardless of trigger or eligibility state.

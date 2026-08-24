@@ -175,6 +175,14 @@ final class FacilityRequestService
         return is_array($row) ? $row : null;
     }
 
+    private function findForUpdate(int $id): ?array
+    {
+        $stmt = $this->pdo->prepare($this->baseSelect() . ' WHERE fr.deleted_at IS NULL AND fr.facility_request_id=:id LIMIT 1 FOR UPDATE');
+        $stmt->execute(['id'=>$id]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $row : null;
+    }
+
     public function details(int|string $idOrNumber): ?array
     {
         $row = $this->find($idOrNumber); if (!$row) return null;
@@ -231,7 +239,7 @@ final class FacilityRequestService
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare("UPDATE facility_request SET department_reference_id=:department_id, facility_space_id=:space_id, request_category_id=:category_id, sla_policy_id=:sla_policy_id, subject=:subject, description=:description, priority=:priority, source_channel=:source_channel, requested_completion_at=:requested_completion_at, updated_by_user_id=:user_id, updated_at=NOW() WHERE facility_request_id=:id AND deleted_at IS NULL");
-            $stmt->execute(['department_id'=>$clean['department_reference_id'],'space_id'=>$clean['facility_space_id'],'category_id'=>$clean['request_category_id'],'sla_policy_id'=>$policy['sla_policy_id'] ?? null,'subject'=>$clean['subject'],'description'=>$clean['description'],'priority'=>$clean['priority'],'source_channel'=>$clean['source_channel'],'requested_completion_at'=>$clean['requested_completion_at'],'created_by_user_id'=>(int)$user['id'],'updated_by_user_id'=>(int)$user['id'],'id'=>$id]);
+            $stmt->execute(['department_id'=>$clean['department_reference_id'],'space_id'=>$clean['facility_space_id'],'category_id'=>$clean['request_category_id'],'sla_policy_id'=>$policy['sla_policy_id'] ?? null,'subject'=>$clean['subject'],'description'=>$clean['description'],'priority'=>$clean['priority'],'source_channel'=>$clean['source_channel'],'requested_completion_at'=>$clean['requested_completion_at'],'user_id'=>(int)$user['id'],'id'=>$id]);
             $this->pdo->commit();
         } catch (Throwable $e) { $this->pdo->rollBack(); throw $e; }
         $after = $this->find($id);
@@ -242,18 +250,23 @@ final class FacilityRequestService
 
     public function assign(int $id, int $employeeId, ?string $note, array $user): ?array
     {
-        $before = $this->find($id); if (!$before) return null;
         FacilityRequestPolicy::requirePermission($user, 'facility_requests.assign');
         if (!$this->exists('employee_reference','employee_reference_id',$employeeId,"employment_status='ACTIVE' AND deleted_at IS NULL")) throw new InvalidArgumentException(json_encode(['assigned_to_employee_reference_id'=>'Active employee assignee is required.']));
         $this->pdo->beginTransaction();
         try {
+            $before = $this->findForUpdate($id); if (!$before) { $this->pdo->rollBack(); return null; }
             $old = (string)$before['status'];
+            if (!in_array($old, ['SUBMITTED','APPROVED','ASSIGNED'], true)) {
+                $this->pdo->rollBack();
+                jsonResponse(false, 'This request cannot be assigned in its current status.', [], 409);
+            }
             $new = in_array($old, ['SUBMITTED','APPROVED'], true) ? 'ASSIGNED' : $old;
             $stmt = $this->pdo->prepare("UPDATE facility_request SET assigned_to_employee_reference_id=:employee_id, status=:status, assigned_at=COALESCE(assigned_at,NOW()), updated_by_user_id=:user_id, updated_at=NOW() WHERE facility_request_id=:id AND deleted_at IS NULL");
             $stmt->execute(['employee_id'=>$employeeId,'status'=>$new,'user_id'=>(int)$user['id'],'id'=>$id]);
             if ($new !== $old) $this->addHistory($id, $old, $new, (int)$user['id'], $note ?: 'Assigned request');
             (new SlaService($this->pdo))->markAssigned($id);
-            $this->createWorkflowTask($id, (string)$before['request_number'], $employeeId, (string)$before['priority'], (string)$before['subject']);
+            $this->supersedeWorkflowTasks($id, $employeeId, (int)$user['id'], $note ?: 'Reassigned request');
+            $this->createWorkflowTaskIfMissing($id, (string)$before['request_number'], $employeeId, (string)$before['priority'], (string)$before['subject']);
             $this->pdo->commit();
         } catch (Throwable $e) { $this->pdo->rollBack(); throw $e; }
         $after = $this->find($id);
@@ -345,6 +358,19 @@ final class FacilityRequestService
     {
         $taskNumber = 'WT-' . date('Ymd-His') . '-' . random_int(100,999);
         $this->pdo->prepare("INSERT INTO workflow_task (task_number,module_code,entity_type,entity_id,entity_reference,task_type,task_title,task_description,assigned_to_employee_reference_id,priority,task_status,created_at,updated_at) VALUES (:task_number,'facility_requests','facility_request',:id,:reference,'FULFILLMENT',:title,:description,:assignee,:priority,'OPEN',NOW(),NOW())")->execute(['task_number'=>$taskNumber,'id'=>$id,'reference'=>$reference,'title'=>'Fulfill '.$reference,'description'=>$subject,'assignee'=>$assigneeId,'priority'=>$priority]);
+    }
+
+    private function createWorkflowTaskIfMissing(int $id, string $reference, int $assigneeId, string $priority, string $subject): void
+    {
+        $stmt = $this->pdo->prepare("SELECT workflow_task_id FROM workflow_task WHERE module_code='facility_requests' AND entity_type='facility_request' AND entity_id=:id AND task_type='FULFILLMENT' AND assigned_to_employee_reference_id=:assignee AND task_status NOT IN ('COMPLETED','CANCELLED') LIMIT 1 FOR UPDATE");
+        $stmt->execute(['id'=>$id,'assignee'=>$assigneeId]);
+        if ($stmt->fetchColumn() !== false) return;
+        $this->createWorkflowTask($id, $reference, $assigneeId, $priority, $subject);
+    }
+
+    private function supersedeWorkflowTasks(int $id, int $assigneeId, int $userId, string $note): void
+    {
+        $this->pdo->prepare("UPDATE workflow_task SET task_status='CANCELLED', completed_at=COALESCE(completed_at,NOW()), completed_by_user_id=:user_id, completion_notes=:notes, updated_at=NOW() WHERE module_code='facility_requests' AND entity_type='facility_request' AND entity_id=:id AND task_type='FULFILLMENT' AND assigned_to_employee_reference_id<>:assignee AND task_status NOT IN ('COMPLETED','CANCELLED')")->execute(['user_id'=>$userId,'notes'=>$note,'id'=>$id,'assignee'=>$assigneeId]);
     }
 
     private function completeWorkflowTask(int $id, int $userId, ?string $notes): void

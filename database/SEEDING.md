@@ -41,14 +41,14 @@ Do not run broad deletes against reference tables unless you intentionally want 
 
 Seeded usernames:
 
-- `admin`
-- `fam.admin`
+- `gsms-super-admin`
+- `gsms-fam-admin`
 - `facility.manager`
 - `maintenance.supervisor`
 - `technician.one`
 - `asset.custodian`
 - `reservation.officer`
-- `procurement.officer`
+- `gsms-scm-head`
 - `records.officer`
 - `requestor.user`
 

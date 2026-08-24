@@ -33,7 +33,11 @@
             return item.related_entity_id ? `room-reservations.html?reservation=${encodeURIComponent(item.related_entity_id)}` : 'room-reservations.html';
         }
         if (item.module_code === 'FACILITY_REQUESTS' || item.related_entity_type === 'facility_request' || String(item.action_url || '').includes('employee/facility-requests.html')) {
-            return `facility-requests.html?request=${encodeURIComponent(item.related_entity_id || '')}`;
+            return item.related_entity_id ? `facility-requests.html?request=${encodeURIComponent(item.related_entity_id)}` : 'facility-requests.html';
+        }
+        if (item.module_code === 'contract_management' || item.related_entity_type === 'contract' || String(item.action_url || '').includes('employee/approvals.html') || String(item.action_url || '').includes('employee/tasks.html')) {
+            const taskId = item.metadata?.workflow_task_id || '';
+            return taskId ? `tasks.html?task=${encodeURIComponent(taskId)}` : 'tasks.html';
         }
         return '#';
     }
@@ -43,7 +47,10 @@
             return { icon: 'calendar_month', label: 'Room Reservations' };
         }
         if (item.module_code === 'FACILITY_REQUESTS' || item.related_entity_type === 'facility_request') {
-            return { icon: 'domain', label: 'Facility Requests' };
+            return { icon: 'domain', label: 'Facility Request' };
+        }
+        if (item.module_code === 'contract_management' || item.related_entity_type === 'contract') {
+            return { icon: 'approval_delegation', label: 'Contract Approval' };
         }
         return { icon: 'notifications', label: 'Notifications' };
     }

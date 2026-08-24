@@ -19,7 +19,7 @@ Any authenticated account with a valid `user_account.employee_reference_id` link
 The employee navigation contains only:
 
 - Dashboard
-- My Facility Requests
+- My Reservations
 - My Room Reservations
 - Notifications through the header bell and Notifications page
 - My Profile through the header account menu
@@ -72,7 +72,7 @@ Employees submit reservations as `SUBMITTED / PENDING`, may cancel while `SUBMIT
 Employee portal access uses:
 
 - `employee_portal.view`
-- `facility_requests.create`
+- `reservations.create`
 - `facility_requests.view_own`
 - `reservations.create`
 - `reservations.view_own`
@@ -92,4 +92,4 @@ Employee APIs filter by module-owned columns, such as:
 
 ## Notifications
 
-The header bell and Notifications page use the live notification table. Opening a facility request notification routes to `pages/employee/facility-requests.html?request=<id>`. Opening a room reservation notification routes to `pages/employee/room-reservations.html?reservation=<id>`. The target employee APIs verify ownership before returning details.
+The header bell and Notifications page use the live notification table. Employee-facing facility booking now routes through `pages/employee/room-reservations.html`. The target employee APIs verify ownership before returning details.

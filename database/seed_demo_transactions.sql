@@ -7,8 +7,8 @@ USE ismers_fam;
 START TRANSACTION;
 
 SET @demo_now := TIMESTAMP('2026-07-26 10:00:00');
-SET @admin_user := (SELECT user_account_id FROM user_account WHERE username='admin');
-SET @fam_user := (SELECT user_account_id FROM user_account WHERE username='fam.admin');
+SET @admin_user := (SELECT user_account_id FROM user_account WHERE username='gsms-super-admin');
+SET @fam_user := (SELECT user_account_id FROM user_account WHERE username='gsms-fam-admin');
 SET @requestor_user := (SELECT user_account_id FROM user_account WHERE username='requestor.user');
 SET @manager_emp := (SELECT employee_reference_id FROM employee_reference WHERE employee_number='EMP-2026-0003');
 SET @supervisor_emp := (SELECT employee_reference_id FROM employee_reference WHERE employee_number='EMP-2026-0004');
@@ -341,8 +341,8 @@ SELECT d.document_id, v.version_number, CONCAT(d.document_number,'-v',v.version_
 FROM document d JOIN (SELECT 1 version_number UNION ALL SELECT 2 UNION ALL SELECT 3) v ON v.version_number<=d.current_version_number
 WHERE d.document_number LIKE 'DOC-2026-%';
 
-INSERT INTO record (record_number, record_title, record_description, record_type, retention_schedule_id, originating_department_reference_id, record_owner_employee_reference_id, source_module, source_entity_type, source_entity_id, record_date, retention_start_date, scheduled_disposition_date, record_status, confidentiality_level, created_by_user_id, updated_by_user_id, created_at, updated_at)
-SELECT CONCAT('REC-2026-',LPAD(n.n,4,'0')), CONCAT(v.title,' ',n.n), 'Demo administrative record for dashboard and records module.', v.record_type, rs.retention_schedule_id, d.department_reference_id, @records_emp, v.module_code, v.entity_type, v.entity_id, DATE_ADD('2026-01-01', INTERVAL n.n*8 DAY), DATE_ADD('2026-01-01', INTERVAL n.n*8 DAY), v.disposition_date, v.status, v.confidentiality, @fam_user, @fam_user, DATE_ADD(@demo_now, INTERVAL -n.n DAY), DATE_ADD(@demo_now, INTERVAL -MOD(n.n,6) DAY)
+INSERT INTO record (record_number, record_title, record_description, record_type, retention_schedule_id, originating_department_reference_id, record_owner_employee_reference_id, source_module, source_entity_type, source_entity_id, record_date, retention_start_date, retention_trigger_basis, retention_trigger_date, policy_eligibility_date, administrative_review_date_override, scheduled_disposition_date, retention_trigger_state, record_status, confidentiality_level, created_by_user_id, updated_by_user_id, created_at, updated_at)
+SELECT CONCAT('REC-2026-',LPAD(n.n,4,'0')), CONCAT(v.title,' ',n.n), 'Demo administrative record for dashboard and records module.', v.record_type, rs.retention_schedule_id, d.department_reference_id, @records_emp, v.module_code, v.entity_type, v.entity_id, DATE_ADD('2026-01-01', INTERVAL n.n*8 DAY), DATE_ADD('2026-01-01', INTERVAL n.n*8 DAY), rs.retention_trigger_basis, NULL, NULL, NULL, NULL, 'WAITING_FOR_TRIGGER', v.status, v.confidentiality, @fam_user, @fam_user, DATE_ADD(@demo_now, INTERVAL -n.n DAY), DATE_ADD(@demo_now, INTERVAL -MOD(n.n,6) DAY)
 FROM (SELECT 1 n UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10) n
 JOIN (
 SELECT 1 n,'Administrative File' title,'Administrative' record_type,'RET-ADM-005' sched,'administration' module_code,'DEMO_RECORD' entity_type,1 entity_id,'2031-01-01' disposition_date,'ACTIVE' status,'INTERNAL' confidentiality UNION ALL
@@ -357,7 +357,7 @@ SELECT 9,'Records Transfer','Administrative','RET-ADM-005','records','DEMO_RECOR
 SELECT 10,'Contract Closeout','Contracts','RET-CON-010','contracts','DEMO_RECORD',10,'2036-01-01','ACTIVE','CONFIDENTIAL'
 ) v ON v.n=n.n
 JOIN retention_schedule rs ON rs.schedule_code=v.sched JOIN department_reference d ON d.department_code='DEP-REC'
-ON DUPLICATE KEY UPDATE record_status=VALUES(record_status), scheduled_disposition_date=VALUES(scheduled_disposition_date), updated_at=VALUES(updated_at);
+ON DUPLICATE KEY UPDATE record_status=VALUES(record_status), retention_trigger_basis=VALUES(retention_trigger_basis), retention_trigger_date=VALUES(retention_trigger_date), policy_eligibility_date=VALUES(policy_eligibility_date), administrative_review_date_override=VALUES(administrative_review_date_override), scheduled_disposition_date=VALUES(scheduled_disposition_date), retention_trigger_state=VALUES(retention_trigger_state), updated_at=VALUES(updated_at);
 
 INSERT IGNORE INTO record_document (record_id, document_id, is_primary_document, added_by_user_id)
 SELECT r.record_id, d.document_id, TRUE, @fam_user
@@ -369,11 +369,11 @@ INSERT INTO contract (contract_number, contract_type_id, contract_title, contrac
 SELECT CONCAT('CON-2026-',LPAD(n.n,4,'0')), ct.contract_type_id, v.title, v.description, sup.supplier_reference_id, b.budget_reference_id, @manager_emp, v.start_date, v.end_date, v.amount, v.amount, 'PHP', v.status, 60
 FROM (SELECT 1 n UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5) n
 JOIN (
-SELECT 1 n,'MNT' type_code,'Campus Preventive Maintenance Services' title,'Maintenance services for critical equipment.' description,'SUP-BRIGHT' supplier,'BUD-MNT-PM' budget,'2026-01-01' start_date,'2026-12-31' end_date,850000 amount,'ACTIVE' status UNION ALL
-SELECT 2,'SUP','Facility Consumables Supply Agreement','Supply agreement for consumables.','SUP-ALPHA','BUD-FAC-OPS','2026-02-01','2027-01-31',420000,'ACTIVE' UNION ALL
-SELECT 3,'LEASE','Temporary Training Equipment Lease','Lease for training equipment.','SUP-CLEAR','BUD-ADM-SUP','2026-06-01','2026-08-15',120000,'EXPIRING' UNION ALL
-SELECT 4,'SVC','Technical Services Retainer','Technical support services.','SUP-BRIGHT','BUD-IT-EQP','2025-07-01','2026-06-30',300000,'EXPIRED' UNION ALL
-SELECT 5,'SVC','Archive Digitization Services','Records digitization support.','SUP-CLEAR','BUD-ADM-SUP','2026-03-01','2026-07-15',180000,'COMPLETED'
+SELECT 1 n,'MAINTENANCE' type_code,'Campus Preventive Maintenance Services' title,'Maintenance services for critical equipment.' description,'SUP-BRIGHT' supplier,'BUD-MNT-PM' budget,'2026-01-01' start_date,'2026-12-31' end_date,850000 amount,'ACTIVE' status UNION ALL
+SELECT 2,'SUPPLY','Facility Consumables Supply Agreement','Supply agreement for consumables.','SUP-ALPHA','BUD-FAC-OPS','2026-02-01','2027-01-31',420000,'ACTIVE' UNION ALL
+SELECT 3,'LEASE','Temporary Training Equipment Lease','Lease for training equipment.','SUP-CLEAR','BUD-ADM-SUP','2026-06-01','2026-08-15',120000,'ACTIVE' UNION ALL
+SELECT 4,'SERVICE','Technical Services Retainer','Technical support services.','SUP-BRIGHT','BUD-IT-EQP','2025-07-01','2026-06-30',300000,'EXPIRED' UNION ALL
+SELECT 5,'SERVICE','Archive Digitization Services','Records digitization support.','SUP-CLEAR','BUD-ADM-SUP','2026-03-01','2026-07-15',180000,'EXPIRED'
 ) v ON v.n=n.n JOIN contract_type ct ON ct.type_code=v.type_code JOIN supplier_reference sup ON sup.supplier_code=v.supplier JOIN budget_reference b ON b.budget_code=v.budget AND b.fiscal_year=2026
 ON DUPLICATE KEY UPDATE contract_status=VALUES(contract_status), end_date=VALUES(end_date), current_amount=VALUES(current_amount);
 
@@ -413,26 +413,26 @@ ON DUPLICATE KEY UPDATE status=VALUES(status), due_at=VALUES(due_at), assigned_t
 INSERT INTO notification (recipient_user_id, notification_type, title, message, module_code, entity_type, entity_id, is_read, read_at, created_at)
 SELECT u.user_account_id, v.ntype, CONCAT('Demo: ',v.title), v.message, v.module_code, v.entity_type, v.entity_id, v.is_read, CASE WHEN v.is_read THEN DATE_ADD(@demo_now, INTERVAL -1 HOUR) END, DATE_ADD(@demo_now, INTERVAL -v.n HOUR)
 FROM (
-SELECT 1 n,'admin' username,'FACILITY_REQUEST_ASSIGNED' ntype,'Facility Request Assigned' title,'FR-2026-0001 assigned to technician.' message,'facility_requests' module_code,'facility_request' entity_type,(SELECT facility_request_id FROM facility_request WHERE request_number='FR-2026-0001') entity_id,FALSE is_read UNION ALL
-SELECT 2,'admin','SLA_NEAR_DUE','SLA Near Due','FR-2026-0020 is near SLA due time.','facility_requests','facility_request',(SELECT facility_request_id FROM facility_request WHERE request_number='FR-2026-0020'),FALSE UNION ALL
-SELECT 3,'admin','SLA_BREACHED','SLA Breached','FR-2026-0006 breached resolution target.','facility_requests','facility_request',(SELECT facility_request_id FROM facility_request WHERE request_number='FR-2026-0006'),FALSE UNION ALL
+SELECT 1 n,'gsms-super-admin' username,'FACILITY_REQUEST_ASSIGNED' ntype,'Facility Request Assigned' title,'FR-2026-0001 assigned to technician.' message,'facility_requests' module_code,'facility_request' entity_type,(SELECT facility_request_id FROM facility_request WHERE request_number='FR-2026-0001') entity_id,FALSE is_read UNION ALL
+SELECT 2,'gsms-super-admin','SLA_NEAR_DUE','SLA Near Due','FR-2026-0020 is near SLA due time.','facility_requests','facility_request',(SELECT facility_request_id FROM facility_request WHERE request_number='FR-2026-0020'),FALSE UNION ALL
+SELECT 3,'gsms-super-admin','SLA_BREACHED','SLA Breached','FR-2026-0006 breached resolution target.','facility_requests','facility_request',(SELECT facility_request_id FROM facility_request WHERE request_number='FR-2026-0006'),FALSE UNION ALL
 SELECT 4,'maintenance.supervisor','WORK_ORDER_ASSIGNED','Work Order Assigned','WO-2026-0002 assigned today.','maintenance','maintenance_work_order',(SELECT maintenance_work_order_id FROM maintenance_work_order WHERE work_order_number='WO-2026-0002'),FALSE UNION ALL
 SELECT 5,'maintenance.supervisor','WORK_ORDER_OVERDUE','Work Order Overdue','WO-2026-0015 is overdue.','maintenance','maintenance_work_order',(SELECT maintenance_work_order_id FROM maintenance_work_order WHERE work_order_number='WO-2026-0015'),FALSE UNION ALL
 SELECT 6,'reservation.officer','RESERVATION_APPROVED','Reservation Approved','RR-2026-0001 approved.','reservations','facility_reservation',(SELECT facility_reservation_id FROM facility_reservation WHERE reservation_number='RR-2026-0001'),TRUE UNION ALL
 SELECT 7,'requestor.user','RESERVATION_REMINDER','Reservation Reminder','Reservation starts today.','reservations','facility_reservation',(SELECT facility_reservation_id FROM facility_reservation WHERE reservation_number='RR-2026-0014'),FALSE UNION ALL
-SELECT 8,'admin','PROCUREMENT_APPROVAL_REQUIRED','Procurement Approval Required','PR-2026-0001 needs approval.','procurement','procurement_request',(SELECT procurement_request_id FROM procurement_request WHERE request_number='PR-2026-0001'),FALSE UNION ALL
-SELECT 9,'procurement.officer','SUPPLY_CHAIN_UPDATE','Supply Chain Update','PO synced from SCM.','procurement','procurement_request',(SELECT procurement_request_id FROM procurement_request WHERE request_number='PR-2026-0003'),TRUE UNION ALL
+SELECT 8,'gsms-super-admin','PROCUREMENT_APPROVAL_REQUIRED','Procurement Approval Required','PR-2026-0001 needs approval.','procurement','procurement_request',(SELECT procurement_request_id FROM procurement_request WHERE request_number='PR-2026-0001'),FALSE UNION ALL
+SELECT 9,'gsms-scm-head','SUPPLY_CHAIN_UPDATE','Supply Chain Update','PO synced from SCM.','procurement','procurement_request',(SELECT procurement_request_id FROM procurement_request WHERE request_number='PR-2026-0003'),TRUE UNION ALL
 SELECT 10,'records.officer','DOCUMENT_REVIEW_DUE','Document Review Due','Fire safety certificate expires soon.','records','document',(SELECT document_id FROM document WHERE document_number='DOC-2026-0005'),FALSE UNION ALL
-SELECT 11,'admin','REPORT_READY','Report Ready','Monthly operations report is ready.','reports','report',1,TRUE UNION ALL
+SELECT 11,'gsms-super-admin','REPORT_READY','Report Ready','Monthly operations report is ready.','reports','report',1,TRUE UNION ALL
 SELECT 12,'facility.manager','AI_RECOMMENDATION_READY','AI Recommendation Ready','AI triage recommendation is pending.','facility_requests','facility_request',(SELECT facility_request_id FROM facility_request WHERE request_number='FR-2026-0002'),FALSE UNION ALL
-SELECT 13,'admin','INTEGRATION_SYNC_COMPLETED','Integration Sync Completed','HRIS sync completed.','administration','integration_log',1,TRUE UNION ALL
-SELECT 14,'admin','INTEGRATION_FAILED','Integration Failed','SCM validation failed for PR-2026-0011.','procurement','procurement_request',(SELECT procurement_request_id FROM procurement_request WHERE request_number='PR-2026-0011'),FALSE UNION ALL
+SELECT 13,'gsms-super-admin','INTEGRATION_SYNC_COMPLETED','Integration Sync Completed','HRIS sync completed.','administration','integration_log',1,TRUE UNION ALL
+SELECT 14,'gsms-super-admin','INTEGRATION_FAILED','Integration Failed','SCM validation failed for PR-2026-0011.','procurement','procurement_request',(SELECT procurement_request_id FROM procurement_request WHERE request_number='PR-2026-0011'),FALSE UNION ALL
 SELECT 15,'asset.custodian','ASSET_DUE_SOON','Asset Due Soon','Fire extinguisher inspection due soon.','assets','asset',(SELECT asset_id FROM asset WHERE asset_code='AST-2026-0009'),FALSE UNION ALL
 SELECT 16,'records.officer','RECORD_REVIEW_DUE','Record Review Due','REC-2026-0006 needs review.','records','record',(SELECT record_id FROM record WHERE record_number='REC-2026-0006'),FALSE UNION ALL
-SELECT 17,'admin','VISITOR_CHECKED_IN','Visitor Checked In','Visitor checked in for meeting.','visitors','visit',(SELECT visit_id FROM visit WHERE visit_number='VIS-2026-0004'),TRUE UNION ALL
+SELECT 17,'gsms-super-admin','VISITOR_CHECKED_IN','Visitor Checked In','Visitor checked in for meeting.','visitors','visit',(SELECT visit_id FROM visit WHERE visit_number='VIS-2026-0004'),TRUE UNION ALL
 SELECT 18,'facility.manager','REQUEST_SUBMITTED','Request Submitted','New facility request submitted.','facility_requests','facility_request',(SELECT facility_request_id FROM facility_request WHERE request_number='FR-2026-0015'),FALSE UNION ALL
-SELECT 19,'admin','CONTRACT_EXPIRING','Contract Expiring','Lease agreement expires soon.','contracts','contract',(SELECT contract_id FROM contract WHERE contract_number='CON-2026-0003'),FALSE UNION ALL
-SELECT 20,'admin','SYSTEM_NOTICE','Integration Sync Completed','BI dashboard extract completed.','administration','integration_log',5,TRUE
+SELECT 19,'gsms-super-admin','CONTRACT_EXPIRING','Contract Expiring','Lease agreement expires soon.','contracts','contract',(SELECT contract_id FROM contract WHERE contract_number='CON-2026-0003'),FALSE UNION ALL
+SELECT 20,'gsms-super-admin','SYSTEM_NOTICE','Integration Sync Completed','BI dashboard extract completed.','administration','integration_log',5,TRUE
 ) v JOIN user_account u ON u.username=v.username;
 
 INSERT INTO activity_event (module_code, entity_type, entity_id, event_type, event_description, actor_user_id, event_status, visibility_level, occurred_at)

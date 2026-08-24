@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ==========================================================================
  * Universal UI Architecture Interactive Script (app.js)
  * Provides dynamic interactions for index.html (search, filter animations)
@@ -216,7 +216,7 @@ function initComponentInteractions() {
                     submitBtn.style.backgroundColor = '#059669'; // Success green
                     submitBtn.style.borderColor = '#059669';
                     submitBtn.style.color = '#ffffff';
-                    submitBtn.innerHTML = '<span>ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Success</span>';
+                    submitBtn.innerHTML = '<span>ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Success</span>';
                     
                     setTimeout(() => {
                         submitBtn.disabled = false;
@@ -446,29 +446,61 @@ function initAuthenticationPage() {
     const apiPrefix = isPagesRoute ? '../api/' : 'api/';
     const pagesPrefix = isPagesRoute ? '' : 'pages/';
 
-    const defaultPortalPath = user => {
-        const roles = (user?.roles || []).map(role => String(role.code || '').toUpperCase());
-        const permissions = user?.permissions || [];
-        const hasAdminRole = roles.some(role => [
-            'SYSTEM_ADMIN',
-            'FAM_ADMIN',
-            'FACILITY_MANAGER',
-            'MAINTENANCE_SUPERVISOR',
-            'TECHNICIAN',
-            'ASSET_CUSTODIAN',
-            'RESERVATION_OFFICER',
-            'PROCUREMENT_OFFICER',
-            'RECORDS_OFFICER',
-            'APPROVER',
-            'AUDITOR'
-        ].includes(role));
-        const isRequester = roles.includes('REQUESTOR')
-            || permissions.includes('facility_requests.create')
-            || permissions.includes('reservations.create');
+    const userPortalClassification = user => {
+        const persona = user?.persona || {};
+        const portal = persona.portal === 'employee' || persona.portal === 'fam' ? persona.portal : 'none';
+        return {
+            portal,
+            persona: String(persona.code || 'UNAUTHORIZED_OR_UNRESOLVED'),
+            employeeAllowed: persona.is_employee_portal_allowed === true,
+            famAllowed: persona.is_fam_portal_allowed === true
+        };
+    };
 
-        return isRequester && !hasAdminRole
-            ? `${pagesPrefix}employee/dashboard.html`
-            : `${pagesPrefix}dashboard.html`;
+    const defaultPortalPath = user => {
+        const classification = userPortalClassification(user);
+        if (classification.portal === 'employee') return `${pagesPrefix}employee/dashboard.html`;
+        if (classification.portal === 'fam') return `${pagesPrefix}dashboard.html`;
+        return `${pagesPrefix}login.html`;
+    };
+
+    const normalizeNextPath = next => {
+        const value = String(next || '').trim();
+        if (!value) return null;
+        try {
+            const parsed = new URL(value, window.location.href);
+            if (parsed.origin !== window.location.origin) return null;
+            return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+        } catch {
+            return null;
+        }
+    };
+
+    const isEmployeePortalPath = path => /(^|\/)pages\/employee\//.test(path) || /^employee\//.test(path);
+
+    const isFamPortalPath = path => {
+        if (isEmployeePortalPath(path)) return false;
+        return /(^|\/)pages\/[^/]+\.html/.test(path) || /^[^/]+\.html/.test(path);
+    };
+
+    const localRedirectPath = path => {
+        const normalized = normalizeNextPath(path);
+        if (!normalized) return null;
+        const pagesIndex = normalized.indexOf('/pages/');
+        if (pagesIndex >= 0) return normalized.slice(pagesIndex + 1);
+        return normalized.replace(/^\/+/, '');
+    };
+
+    const redirectPathAfterLogin = user => {
+        const classification = userPortalClassification(user);
+        const next = new URLSearchParams(window.location.search).get('next');
+        if (!next) return defaultPortalPath(user);
+        const decodedNext = localRedirectPath(next);
+        if (!decodedNext) return defaultPortalPath(user);
+        if (classification.portal === 'employee' && isFamPortalPath(decodedNext)) return defaultPortalPath(user);
+        if (classification.portal === 'fam' && isEmployeePortalPath(decodedNext)) return defaultPortalPath(user);
+        if (classification.portal === 'none') return defaultPortalPath(user);
+        return decodedNext;
     };
 
     if (subsystem && forgotPasswordLink) {
@@ -502,8 +534,7 @@ function initAuthenticationPage() {
             });
             const payload = await response.json().catch(() => null);
             if (!response.ok || payload?.success === false) throw new Error(payload?.message || 'Sign in failed.');
-            const currentParams = new URLSearchParams(window.location.search);
-            window.location.href = currentParams.get('next') || defaultPortalPath(payload?.data?.user);
+            window.location.href = redirectPathAfterLogin(payload?.data?.user);
         } catch (error) {
             if (errorBox) { errorBox.textContent = error.message || 'Sign in failed.'; errorBox.hidden = false; }
         } finally {

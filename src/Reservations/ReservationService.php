@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Notifications' . DIRECTORY_SEPARATOR . 'NotificationService.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'ReservationRequestSummaryService.php';
 
 final class ReservationPolicy
 {
@@ -35,6 +36,9 @@ final class ReservationService
     private const APPROVAL_STATUSES = ['PENDING','APPROVED','REJECTED','CANCELLED'];
     private const DEFAULT_SETUP_BUFFER_MINUTES = 0;
     private const DEFAULT_CLEANUP_BUFFER_MINUTES = 0;
+    private const REQUEST_LETTER_MAX_SIZE = 10485760;
+    private const REQUEST_LETTER_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg'];
+    private const REQUEST_LETTER_MIME = ['application/pdf', 'image/png', 'image/jpeg'];
 
     public function __construct(private readonly PDO $pdo) {}
 
@@ -77,7 +81,29 @@ final class ReservationService
         $id = (int) $row['facility_reservation_id'];
         $item['participants'] = $this->query('SELECT e.employee_number,e.full_name,rp.participant_role,rp.attendance_status FROM reservation_participant rp INNER JOIN employee_reference e ON e.employee_reference_id=rp.employee_reference_id WHERE rp.facility_reservation_id=:id ORDER BY e.full_name', ['id'=>$id]);
         $item['history'] = $this->query('SELECT old_status,new_status,change_reason,changed_at FROM reservation_history WHERE facility_reservation_id=:id ORDER BY changed_at DESC', ['id'=>$id]);
+        $item['request_letter'] = $this->requestLetterMetadata($id);
         return $item;
+    }
+
+    public function requestLetterFile(int|string $idOrNumber, array $user): ?array
+    {
+        $item = $this->details($idOrNumber);
+        if ($item === null || !$this->canView($item, $user)) return null;
+        $letter = $this->requestLetterRow((int)$item['id']);
+        if ($letter === null) return null;
+        $absolute = $this->storageRoot() . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$letter['storage_path']);
+        if (!is_file($absolute)) return null;
+        return ['absolute_path'=>$absolute,'download_name'=>(string)$letter['original_file_name'],'mime_type'=>(string)$letter['mime_type'],'file_size'=>(int)$letter['file_size']];
+    }
+
+    public function canView(array $item, array $user): bool
+    {
+        if ($this->employeeOwns($item, $user) && ReservationPolicy::hasPermission($user, 'reservations.view')) return true;
+        return ReservationPolicy::hasPermission($user, 'reservations.view')
+            && (($user['persona']['is_fam_portal_allowed'] ?? false) === true
+                || ReservationPolicy::hasPermission($user, 'reservations.manage')
+                || ReservationPolicy::hasPermission($user, 'reservations.approve')
+                || ReservationPolicy::hasPermission($user, 'reservations.edit'));
     }
 
     public function employeeOwns(array $item, array $user): bool
@@ -106,10 +132,12 @@ final class ReservationService
         ];
     }
 
-    public function create(array $data, array $user): array
+    public function create(array $data, array $user, ?array $file = null): array
     {
         ReservationPolicy::requirePermission($user, 'reservations.create');
         $clean = $this->validate($data, true);
+        $letter = $this->validateRequestLetter($file ?? []);
+        $stored = null;
         $this->pdo->beginTransaction();
         try {
             $this->assertNoConflict($clean);
@@ -117,9 +145,17 @@ final class ReservationService
             $stmt = $this->pdo->prepare("INSERT INTO facility_reservation (reservation_number,facility_space_id,requested_by_employee_reference_id,department_reference_id,reservation_type,purpose,expected_attendees,setup_requirements,start_datetime,end_datetime,setup_buffer_minutes,cleanup_buffer_minutes,status,approval_status,created_by_user_id,updated_by_user_id,created_at,updated_at) VALUES (:number,:space,:requester,:department,:type,:purpose,:attendees,:setup,:start,:end,:setup_buffer,:cleanup_buffer,:status,:approval,:created_by_user_id,:updated_by_user_id,NOW(),NOW())");
             $stmt->execute(['number'=>$number,'space'=>$clean['facility_space_id'],'requester'=>$clean['requested_by_employee_reference_id'],'department'=>$clean['department_reference_id'],'type'=>$clean['reservation_type'],'purpose'=>$clean['purpose'],'attendees'=>$clean['expected_attendees'],'setup'=>$clean['setup_requirements'],'start'=>$clean['start_datetime'],'end'=>$clean['end_datetime'],'setup_buffer'=>$clean['setup_buffer_minutes'],'cleanup_buffer'=>$clean['cleanup_buffer_minutes'],'status'=>$clean['status'],'approval'=>$clean['approval_status'],'created_by_user_id'=>(int)$user['id'],'updated_by_user_id'=>(int)$user['id']]);
             $id = (int)$this->pdo->lastInsertId();
+            $stored = $this->storeRequestLetter($letter, $id);
+            $this->insertRequestLetter($id, $letter, $stored, (int)$user['id']);
             $this->addHistory($id, null, (string)$clean['status'], (int)$user['id'], 'Reservation created');
             $this->pdo->commit();
-        } catch (Throwable $e) { $this->pdo->rollBack(); throw $e; }
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            if ($stored !== null && is_file($stored['absolute_path'])) @unlink($stored['absolute_path']);
+            throw $e;
+        }
+        try { (new ReservationRequestSummaryService($this->pdo))->markPending($id); }
+        catch (Throwable $e) { error_log('Reservation AI summary pending marker failed: ' . $e->getMessage()); }
         $row = $this->find($id);
         if ($row) $this->afterChange($user, $row, 'RESERVATION_CREATED', 'Reservation created');
         return $this->details($id) ?? ['id'=>$id,'reservationNo'=>$number];
@@ -302,7 +338,6 @@ final class ReservationService
         if (!$availabilityOnly && ($requester < 1 || !$this->exists('employee_reference','employee_reference_id',$requester,"employment_status='ACTIVE' AND deleted_at IS NULL"))) $errors['requested_by_employee_reference_id'] = 'Active requester is required.';
         $department = $data['department_reference_id'] ?? null; $department = $department === '' || $department === null ? null : (int)$department;
         $purpose = trim((string)($data['purpose'] ?? ''));
-        if (!$availabilityOnly && $purpose === '') $errors['purpose'] = 'Purpose is required.';
         $type = trim((string)($data['reservation_type'] ?? 'MEETING'));
         $attendees = max(1, (int)($data['expected_attendees'] ?? 1));
         if (!$availabilityOnly && $space > 0) {
@@ -332,7 +367,90 @@ final class ReservationService
         $approval = strtoupper((string)($data['approval_status'] ?? 'PENDING'));
         if (!in_array($approval, self::APPROVAL_STATUSES, true)) $errors['approval_status'] = 'Approval status is invalid.';
         if ($errors) throw new InvalidArgumentException(json_encode($errors));
+        if ($purpose === '' && !$availabilityOnly) $purpose = 'Request letter submitted';
         return ['facility_space_id'=>$space,'requested_by_employee_reference_id'=>$requester,'department_reference_id'=>$department,'reservation_type'=>$type,'purpose'=>$purpose,'expected_attendees'=>$attendees,'setup_requirements'=>trim((string)($data['setup_requirements'] ?? '')) ?: null,'start_datetime'=>$start,'end_datetime'=>$end,'setup_buffer_minutes'=>$setup,'cleanup_buffer_minutes'=>$cleanup,'status'=>$status,'approval_status'=>$approval];
+    }
+
+    private function validateRequestLetter(array $file): array
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new InvalidArgumentException(json_encode(['request_letter' => 'Upload a request letter.']));
+        }
+        $size = (int)($file['size'] ?? 0);
+        if ($size <= 0 || $size > self::REQUEST_LETTER_MAX_SIZE) {
+            throw new InvalidArgumentException(json_encode(['request_letter' => 'Request letter must be 10 MB or smaller.']));
+        }
+        $original = basename((string)($file['name'] ?? 'request-letter'));
+        $extension = strtolower(pathinfo($original, PATHINFO_EXTENSION));
+        if (!in_array($extension, self::REQUEST_LETTER_EXTENSIONS, true)) {
+            throw new InvalidArgumentException(json_encode(['request_letter' => 'Upload a supported request letter file: PDF, PNG, JPG, or JPEG.']));
+        }
+        $tmp = (string)($file['tmp_name'] ?? '');
+        $mime = $tmp !== '' ? ((new finfo(FILEINFO_MIME_TYPE))->file($tmp) ?: '') : '';
+        if (!in_array($mime, self::REQUEST_LETTER_MIME, true)) {
+            throw new InvalidArgumentException(json_encode(['request_letter' => 'Request letter file type is not supported.']));
+        }
+        return ['tmp_name'=>$tmp,'original_name'=>$this->safeFileName($original),'extension'=>$extension,'mime_type'=>$mime,'size'=>$size];
+    }
+
+    private function storeRequestLetter(array $upload, int $reservationId): array
+    {
+        $relativeDir = 'reservations/' . $reservationId . '/request-letter';
+        $absoluteDir = $this->storageRoot() . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativeDir);
+        if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0775, true) && !is_dir($absoluteDir)) {
+            throw new RuntimeException('Unable to prepare reservation letter storage.');
+        }
+        $storedName = bin2hex(random_bytes(16)) . '.' . $upload['extension'];
+        $absolutePath = $absoluteDir . DIRECTORY_SEPARATOR . $storedName;
+        $stored = is_uploaded_file($upload['tmp_name'])
+            ? move_uploaded_file($upload['tmp_name'], $absolutePath)
+            : (PHP_SAPI === 'cli' && copy($upload['tmp_name'], $absolutePath));
+        if (!$stored) {
+            throw new RuntimeException('Unable to store request letter.');
+        }
+        return ['relative_path'=>$relativeDir . '/' . $storedName,'absolute_path'=>$absolutePath,'stored_name'=>$storedName,'hash'=>hash_file('sha256', $absolutePath) ?: ''];
+    }
+
+    private function insertRequestLetter(int $reservationId, array $upload, array $stored, int $userId): void
+    {
+        $this->pdo->prepare('INSERT INTO reservation_request_letter (facility_reservation_id, original_file_name, stored_file_name, file_extension, mime_type, file_size, storage_path, file_hash, uploaded_by_user_id, uploaded_at) VALUES (:reservation_id, :original, :stored, :extension, :mime, :size, :path, :hash, :user_id, NOW())')->execute([
+            'reservation_id'=>$reservationId,
+            'original'=>$upload['original_name'],
+            'stored'=>$stored['stored_name'],
+            'extension'=>$upload['extension'],
+            'mime'=>$upload['mime_type'],
+            'size'=>$upload['size'],
+            'path'=>$stored['relative_path'],
+            'hash'=>$stored['hash'],
+            'user_id'=>$userId,
+        ]);
+    }
+
+    private function requestLetterMetadata(int $reservationId): ?array
+    {
+        $row = $this->requestLetterRow($reservationId);
+        if ($row === null) return null;
+        return ['fileName'=>(string)$row['original_file_name'],'extension'=>(string)$row['file_extension'],'mimeType'=>(string)$row['mime_type'],'fileSize'=>(int)$row['file_size'],'uploadedAt'=>(string)$row['uploaded_at']];
+    }
+
+    private function requestLetterRow(int $reservationId): ?array
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM reservation_request_letter WHERE facility_reservation_id=:id AND deleted_at IS NULL LIMIT 1');
+        $stmt->execute(['id'=>$reservationId]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $row : null;
+    }
+
+    private function safeFileName(string $name): string
+    {
+        $name = preg_replace('/[^A-Za-z0-9._ -]+/', '_', $name) ?? 'request-letter';
+        $name = trim($name, " .\t\n\r\0\x0B");
+        return mb_substr($name === '' ? 'request-letter' : $name, 0, 180);
+    }
+
+    private function storageRoot(): string
+    {
+        return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage';
     }
 
     private function assertTransition(string $current, string $next): void
@@ -425,7 +543,7 @@ final class ReservationService
 
     private function shape(array $r, bool $details = false): array
     {
-        $item = ['id'=>(int)$r['facility_reservation_id'],'requesterId'=>(int)$r['requested_by_employee_reference_id'],'reservationNo'=>$r['reservation_number'],'purpose'=>$r['purpose'],'room'=>$r['space_name'],'roomType'=>$r['space_type'],'building'=>$r['building_name'],'floor'=>$r['floor_number'],'capacity'=>$r['capacity']===null?null:(int)$r['capacity'],'requester'=>$r['requester_name'],'employeeNumber'=>$r['requester_number'],'department'=>$r['department_name'],'attendees'=>(int)$r['expected_attendees'],'approval'=>$r['approval_status'],'status'=>$r['status'],'start'=>$r['start_datetime'],'end'=>$r['end_datetime'],'createdAt'=>$r['created_at']];
+        $item = ['id'=>(int)$r['facility_reservation_id'],'requesterId'=>(int)$r['requested_by_employee_reference_id'],'reservationNo'=>$r['reservation_number'],'purpose'=>$r['purpose'],'reservationType'=>$r['reservation_type'],'room'=>$r['space_name'],'roomType'=>$r['space_type'],'building'=>$r['building_name'],'floor'=>$r['floor_number'],'capacity'=>$r['capacity']===null?null:(int)$r['capacity'],'requester'=>$r['requester_name'],'employeeNumber'=>$r['requester_number'],'department'=>$r['department_name'],'attendees'=>(int)$r['expected_attendees'],'approval'=>$r['approval_status'],'status'=>$r['status'],'start'=>$r['start_datetime'],'end'=>$r['end_datetime'],'createdAt'=>$r['created_at'],'ai_request_summary'=>['summary'=>$r['ai_request_summary'] ?? null,'status'=>$r['ai_request_summary_status'] ?? 'NOT_REQUESTED','generatedAt'=>$r['ai_request_summary_generated_at'] ?? null,'provider'=>$r['ai_request_summary_provider'] ?? null,'model'=>$r['ai_request_summary_model'] ?? null,'failureReason'=>$r['ai_request_summary_failure_reason'] ?? null]];
         if ($details) $item['lifecycle'] = ['setup_requirements'=>$r['setup_requirements'],'setup_buffer_minutes'=>(int)$r['setup_buffer_minutes'],'cleanup_buffer_minutes'=>(int)$r['cleanup_buffer_minutes'],'approved_at'=>$r['approved_at'],'checked_in_at'=>$r['checked_in_at'],'checked_out_at'=>$r['checked_out_at'],'cancellation_reason'=>$r['cancellation_reason'],'remarks'=>$r['remarks']];
         $item['allowed_actions'] = $this->allowedActions($item, ['employee_id'=>$item['requesterId'], 'permissions'=>[]]);
         return $item;

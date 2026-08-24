@@ -10,4 +10,5 @@ WHERE deadline_basis IS NULL;
 ALTER TABLE legal_matter_action
   ADD COLUMN IF NOT EXISTS suggestion_id bigint(20) unsigned NULL AFTER source,
   ADD COLUMN IF NOT EXISTS deadline_basis varchar(30) NULL AFTER source_document_version_id,
-  ADD COLUMN IF NOT EXISTS recommendation_reason varchar(500) NULL AFTER deadline_basis;
+  ADD COLUMN IF NOT EXISTS recommendation_reason varchar(500) NULL AFTER deadline_basis,
+  ADD COLUMN IF NOT EXISTS completion_note text NULL AFTER recommendation_reason;

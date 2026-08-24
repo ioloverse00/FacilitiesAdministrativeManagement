@@ -299,8 +299,29 @@ final class LegalMatterSummaryService
         if (!is_string($body)) {
             throw new RuntimeException('Unable to encode AI request.');
         }
-        $timeout = max(5, (int) env('GEMINI_LEGAL_SUMMARY_TIMEOUT_SECONDS', 35));
+        $timeout = max(5, (int) env('GEMINI_LEGAL_SUMMARY_TIMEOUT_SECONDS', 60));
         $headers = ['Content-Type: application/json', 'Accept: application/json'];
+        $attempts = 0;
+        $maxAttempts = 2;
+        $lastException = null;
+
+        while ($attempts < $maxAttempts) {
+            $attempts++;
+            try {
+                return $this->postJsonOnce($url, $payload, $body, $headers, $timeout);
+            } catch (RuntimeException $exception) {
+                $lastException = $exception;
+                if ($attempts >= $maxAttempts || !$this->isRetryableFailure($exception->getMessage())) {
+                    throw $exception;
+                }
+            }
+        }
+
+        throw $lastException ?? new RuntimeException('GEMINI_REQUEST_FAILED');
+    }
+
+    private function postJsonOnce(string $url, array $payload, string $body, array $headers, int $timeout): array
+    {
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
@@ -313,9 +334,10 @@ final class LegalMatterSummaryService
             $raw = curl_exec($ch);
             $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             $error = curl_error($ch);
+            $errorCode = (int) curl_errno($ch);
             curl_close($ch);
             if ($raw === false || $status < 200 || $status >= 300) {
-                throw new RuntimeException($this->geminiError($raw ?: '', $status, $error, $url, $payload));
+                throw new RuntimeException($this->geminiError($raw ?: '', $status, $error, $url, $payload, $errorCode));
             }
             return $this->decodeResponse((string) $raw);
         }
@@ -332,7 +354,7 @@ final class LegalMatterSummaryService
         $raw = file_get_contents($url, false, $context);
         $status = $this->streamStatus($http_response_header ?? []);
         if ($raw === false || $status < 200 || $status >= 300) {
-            throw new RuntimeException($this->geminiError((string) $raw, $status, '', $url, $payload));
+            throw new RuntimeException($this->geminiError((string) $raw, $status, '', $url, $payload, 0));
         }
         return $this->decodeResponse((string) $raw);
     }
@@ -380,9 +402,10 @@ final class LegalMatterSummaryService
         return $model === '' ? 'gemini-3.6-flash' : $model;
     }
 
-    private function geminiError(string $raw, int $status, string $transportError, string $url, array $payload): string
+    private function geminiError(string $raw, int $status, string $transportError, string $url, array $payload, int $transportErrorCode): string
     {
         $category = match (true) {
+            defined('CURLE_OPERATION_TIMEDOUT') && $transportErrorCode === CURLE_OPERATION_TIMEDOUT => 'GEMINI_TIMEOUT',
             $transportError !== '' => 'GEMINI_TRANSPORT_ERROR',
             $status === 400 => 'GEMINI_HTTP_400',
             $status === 401 || $status === 403 => 'GEMINI_KEY_INVALID',
@@ -406,6 +429,12 @@ final class LegalMatterSummaryService
             'structured_schema_included' => isset($payload['generationConfig']['response_schema']),
         ];
         return $category . ' ' . json_encode($details, JSON_UNESCAPED_SLASHES);
+    }
+
+    private function isRetryableFailure(string $message): bool
+    {
+        $category = strtok($message, ' ');
+        return in_array($category, ['GEMINI_TIMEOUT', 'GEMINI_TRANSPORT_ERROR', 'GEMINI_SERVICE_UNAVAILABLE'], true);
     }
 
     private function safeFailureStage(string $message): string

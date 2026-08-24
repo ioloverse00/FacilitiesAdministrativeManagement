@@ -1,5 +1,5 @@
 (function () {
-    const state = { page: 1, totalPages: 1, sort: 'updated_at', direction: 'desc', options: {}, activeItem: null, lastFocus: null };
+    const state = { page: 1, totalPages: 1, sort: 'updated_at', direction: 'desc', options: {}, activeItem: null, lastFocus: null, bound: false, aiInitialJobs: new Set() };
     const qs = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const api = path => `../api/${path}`;
@@ -71,7 +71,7 @@
         fillSimple(qs('#legal-priority-filter'), state.options.priorities || [], 'All Priorities');
         fillSimple(qs('#legal-status-filter'), state.options.statuses || [], 'All Statuses');
         fillObjects(qs('#legal-department-filter'), state.options.departments || [], 'All Departments');
-        fillObjects(qs('#legal-assignee-filter'), state.options.employees || [], 'All Assignees');
+        fillObjects(qs('#legal-assignee-filter'), state.options.legal_matter_handlers || [], 'All Assignees');
     }
 
     function renderSummary(summary) {
@@ -152,8 +152,22 @@
         select.innerHTML = `<option value="all">${esc(first)}</option>` + items.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
     }
 
-    function employeeOptions(selected = '') {
-        return `<option value="">Unassigned</option>` + (state.options.employees || []).map(item => `<option value="${esc(item.id)}" ${String(item.id) === String(selected || '') ? 'selected' : ''}>${esc(item.name)}${item.department ? ` - ${esc(item.department)}` : ''}</option>`).join('');
+    function legalMatterHandlerOptions(selected = '') {
+        const handlers = state.options.legal_matter_handlers || [];
+        if (!handlers.length) return '<option value="">No eligible FAM handlers available</option>';
+        return `<option value="">Unassigned</option>` + handlers.map(item => `<option value="${esc(item.id)}" ${String(item.id) === String(selected || '') ? 'selected' : ''}>${esc(item.name)}${item.department ? ` - ${esc(item.department)}` : ''}</option>`).join('');
+    }
+
+    function legalActionAssigneeOptions(selected = '') {
+        const groups = state.options.legal_action_assignees || {};
+        const handlers = groups.handlers || [];
+        const heads = groups.departmentHeads || [];
+        const option = item => `<option value="${esc(item.id)}" ${String(item.id) === String(selected || '') ? 'selected' : ''}>${esc(item.name)}${item.department ? ` - ${esc(item.department)}` : ''}</option>`;
+        let html = '<option value="">Unassigned</option>';
+        if (handlers.length) html += `<optgroup label="FAM Handlers">${handlers.map(option).join('')}</optgroup>`;
+        if (heads.length) html += `<optgroup label="Department Heads">${heads.map(option).join('')}</optgroup>`;
+        if (!handlers.length && !heads.length) html = '<option value="">No eligible assignees available</option>';
+        return html;
     }
 
     function partyEmployeeOptions(selected = '') {
@@ -186,7 +200,7 @@
         state.lastFocus = document.activeElement;
         modal.hidden = false;
         document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
-        modal.innerHTML = detailsShell('LEGAL MATTER', 'Loading...', 'Loading legal matter details...', '<div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">progress_activity</span><span>Loading legal matter details...</span></div>');
+        modal.innerHTML = detailsShell('LEGAL MATTER', 'Loading...', 'Loading legal matter details...', '<div class="fam-state"><span class="material-symbols-outlined id-processing-icon" aria-hidden="true">progress_activity</span><span>Loading legal matter details...</span></div>');
         modal.querySelector('[data-legal-details-close]')?.focus();
         try {
             const item = await fetchItem(id);
@@ -224,9 +238,9 @@
                 ${aiSummaryHtml(item)}
                 <div class="visitor-detail-accordion legal-detail-accordion">
                     <details class="visitor-detail-disclosure" open><summary>Matter Information</summary>${matterInfo}</details>
+                    <details class="visitor-detail-disclosure"><summary>Assignment</summary>${assignment}</details>
                     <details class="visitor-detail-disclosure"><summary>Parties Involved (${partyCount})</summary>${parties}</details>
                     <details class="visitor-detail-disclosure"><summary>Actions &amp; Deadlines (${actionsCount})</summary>${actions}</details>
-                    <details class="visitor-detail-disclosure"><summary>Assignment</summary>${assignment}</details>
                     <details class="visitor-detail-disclosure"><summary>Supporting Documents</summary>${supportingDocuments}</details>
                     <details class="visitor-detail-disclosure"><summary>Resolution</summary>${resolution}</details>
                     <details class="visitor-detail-disclosure"><summary>Activity History</summary>${history(item.history || [])}</details>
@@ -251,19 +265,23 @@
     function detailsWorkflowActions(item) {
         const status = String(item.status || '').toUpperCase();
         const allowed = new Set(item.allowedActions || []);
+        const isUnassignedReview = status === 'UNDER_REVIEW' && !item.assignedEmployeeId;
         const buttons = [];
         const add = (key, label, permission, primary = true) => {
             if (!allowed.has(key)) return;
             if (permission && !can(permission) && !can('legal.manage')) return;
             buttons.push(`<button class="${primary ? 'btn-primary' : 'btn-secondary'} dashboard-action-button" type="button" data-legal-action="${key}" data-legal-id="${esc(item.id)}">${label}</button>`);
         };
-        if (status === 'UNDER_REVIEW') add('start_processing', 'Begin Processing', 'legal.resolve');
+        if (status === 'UNDER_REVIEW' && !isUnassignedReview) add('start_processing', 'Begin Processing', 'legal.resolve');
         if (status === 'IN_PROGRESS') add('resolve', 'Resolve Matter', 'legal.resolve');
         if (status === 'RESOLVED') {
             add('close', 'Close Matter', 'legal.close');
             add('reopen', 'Reopen Matter', 'legal.resolve', false);
         }
-        return buttons.join('');
+        const guidance = isUnassignedReview
+            ? '<p class="legal-workflow-guidance">Assign a responsible handler before beginning processing.</p>'
+            : '';
+        return `${guidance}${buttons.join('')}`;
     }
 
     function partiesHtml(item) {
@@ -272,14 +290,14 @@
         const canManage = can('legal.manage');
         const actions = canManage ? `<div class="legal-party-toolbar">
             <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="add-party" data-legal-id="${esc(item.id)}">Add Party</button>
-            <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="reanalyze-parties" data-legal-id="${esc(item.id)}">Re-analyze Parties</button>
+            <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Re-analyze AI</button>
         </div>` : '';
         const confirmed = parties.length ? `<div class="legal-party-list">${parties.map(party => `<article class="legal-party-card">
-            <div><strong>${esc(party.name)}</strong><span>${esc(title(party.role))}</span><small>${esc([title(party.type), party.subtitle || party.organization].filter(Boolean).join(' • ') || 'No additional profile context')}</small>${party.notes ? `<p>${esc(party.notes)}</p>` : ''}</div>
+            <div><strong>${esc(party.name)}</strong><span>${esc(title(party.role))}</span><small>${esc([title(party.type), party.subtitle || party.organization].filter(Boolean).join(' â€¢ ') || 'No additional profile context')}</small>${party.notes ? `<p>${esc(party.notes)}</p>` : ''}</div>
             ${party.aiSuggested ? '<em>AI suggested, human confirmed</em>' : ''}
         </article>`).join('')}</div>` : '<p class="legal-empty-note">No confirmed parties yet.</p>';
         const suggested = suggestions.length ? `<div class="legal-party-suggestions">${suggestions.map(suggestion => `<article class="legal-party-suggestion">
-            <div><strong>${esc(suggestion.name)}</strong><span>${esc(title(suggestion.role))} • ${esc(title(suggestion.type))}</span>${suggestion.organization ? `<small>${esc(suggestion.organization)}</small>` : ''}${suggestion.context ? `<p>${esc(suggestion.context)}</p>` : ''}</div>
+            <div><strong>${esc(suggestion.name)}</strong><span>${esc(title(suggestion.role))} â€¢ ${esc(title(suggestion.type))}</span>${suggestion.organization ? `<small>${esc(suggestion.organization)}</small>` : ''}${suggestion.context ? `<p>${esc(suggestion.context)}</p>` : ''}</div>
             <div class="legal-party-actions">
                 <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="accept-party-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Accept</button>
                 <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="edit-party-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Edit & Accept</button>
@@ -297,9 +315,19 @@
         const parties = item.parties || [];
         const canManage = can('legal.manage') && !isMatterReadOnly(item);
         const addAction = canManage ? `<button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="add-party" data-legal-id="${esc(item.id)}">Add Party</button>` : '';
-        const analyzeAction = canManage ? `<button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="reanalyze-parties" data-legal-id="${esc(item.id)}">Re-analyze Parties</button>` : '';
+        const analyzeAction = canManage ? `<button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Re-analyze AI</button>` : '';
         const bottomActions = canManage ? `<div class="legal-party-footer">${addAction}${analyzeAction}</div>` : '';
-        const partyRows = parties.length ? `<div class="legal-party-list">${parties.map(party => partyEntryHtml(item, party)).join('')}</div>` : '<p class="legal-empty-note">No parties associated with this matter yet.</p>';
+        const status = item.aiPartiesStatus || 'NOT_REQUESTED';
+        const emptyText = status === 'PENDING'
+            ? 'Analyzing parties...'
+            : status === 'TIMEOUT'
+                ? 'AI party analysis timed out. Try again.'
+            : status === 'RATE_LIMITED'
+                ? 'AI party analysis is temporarily unavailable because the provider limit was reached. Try again later.'
+            : status === 'FAILED'
+                ? 'AI party extraction is unavailable. Review the supporting documents directly or try again.'
+                : 'No parties associated with this matter yet.';
+        const partyRows = parties.length ? `<div class="legal-party-list">${parties.map(party => partyEntryHtml(item, party)).join('')}</div>` : `<p class="legal-empty-note">${esc(emptyText)}</p>`;
         return `<div class="legal-parties-section">
             ${partyRows}
             ${bottomActions}
@@ -334,8 +362,18 @@
             ...legalActions.map(action => actionEntryHtml(item, action)),
             ...suggestions.map(suggestion => actionSuggestionHtml(item, suggestion)),
         ];
-        const rows = visibleRows.length ? `<div class="legal-action-list">${visibleRows.join('')}</div>` : '<p class="legal-empty-note">No legal actions or recommendations available.</p>';
-        const footer = canManage ? `<div class="legal-party-footer"><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="add-action" data-legal-id="${esc(item.id)}">Add Action</button><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="reanalyze-actions" data-legal-id="${esc(item.id)}">Re-analyze Actions</button></div>` : '';
+        const status = item.aiActionsStatus || 'NOT_REQUESTED';
+        const emptyText = status === 'PENDING'
+            ? 'Analyzing action recommendations...'
+            : status === 'TIMEOUT'
+                ? 'AI action analysis timed out. Try again.'
+            : status === 'RATE_LIMITED'
+                ? 'AI action analysis is temporarily unavailable because the provider limit was reached. Try again later.'
+            : status === 'FAILED'
+                ? 'AI action recommendation extraction is unavailable. Review the supporting documents directly or try again.'
+                : 'No legal actions or recommendations available.';
+        const rows = visibleRows.length ? `<div class="legal-action-list">${visibleRows.join('')}</div>` : `<p class="legal-empty-note">${esc(emptyText)}</p>`;
+        const footer = canManage ? `<div class="legal-party-footer"><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="add-action" data-legal-id="${esc(item.id)}">Add Action</button><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Re-analyze AI</button></div>` : '';
         return `<div class="legal-actions-section">
             ${rows}
             ${footer}
@@ -345,10 +383,14 @@
     function actionEntryHtml(item, action) {
         const active = !['COMPLETED', 'CANCELLED'].includes(action.status);
         const canManage = can('legal.manage') && !isMatterReadOnly(item);
+        const canExecute = canManage && item.status === 'IN_PROGRESS';
+        const canCancel = canManage && !['RESOLVED', 'CLOSED', 'CANCELLED'].includes(item.status);
+        const completion = action.status === 'COMPLETED' && action.completionNote ? `<small><strong>Result:</strong> ${esc(action.completionNote)}</small>` : '';
         const actionButtons = canManage ? `<div class="legal-party-actions">
             ${active ? `<button class="btn-secondary dashboard-action-button" type="button" data-legal-action="edit-action" data-legal-id="${esc(item.id)}" data-action-id="${esc(action.id)}">Edit</button>` : ''}
-            ${action.status === 'PENDING' ? `<button class="btn-secondary dashboard-action-button" type="button" data-legal-action="start-action" data-legal-id="${esc(item.id)}" data-action-id="${esc(action.id)}">Start</button>` : ''}
-            ${active ? `<button class="btn-secondary dashboard-action-button" type="button" data-legal-action="complete-action" data-legal-id="${esc(item.id)}" data-action-id="${esc(action.id)}">Complete</button><button class="btn-secondary dashboard-action-button document-danger-action" type="button" data-legal-action="cancel-action" data-legal-id="${esc(item.id)}" data-action-id="${esc(action.id)}">Cancel</button>` : ''}
+            ${canExecute && action.status === 'PENDING' ? `<button class="btn-secondary dashboard-action-button" type="button" data-legal-action="start-action" data-legal-id="${esc(item.id)}" data-action-id="${esc(action.id)}">Start</button>` : ''}
+            ${canExecute && action.status === 'IN_PROGRESS' ? `<button class="btn-secondary dashboard-action-button" type="button" data-legal-action="complete-action" data-legal-id="${esc(item.id)}" data-action-id="${esc(action.id)}">Complete</button>` : ''}
+            ${canCancel && active ? `<button class="btn-secondary dashboard-action-button document-danger-action" type="button" data-legal-action="cancel-action" data-legal-id="${esc(item.id)}" data-action-id="${esc(action.id)}">Cancel</button>` : ''}
         </div>` : '';
         return `<article class="legal-action-entry">
             <div class="legal-party-summary">
@@ -358,6 +400,7 @@
                     <small class="legal-action-basis">${esc(title(action.displayStatus || action.status))}</small>
                     ${action.assignedTo ? `<small>Assigned to ${esc(action.assignedTo)}</small>` : ''}
                     ${action.source === 'AI' ? `<small>AI-assisted / confirmed${action.deadlineBasis ? ` &middot; ${esc(actionBasisLabel(action.deadlineBasis))}` : ''}</small>` : ''}
+                    ${completion}
                 </div>
                 ${actionButtons ? `<div class="legal-action-side">${actionButtons}</div>` : ''}
             </div>
@@ -438,16 +481,23 @@
 
     function aiSummaryHtml(item) {
         const status = item.aiSummaryStatus || 'NOT_REQUESTED';
+        const failureReason = item.aiSummaryFailureReason || '';
         const docs = item.supportingDocuments || [];
         const canRegenerate = docs.length > 0 && !isMatterReadOnly(item) && can('records.view') && (can('legal.edit') || can('legal.manage'));
-        const button = canRegenerate ? `<button class="btn-secondary dashboard-action-button legal-ai-summary-action" type="button" data-legal-action="regenerate-summary" data-legal-id="${esc(item.id)}">Regenerate AI Summary</button>` : '';
+        const button = canRegenerate ? `<button class="btn-secondary dashboard-action-button legal-ai-summary-action" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Re-analyze AI</button>` : '';
         let content = '';
         if (status === 'READY') {
             content = `${summaryParagraphs(item.aiSummary)}<small>Generated automatically from linked supporting documents${item.aiSummaryGeneratedAt ? ` on ${esc(fmt(item.aiSummaryGeneratedAt))}` : ''}. Review source documents for authoritative details.</small>`;
         } else if (status === 'PENDING') {
-            content = '<p>Analyzing supporting documents...</p><small>Refresh this matter in a moment to see the generated summary.</small>';
+            content = '<p>Analyzing summary...</p><small>Refresh this matter in a moment to see the generated summary.</small>';
         } else if (status === 'FAILED') {
-            content = '<p>AI summary could not be generated. Review the supporting documents directly.</p>';
+            if (failureReason === 'GEMINI_TIMEOUT') {
+                content = '<p>AI summary generation timed out. Try again.</p>';
+            } else if (failureReason === 'GEMINI_QUOTA_OR_RATE_LIMIT') {
+                content = '<p>AI summary is temporarily unavailable due to provider limits.</p>';
+            } else {
+                content = '<p>AI summary could not be generated. Review the supporting documents directly.</p>';
+            }
         } else if (status === 'NO_READABLE_SOURCE') {
             content = '<p>No readable supporting documents are available for AI summarization.</p>';
         } else if (status === 'STALE') {
@@ -475,6 +525,7 @@
         const docs = item.supportingDocuments || [];
         const canAttach = !isMatterReadOnly(item) && can('records.create') && (can('legal.edit') || can('legal.manage'));
         const attachButton = canAttach ? `<button class="btn-secondary dashboard-action-button legal-attach-button" type="button" data-legal-action="attach-document" data-legal-id="${esc(item.id)}">Add Supporting Document</button>` : '';
+        const contractMatter = item.matterType === 'CONTRACT_RELATED';
         if (!docs.length) {
             return `<div class="legal-supporting-documents-empty"><p class="legal-empty-note">No supporting documents attached.</p>${attachButton}</div>`;
         }
@@ -482,14 +533,18 @@
             <div class="legal-supporting-documents-list">
                 ${docs.map(doc => {
                     const current = doc.currentVersion || {};
+                    const metadataAction = ['CONFIRMED', 'PENDING_CONFIRMATION'].includes(doc.contractMetadataStatus) ? 'review-contract-metadata' : 'analyze-contract-metadata';
+                    const metadataLabel = ['CONFIRMED', 'PENDING_CONFIRMATION'].includes(doc.contractMetadataStatus) ? 'Review Metadata' : 'Analyze Metadata';
                     return `<article class="legal-supporting-document">
                         <div class="legal-supporting-copy">
                             <strong>${esc(doc.title)}</strong>
-                            <small>${esc(doc.documentNo)} · ${esc(current.fileName || 'File')} · ${esc(doc.version || '')} · ${esc(title(doc.status))}</small>
+                            <small>${esc(doc.documentNo)} - ${esc(current.fileName || 'File')} - ${esc(doc.version || '')} - ${esc(title(doc.status))}</small>
+                            ${contractMatter ? contractMetadataStateHtml(doc) : ''}
                         </div>
                         <div class="document-file-actions">
                             <a href="${api(`documents/view.php?id=${doc.id}`)}" target="_blank" rel="noopener">View</a>
                             <a href="${api(`documents/download.php?id=${doc.id}`)}">Download</a>
+                            ${contractMatter && can('legal.manage') ? `<button type="button" data-legal-action="${metadataAction}" data-legal-id="${esc(item.id)}" data-document-id="${esc(doc.id)}">${metadataLabel}</button>` : ''}
                         </div>
                     </article>`;
                 }).join('')}
@@ -498,6 +553,24 @@
         </div>`;
     }
 
+    function contractMetadataStateHtml(doc) {
+        const status = doc.contractMetadataStatus || 'NOT_ANALYZED';
+        if (status === 'CONFIRMED') {
+            const bits = [];
+            if (doc.agreementReference) bits.push(`Reference: ${doc.agreementReference}`);
+            if (doc.expirationDate) bits.push(`Expiration: ${fmtDate(doc.expirationDate)}`);
+            if (doc.agreementStatus) bits.push(title(doc.agreementStatus));
+            return `<span class="legal-contract-metadata-state legal-contract-metadata-confirmed">Contract metadata confirmed${bits.length ? ` - ${esc(bits.join(' - '))}` : ''}</span>`;
+        }
+        if (status === 'PENDING_CONFIRMATION') {
+            const candidate = doc.contractMetadataCandidate || {};
+            return `<span class="legal-contract-metadata-state legal-contract-metadata-pending">Contract metadata detected${candidate.expiration_date ? ` - Candidate expiration: ${esc(fmtDate(candidate.expiration_date))}` : ''}</span>`;
+        }
+        if (status === 'UNAVAILABLE') {
+            return '<span class="legal-contract-metadata-state legal-contract-metadata-unavailable">Contract metadata unavailable</span>';
+        }
+        return '<span class="legal-contract-metadata-state">Contract metadata not analyzed</span>';
+    }
     function detailsShell(label, reference, heading, body) {
         return `<div class="facility-details-modal-panel visitor-details-panel legal-details-panel">
             <div class="facility-details-modal-header visitor-details-header">
@@ -577,7 +650,7 @@
         modal.hidden = false;
         modal.innerHTML = `<form class="facility-dialog-panel legal-form legal-assign-form" data-legal-form="assign">
             <div class="facility-details-modal-header"><div><p>Legal Management</p><span class="facility-details-modal-request-number">${esc(item.matterNo)}</span><h2>Assign Legal Matter</h2></div><button class="facility-details-modal-close" type="button" data-legal-dialog-close aria-label="Close form">&times;</button></div>
-            <div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-legal-error></div><section class="document-form-section"><h3>${esc(item.title)}</h3><label class="facility-field"><span>Assigned To</span><select name="assigned_employee_reference_id">${employeeOptions(item.assignedEmployeeId || '')}</select></label></section></div>
+            <div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-legal-error></div><section class="document-form-section"><h3>${esc(item.title)}</h3><label class="facility-field"><span>Assigned To</span><select name="assigned_employee_reference_id">${legalMatterHandlerOptions(item.assignedEmployeeId || '')}</select></label></section></div>
             <div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-legal-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Save Assignment</button></div>
         </form>`;
         document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
@@ -652,7 +725,7 @@
                 <div class="document-form-grid">
                     ${field('title', 'Action Title *', source.title || '', 'text', true)}
                     <label class="facility-field"><span>Action Type *</span><select name="action_type" required>${actionTypeOptions(source.actionType || 'REVIEW')}</select></label>
-                    <label class="facility-field"><span>Assigned To</span><select name="assigned_employee_reference_id">${employeeOptions(source.assignedEmployeeId || '')}</select></label>
+                    <label class="facility-field"><span>Assigned To</span><select name="assigned_employee_reference_id">${legalActionAssigneeOptions(source.assignedEmployeeId || '')}</select></label>
                     <label class="facility-field"><span>Due Date</span><input name="due_at" type="datetime-local" value="${esc(dateTimeInputValue(source.dueAt || ''))}"></label>
                 </div>
                 <label class="facility-field document-full-field"><span>Description</span><textarea name="description" rows="4">${esc(source.description || '')}</textarea></label>
@@ -662,6 +735,32 @@
         </form>`;
         document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
         modal.querySelector('input[name="title"]')?.focus();
+    }
+
+    function openContractMetadataForm(item, doc) {
+        if (!doc) return;
+        const modal = moveToTopLayer(qs('#legal-dialog'));
+        const candidate = doc.contractMetadataCandidate || {};
+        const fieldValue = (key, confirmed) => doc.contractMetadataStatus === 'CONFIRMED' ? (confirmed || '') : (candidate[key] || confirmed || '');
+        state.lastFocus = document.activeElement;
+        modal.hidden = false;
+        modal.innerHTML = `<form class="facility-dialog-panel legal-form legal-contract-metadata-form" data-legal-form="confirm-contract-metadata" data-document-id="${esc(doc.id)}">
+            <div class="facility-details-modal-header"><div><p>Legal Management</p><span class="facility-details-modal-request-number">${esc(doc.documentNo)}</span><h2>Review Contract Metadata</h2></div><button class="facility-details-modal-close" type="button" data-legal-dialog-close aria-label="Close form">&times;</button></div>
+            <div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-legal-error></div><section class="document-form-section">
+                <h3>${esc(doc.title)}</h3>
+                <p class="document-form-note">AI-extracted values are candidates only. Confirmed values become authoritative Document Management metadata for deterministic Records Retention.</p>
+                <div class="document-form-grid">
+                    ${field('agreement_reference', 'Agreement Reference', fieldValue('agreement_reference', doc.agreementReference), 'text', false)}
+                    <label class="facility-field"><span>Agreement Status</span><select name="agreement_status">${['', 'ACTIVE', 'EXPIRED', 'TERMINATED', 'RENEWED', 'UNKNOWN'].map(option => `<option value="${esc(option)}" ${option === fieldValue('agreement_status', doc.agreementStatus) ? 'selected' : ''}>${option ? esc(title(option)) : 'Not set'}</option>`).join('')}</select></label>
+                    <label class="facility-field"><span>Effective Date</span><input name="effective_date" type="date" value="${esc(fieldValue('effective_date', doc.effectiveDate))}"></label>
+                    <label class="facility-field"><span>Expiration Date</span><input name="expiration_date" type="date" value="${esc(fieldValue('expiration_date', doc.expirationDate))}"></label>
+                </div>
+                ${candidate.confidence ? `<div class="legal-contract-confidence"><strong>AI Confidence</strong><span>Reference: ${esc(candidate.confidence.agreement_reference || 'LOW')}</span><span>Effective: ${esc(candidate.confidence.effective_date || 'LOW')}</span><span>Expiration: ${esc(candidate.confidence.expiration_date || 'LOW')}</span><span>Status: ${esc(candidate.confidence.agreement_status || 'LOW')}</span></div>` : ''}
+            </section></div>
+            <div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-legal-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Confirm Contract Metadata</button></div>
+        </form>`;
+        document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
+        modal.querySelector('input[name="expiration_date"]')?.focus();
     }
 
     function dateTimeInputValue(value) {
@@ -709,11 +808,16 @@
 
     function showError(form, error) {
         const box = form.querySelector('[data-legal-error]');
-        const message = Object.values(error.errors || {})[0] || error.message || 'Unable to complete this action.';
+        const message = validationMessage(error);
         if (box) {
             box.textContent = message;
             box.classList.remove('hidden');
         }
+    }
+
+    function validationMessage(error, fallback = 'Unable to complete this action.') {
+        const first = Object.values(error?.errors || {}).find(value => typeof value === 'string' && value.trim());
+        return first || error?.message || fallback;
     }
 
     function clearError(form) {
@@ -764,13 +868,30 @@
 
     function triggerInitialSummary(id) {
         if (!id || !can('legal.manage')) return;
-        window.FAMApi.request(api(`legal/generate-summary.php?id=${id}`), { method: 'POST', body: {} })
-            .then(() => window.FAMApi.request(api(`legal/analyze-parties.php?id=${id}`), { method: 'POST', body: {} }).catch(error => console.warn('Initial legal AI party extraction failed.', error)))
-            .then(() => load())
-            .catch(error => {
-                console.warn('Initial legal AI summary generation failed.', error);
-                load().catch(console.error);
-            });
+        if (state.aiInitialJobs.has(id)) return;
+        state.aiInitialJobs.add(id);
+        runInitialAiPreprocessing(id).catch(error => {
+            console.warn('Initial legal AI preprocessing failed.', error);
+        }).finally(() => {
+            state.aiInitialJobs.delete(id);
+        });
+    }
+
+    async function runInitialAiPreprocessing(id) {
+        try {
+            const payload = await window.FAMApi.request(api(`legal/analyze-ai.php?id=${id}`), { method: 'POST', body: {} });
+            if (payload.data?.item) state.activeItem = payload.data.item;
+        } catch (error) {
+            console.warn('Initial unified legal AI processing failed.', error);
+        }
+        await refreshAfterAiStep(id);
+    }
+
+    async function refreshAfterAiStep(id) {
+        await load().catch(console.error);
+        if (Number(state.activeItem?.id || 0) === Number(id) && qs('#legal-details-modal')?.hidden === false) {
+            await openDetails(id).catch(console.error);
+        }
     }
 
     async function submitForm(form) {
@@ -783,15 +904,16 @@
         const actionId = form.dataset.actionId;
         const partyPath = type === 'add-party' ? `legal/add-party.php?id=${id}` : type === 'update-party' ? `legal/update-party.php?matter_id=${id}&party_id=${partyId}` : type === 'accept-party-suggestion' ? `legal/accept-party-suggestion.php?suggestion_id=${suggestionId}&matter_id=${id}` : '';
         const actionPath = type === 'add-action' ? `legal/add-action.php?id=${id}` : type === 'update-action' ? `legal/update-action.php?matter_id=${id}&action_id=${actionId}` : type === 'accept-action-suggestion' ? `legal/accept-action-suggestion.php?matter_id=${id}&suggestion_id=${suggestionId}` : '';
+        const metadataPath = type === 'confirm-contract-metadata' ? `legal/confirm-contract-metadata.php?document_id=${form.dataset.documentId}` : '';
         if (type === 'create' && !validateCreateEvidence(form)) return;
         const body = ['create', 'attach-document'].includes(type) ? formDataPayload(form) : formPayload(form);
         setSubmitting(form, true);
         try {
-            const payload = await window.FAMApi.request(api(actionPath || partyPath || path), { method: 'POST', body });
+            const payload = await window.FAMApi.request(api(metadataPath || actionPath || partyPath || path), { method: 'POST', body });
             const createdId = Number(payload.data?.item?.id || 0);
             closeDialog();
             const partial = payload.data?.attachment_errors?.length;
-            window.FAMModal?.showToast?.(partial ? payload.message : type === 'create' ? 'Legal matter created.' : type === 'edit' ? 'Legal matter updated.' : type === 'attach-document' ? 'Supporting document attached.' : type.includes('party') ? 'Party updated.' : type.includes('action') ? 'Legal action updated.' : 'Legal matter assigned.');
+            window.FAMModal?.showToast?.(partial ? payload.message : type === 'create' ? 'Legal matter created.' : type === 'edit' ? 'Legal matter updated.' : type === 'attach-document' ? 'Supporting document attached.' : type === 'confirm-contract-metadata' ? 'Contract metadata confirmed.' : type.includes('party') ? 'Party updated.' : type.includes('action') ? 'Legal action updated.' : 'Legal matter assigned.');
             await load();
             if (type === 'create' && createdId) triggerInitialSummary(createdId);
             if (id && qs('#legal-details-modal')?.hidden === false) await openDetails(id);
@@ -803,8 +925,6 @@
     }
 
     async function transition(id, action) {
-        const item = await fetchItem(id);
-        state.activeItem = item;
         const config = {
             start_review: { title: 'Review Legal Matter', confirmLabel: 'Start Review' },
             start_processing: { title: 'Begin Processing', confirmLabel: 'Begin Processing' },
@@ -829,6 +949,8 @@
     }
 
     function bind() {
+        if (state.bound) return;
+        state.bound = true;
         qs('#legal-refresh')?.addEventListener('click', () => load().catch(console.error));
         qs('#legal-new-matter')?.addEventListener('click', () => openMatterForm());
         qs('#legal-prev-page')?.addEventListener('click', () => { if (state.page > 1) { state.page--; load().catch(console.error); } });
@@ -857,6 +979,8 @@
             if (type === 'edit') fetchItem(id).then(item => { state.activeItem = item; openMatterForm(item); }).catch(console.error);
             if (type === 'assign') fetchItem(id).then(item => { state.activeItem = item; openAssign(item); }).catch(console.error);
             if (type === 'attach-document') fetchItem(id).then(item => { state.activeItem = item; openAttachDocument(item); }).catch(console.error);
+            if (type === 'analyze-contract-metadata') analyzeContractMetadata(id, Number(action.dataset.documentId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to analyze contract metadata.'));
+            if (type === 'review-contract-metadata') fetchItem(id).then(item => { state.activeItem = item; openContractMetadataForm(item, (item.supportingDocuments || []).find(doc => Number(doc.id) === Number(action.dataset.documentId))); }).catch(console.error);
             if (type === 'add-party') fetchItem(id).then(item => { state.activeItem = item; openPartyForm(item); }).catch(console.error);
             if (type === 'edit-party') fetchItem(id).then(item => { state.activeItem = item; openPartyForm(item, null, (item.parties || []).find(p => Number(p.id) === Number(action.dataset.partyId))); }).catch(console.error);
             if (type === 'dismiss-party') dismissParty(id, Number(action.dataset.partyId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to dismiss party.'));
@@ -864,6 +988,7 @@
             if (type === 'accept-party-suggestion') acceptPartySuggestion(id, Number(action.dataset.suggestionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to accept party suggestion.'));
             if (type === 'dismiss-party-suggestion') dismissPartySuggestion(id, Number(action.dataset.suggestionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to dismiss party suggestion.'));
             if (type === 'reanalyze-parties') reanalyzeParties(id).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to analyze parties.'));
+            if (type === 'reanalyze-ai') reanalyzeAi(id).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to analyze legal matter.'));
             if (type === 'add-action') fetchItem(id).then(item => { state.activeItem = item; openActionForm(item); }).catch(console.error);
             if (type === 'edit-action') fetchItem(id).then(item => { state.activeItem = item; openActionForm(item, (item.actions || []).find(record => Number(record.id) === Number(action.dataset.actionId))); }).catch(console.error);
             if (type === 'review-action-suggestion') fetchItem(id).then(item => { state.activeItem = item; openActionForm(item, null, (item.actionSuggestions || []).find(record => Number(record.id) === Number(action.dataset.suggestionId))); }).catch(console.error);
@@ -873,7 +998,7 @@
             if (type === 'complete-action') completeAction(id, Number(action.dataset.actionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to complete action.'));
             if (type === 'cancel-action') cancelAction(id, Number(action.dataset.actionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to cancel action.'));
             if (type === 'regenerate-summary') regenerateSummary(id).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to refresh AI summary.'));
-            if (['start_review', 'start_processing', 'resolve', 'close', 'cancel', 'reopen'].includes(type)) transition(id, type).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to update matter.'));
+            if (['start_review', 'start_processing', 'resolve', 'close', 'cancel', 'reopen'].includes(type)) transition(id, type).catch(error => window.FAMModal?.showToast?.(validationMessage(error, 'Unable to update matter.')));
         });
         document.addEventListener('submit', event => {
             const form = event.target.closest('[data-legal-form]');
@@ -890,31 +1015,72 @@
             const partyType = event.target.closest('[data-party-type]');
             if (partyType) syncPartyForm(partyType);
         });
-        document.addEventListener('keydown', event => { if (event.key === 'Escape') { closeDialog(); closeDetails(); } });
+        document.addEventListener('keydown', event => {
+            if (event.key !== 'Escape' || event.defaultPrevented) return;
+            const actionDialog = document.getElementById('fam-action-dialog');
+            if (actionDialog && actionDialog.hidden === false) return;
+            if (qs('#legal-dialog')?.hidden === false) {
+                event.preventDefault();
+                closeDialog();
+                return;
+            }
+            if (qs('#legal-details-modal')?.hidden === false) {
+                event.preventDefault();
+                closeDetails();
+            }
+        });
     }
 
     async function regenerateSummary(id) {
         if (!await window.FAMModal.confirm('Regenerate the AI matter summary from the current supporting documents?', { title: 'Regenerate AI Summary', confirmLabel: 'Regenerate' })) return;
-        await window.FAMApi.request(api(`legal/regenerate-summary.php?id=${id}`), { method: 'POST', body: {} });
-        window.FAMModal?.showToast?.('AI matter summary refreshed.');
+        const payload = await window.FAMApi.request(api(`legal/regenerate-summary.php?id=${id}`), { method: 'POST', body: {} });
+        window.FAMModal?.showToast?.(payload.message || 'AI matter summary updated.', payload.data?.ai_summary_status === 'READY' ? {} : { type: 'error' });
         await load();
         if (qs('#legal-details-modal')?.hidden === false) await openDetails(id);
     }
 
+    async function reanalyzeAi(id) {
+        if (state.aiInitialJobs.has(id)) return;
+        if (!await window.FAMModal.confirm('Analyze linked supporting documents for summary, parties, and action suggestions?', { title: 'Re-analyze AI', confirmLabel: 'Analyze' })) return;
+        state.aiInitialJobs.add(id);
+        try {
+            const payload = await window.FAMApi.request(api(`legal/analyze-ai.php?id=${id}&regenerate=1`), { method: 'POST', body: {} });
+            const statuses = payload.data?.section_statuses || {};
+            const failed = Object.values(statuses).some(status => ['FAILED', 'TIMEOUT', 'RATE_LIMITED'].includes(String(status)));
+            if (payload.data?.item) state.activeItem = payload.data.item;
+            window.FAMModal?.showToast?.(payload.message || 'Legal AI analysis completed.', failed ? { type: 'error' } : {});
+            await load();
+            if (qs('#legal-details-modal')?.hidden === false) await openDetails(id);
+        } finally {
+            state.aiInitialJobs.delete(id);
+        }
+    }
+
     async function reanalyzeParties(id) {
         if (!await window.FAMModal.confirm('Analyze linked supporting documents for party suggestions?', { title: 'Re-analyze Parties', confirmLabel: 'Analyze' })) return;
-        await window.FAMApi.request(api(`legal/analyze-parties.php?id=${id}`), { method: 'POST', body: {} });
-        window.FAMModal?.showToast?.('AI party suggestions updated.');
+        const payload = await window.FAMApi.request(api(`legal/analyze-parties.php?id=${id}`), { method: 'POST', body: {} });
+        const status = payload.data?.item?.aiPartiesStatus || '';
+        window.FAMModal?.showToast?.(payload.message || 'AI party suggestions updated.', ['FAILED', 'TIMEOUT', 'RATE_LIMITED'].includes(status) ? { type: 'error' } : {});
         await load();
         if (qs('#legal-details-modal')?.hidden === false) await openDetails(id);
     }
 
     async function reanalyzeActions(id) {
         if (!await window.FAMModal.confirm('Analyze linked supporting documents for action and deadline suggestions?', { title: 'Re-analyze Actions', confirmLabel: 'Analyze' })) return;
-        await window.FAMApi.request(api(`legal/analyze-actions.php?id=${id}`), { method: 'POST', body: {} });
-        window.FAMModal?.showToast?.('AI action suggestions updated.');
+        const payload = await window.FAMApi.request(api(`legal/analyze-actions.php?id=${id}`), { method: 'POST', body: {} });
+        const status = payload.data?.item?.aiActionsStatus || '';
+        window.FAMModal?.showToast?.(payload.message || 'AI action suggestions updated.', ['FAILED', 'TIMEOUT', 'RATE_LIMITED'].includes(status) ? { type: 'error' } : {});
         await load();
         if (qs('#legal-details-modal')?.hidden === false) await openDetails(id);
+    }
+
+    async function analyzeContractMetadata(matterId, documentId) {
+        if (!documentId) return;
+        if (!await window.FAMModal.confirm('Analyze this supporting document for contract metadata?', { title: 'Analyze Contract Metadata', confirmLabel: 'Analyze' })) return;
+        await window.FAMApi.request(api(`legal/analyze-contract-metadata.php?document_id=${documentId}`), { method: 'POST', body: {} });
+        window.FAMModal?.showToast?.('Contract metadata analysis updated.');
+        await load();
+        if (qs('#legal-details-modal')?.hidden === false) await openDetails(matterId);
     }
 
     async function dismissActionSuggestion(matterId, suggestionId) {
@@ -935,8 +1101,13 @@
     }
 
     async function completeAction(matterId, actionId) {
-        if (!await window.FAMModal.confirm('Mark this legal action as completed?', { title: 'Complete Action', confirmLabel: 'Complete' })) return;
-        await window.FAMApi.request(api(`legal/complete-action.php?matter_id=${matterId}&action_id=${actionId}`), { method: 'POST', body: {} });
+        const completionNote = await window.FAMModal.prompt('Enter the completion note or action result.', '', { title: 'Complete Action', inputLabel: 'Completion Note', confirmLabel: 'Complete Action' });
+        if (completionNote === null) return;
+        if (!completionNote.trim()) {
+            window.FAMModal?.showToast?.('Completion note is required.', 'error');
+            return;
+        }
+        await window.FAMApi.request(api(`legal/complete-action.php?matter_id=${matterId}&action_id=${actionId}`), { method: 'POST', body: { completion_note: completionNote.trim() } });
         window.FAMModal?.showToast?.('Legal action completed.');
         await load();
         if (qs('#legal-details-modal')?.hidden === false) await openDetails(matterId);

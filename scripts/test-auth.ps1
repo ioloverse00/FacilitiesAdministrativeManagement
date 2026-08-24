@@ -1,6 +1,6 @@
 param(
     [string] $BaseUrl = "http://localhost/uiv2-components",
-    [string] $Username = "admin"
+    [string] $Username = "gsms-super-admin"
 )
 
 $ErrorActionPreference = "Stop"

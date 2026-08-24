@@ -77,6 +77,20 @@ These statuses do not block availability:
 
 Setup and cleanup buffer columns remain in `facility_reservation`, but the normal Employee Portal form does not expose buffer controls. Current centralized defaults are `0` minutes for setup and cleanup until room-specific policy is added.
 
+## Request Letter and AI Request Summary
+
+New Employee Portal room reservation requests require a reservation-owned Request Letter upload. The file remains attached to Room Reservations only; it is not copied into Document Management and does not create a Document Management record.
+
+Supported request-letter formats are PDF, PNG, JPG, and JPEG with the existing 10 MB maximum. The original Request Letter remains the authoritative source for review. The AI Request Summary is advisory, read-only preview text for Employee and FAM review screens.
+
+After a reservation and Request Letter are saved, the browser triggers one explicit reservation AI processing request. That run prepares the Request Letter once, sends one Gemini 3.6 request, and persists the summary/status on `facility_reservation`. Normal details opens, FAM review opens, and page refreshes read the persisted fields only and do not call Gemini.
+
+The reservation AI service uses `GEMINI_RESERVATION_SUMMARY_MODEL` when configured, then the existing Gemini model fallback convention, with `gemini-3.6-flash` as the final fallback. Timeout is controlled by `GEMINI_RESERVATION_SUMMARY_TIMEOUT_SECONDS` and defaults to 45 seconds.
+
+Retry policy is intentionally small: one retry is allowed only for timeout, transport, or provider service-unavailable failures. Quota/rate limit, authentication, invalid model, malformed output, local file validation, and unreadable-source failures are not retried. Durable statuses distinguish `PENDING`, `READY`, `TIMEOUT`, `RATE_LIMITED`, `FAILED`, and `NO_READABLE_SOURCE`.
+
+AI failure never invalidates or rolls back a saved reservation. If summary generation fails, the reservation remains submitted and the Request Letter remains available through the authorized View/Download endpoints.
+
 ## Check-In / Check-Out
 
 Employee check-in opens 30 minutes before scheduled start and closes at scheduled end.
@@ -124,6 +138,7 @@ Employee endpoints:
 - `GET /api/employee/reservations/show.php?id=<id>`
 - `POST /api/employee/reservations/availability.php`
 - `POST /api/employee/reservations/create.php`
+- `POST /api/employee/reservations/create.php?analyze_ai=1&id=<id>`
 - `POST /api/employee/reservations/cancel.php?id=<id>`
 - `POST /api/employee/reservations/check-in.php?id=<id>`
 - `POST /api/employee/reservations/check-out.php?id=<id>`
@@ -144,6 +159,8 @@ Admin create/check-in/check-out endpoints may exist for compatibility, but norma
 ## Data
 
 - `facility_reservation` stores request, schedule, approval, attendance timestamps, cancellation reason, and remarks.
+- `facility_reservation.ai_request_summary*` stores the persisted advisory AI Request Summary state.
+- `reservation_request_letter` stores reservation-owned Request Letter metadata and storage path.
 - `reservation_history` stores lifecycle transitions and actor user.
 - `reservation_participant` remains the participant/attendance extension point.
 

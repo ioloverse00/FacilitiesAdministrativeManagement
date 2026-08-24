@@ -73,7 +73,7 @@ function usage(): void
 {
     echo "Development-only demo password setup.\n\n";
     echo "Usage:\n";
-    echo "  php scripts/set-demo-passwords.php admin \"NewPassword123!\"\n";
+    echo "  php scripts/set-demo-passwords.php gsms-super-admin \"NewPassword123!\"\n";
     echo "  php scripts/set-demo-passwords.php --all \"NewPassword123!\"\n";
 }
 

@@ -10,7 +10,7 @@ Request:
 
 ```json
 {
-  "username": "admin",
+  "username": "gsms-super-admin",
   "password": "DemoPassword123!"
 }
 ```
@@ -24,7 +24,7 @@ Successful response:
   "data": {
     "user": {
       "id": 1,
-      "username": "admin",
+      "username": "gsms-super-admin",
       "employee_id": 1,
       "employee_number": "EMP-2026-0001",
       "full_name": "Mara Ibarra",
@@ -74,7 +74,7 @@ Logout is idempotent; an already logged-out request still receives a success res
 Seeded accounts contain placeholder password hashes. Set development passwords with the CLI-only script:
 
 ```powershell
-C:\xampp\php\php.exe scripts/set-demo-passwords.php admin "DemoPassword123!"
+C:\xampp\php\php.exe scripts/set-demo-passwords.php gsms-super-admin "DemoPassword123!"
 ```
 
 To update all active demo accounts:
@@ -115,7 +115,7 @@ Same-origin XAMPP requests need no permissive CORS. If the frontend uses a diffe
 PowerShell-friendly test script:
 
 ```powershell
-.\scripts\test-auth.ps1 -BaseUrl "http://localhost/uiv2-components" -Username "admin"
+.\scripts\test-auth.ps1 -BaseUrl "http://localhost/uiv2-components" -Username "gsms-super-admin"
 ```
 
 Manual curl flow:

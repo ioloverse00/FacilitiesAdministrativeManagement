@@ -118,7 +118,7 @@
             `<a href="${esc(api(`documents/view.php?id=${row.id}`))}" target="_blank" rel="noopener">View File</a>`,
             `<a href="${esc(api(`documents/download.php?id=${row.id}`))}" target="_blank" rel="noopener">Download</a>`
         ];
-        if (can('records.edit') || can('records.create')) items.push('<hr aria-hidden="true">', `<button type="button" data-document-action="version" data-document-id="${row.id}">Upload New Version</button>`);
+        if ((can('records.edit') || can('records.create')) && row.status !== 'ARCHIVED') items.push('<hr aria-hidden="true">', `<button type="button" data-document-action="version" data-document-id="${row.id}">Upload New Version</button>`);
         if (can('records.edit') && row.status !== 'ARCHIVED') items.push('<hr aria-hidden="true">', `<button class="document-danger-action" type="button" data-document-action="archive" data-document-id="${row.id}">Archive Document</button>`);
         const menuId = `document-menu-${row.id}`;
         return `<button class="facility-action-toggle" type="button" aria-label="Open document actions" aria-expanded="false" data-document-menu-toggle="${menuId}"><span class="material-symbols-outlined" aria-hidden="true">more_vert</span></button><div id="${menuId}" class="facility-action-dropdown document-action-dropdown hidden" role="menu">${items.join('')}</div>`;
@@ -242,7 +242,7 @@
         const current = item.currentVersion || {};
         const modal = moveToTopLayer(qs('#document-details-modal'));
         modal.hidden = false;
-        const uploadAction = (can('records.edit') || can('records.create')) ? '<button class="btn-primary dashboard-action-button" type="button" data-document-version-from-details><span class="material-symbols-outlined" aria-hidden="true">upgrade</span>Upload New Version</button>' : '';
+        const uploadAction = (can('records.edit') || can('records.create')) && item.status !== 'ARCHIVED' ? '<button class="btn-primary dashboard-action-button" type="button" data-document-version-from-details><span class="material-symbols-outlined" aria-hidden="true">upgrade</span>Upload New Version</button>' : '';
         const archiveAction = can('records.edit') && item.status !== 'ARCHIVED' ? '<button class="btn-secondary dashboard-action-button document-danger-action-button" type="button" data-document-archive-from-details><span class="material-symbols-outlined" aria-hidden="true">archive</span>Archive Document</button>' : '';
         const documentInfo = detailGrid(`${detail('Document Number', item.documentNo)}${detail('Status', title(item.status))}${detail('Category', item.category)}${detail('Confidentiality', title(item.confidentiality))}${detail('Related To', item.relatedTo)}${detail('Current Version', `v${item.currentVersionNumber || current.versionNumber || 1}`)}${detail('Created By', item.createdBy)}${detail('Created At', fmt(item.createdAt))}${detail('Updated At', fmt(item.updatedAt))}${item.description ? detail('Description', item.description, 'detail-item--full') : ''}`);
         const retentionInfo = item.retention ? detailGrid(`${detail('Record Number', item.retention.recordNo)}${detail('Schedule', item.retention.scheduleName)}${detail('Retention Start', item.retention.retentionStartDate)}${detail('Scheduled Review Date', item.retention.scheduledDispositionDate)}${detail('Record Status', title(item.retention.status))}${detail('Legal Hold', title(item.retention.legalHoldStatus))}`) : '';

@@ -87,16 +87,17 @@ ON DUPLICATE KEY UPDATE full_name=VALUES(full_name), department_reference_id=VAL
 INSERT INTO user_account (employee_reference_id, username, password_hash, account_status, last_login_at)
 SELECT e.employee_reference_id, v.username, '$2y$10$abcdefghijklmnopqrstuuM6Dks4xK8vRNhV0N2mP1xG1Jv6bqF9y', 'ACTIVE', v.last_login_at
 FROM (
-SELECT 'EMP-2026-0001' employee_number,'admin' username,'2026-07-26 08:45:00' last_login_at UNION ALL
-SELECT 'EMP-2026-0002','fam.admin','2026-07-26 09:10:00' UNION ALL
+SELECT 'EMP-2026-0001' employee_number,'gsms-super-admin' username,'2026-07-26 08:45:00' last_login_at UNION ALL
+SELECT 'EMP-2026-0002','gsms-fam-admin','2026-07-26 09:10:00' UNION ALL
 SELECT 'EMP-2026-0003','facility.manager','2026-07-26 10:20:00' UNION ALL
 SELECT 'EMP-2026-0004','maintenance.supervisor','2026-07-26 07:50:00' UNION ALL
 SELECT 'EMP-2026-0005','technician.one','2026-07-26 13:05:00' UNION ALL
 SELECT 'EMP-2026-0008','asset.custodian','2026-07-25 16:30:00' UNION ALL
 SELECT 'EMP-2026-0009','reservation.officer','2026-07-26 11:35:00' UNION ALL
-SELECT 'EMP-2026-0010','procurement.officer','2026-07-25 14:00:00' UNION ALL
+SELECT 'EMP-2026-0010','gsms-scm-head','2026-07-25 14:00:00' UNION ALL
 SELECT 'EMP-2026-0011','records.officer','2026-07-26 15:10:00' UNION ALL
-SELECT 'EMP-2026-0012','requestor.user','2026-07-26 12:00:00'
+SELECT 'EMP-2026-0012','requestor.user','2026-07-26 12:00:00' UNION ALL
+SELECT 'EMP-2026-0013','gsms-fin-head',NULL
 ) v JOIN employee_reference e ON e.employee_number=v.employee_number AND e.source_system='HRIS'
 ON DUPLICATE KEY UPDATE employee_reference_id=VALUES(employee_reference_id), account_status=VALUES(account_status), last_login_at=VALUES(last_login_at);
 
@@ -111,6 +112,7 @@ VALUES
 ('ASSET_CUSTODIAN','Asset Custodian','Maintains asset register and transfers.','ACTIVE'),
 ('RESERVATION_OFFICER','Reservation Officer','Reviews room reservations and visitor schedules.','ACTIVE'),
 ('PROCUREMENT_OFFICER','Procurement Officer','Processes FAM procurement requests.','ACTIVE'),
+('FINANCE_APPROVER','Finance Approver','Reviews and approves budget-linked contract approval steps.','ACTIVE'),
 ('RECORDS_OFFICER','Records Officer','Maintains documents, records, and retention schedules.','ACTIVE'),
 ('REQUESTOR','Requestor','Creates and monitors own requests.','ACTIVE'),
 ('APPROVER','Approver','Reviews approval requests.','ACTIVE'),
@@ -168,6 +170,19 @@ ON DUPLICATE KEY UPDATE
     module_code = VALUES(module_code),
     description = VALUES(description);
 
+INSERT INTO permission (permission_code, permission_name, module_code, description) VALUES
+('contract.view','View Contracts','contract','View Contract Management records.'),
+('contract.create','Create Contracts','contract','Create draft Contract Management records.'),
+('contract.edit','Edit Contracts','contract','Edit draft Contract Management records and submit/cancel drafts.'),
+('contract.review','Review Contracts','contract','Review Contract Management records and route lifecycle review states.'),
+('contract.approve','Approve Contracts','contract','Approve or reject Contract Management lifecycle approval in Phase 2.'),
+('contract.activate','Activate Contracts','contract','Activate approved contracts after execution checks.'),
+('contract.terminate','Terminate Contracts','contract','Terminate active contracts with required reason and date.'),
+('contract.archive','Archive Contracts','contract','Archive expired or terminated Contract Management records.'),
+('contract.manage','Manage Contracts','contract','Administer Contract Management records and lifecycle.'),
+('budget.approve','Approve Budgets','budget','Approve budget-linked Contract Management approval steps.')
+ON DUPLICATE KEY UPDATE permission_name=VALUES(permission_name), module_code=VALUES(module_code), description=VALUES(description);
+
 -- 7. Role-Permission Assignments
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
@@ -175,7 +190,15 @@ WHERE r.role_code='SYSTEM_ADMIN';
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
+WHERE r.role_code='SYSTEM_ADMIN' AND p.permission_code LIKE 'contract.%';
+
+INSERT IGNORE INTO role_permission (role_id, permission_id)
+SELECT r.role_id, p.permission_id FROM role r JOIN permission p
 WHERE r.role_code='FAM_ADMIN' AND (p.module_code<>'administration' OR SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','manage'));
+
+INSERT IGNORE INTO role_permission (role_id, permission_id)
+SELECT r.role_id, p.permission_id FROM role r JOIN permission p
+WHERE r.role_code='FAM_ADMIN' AND p.permission_code LIKE 'contract.%';
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
@@ -183,6 +206,11 @@ WHERE r.role_code='FACILITY_MANAGER' AND (
   p.permission_code IN ('dashboard.view','reports.view','reports.export') OR
   (p.module_code IN ('facility_requests','maintenance','reservations') AND SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','create','edit','assign','approve','complete','verify','export'))
 );
+
+INSERT IGNORE INTO role_permission (role_id, permission_id)
+SELECT r.role_id, p.permission_id FROM role r JOIN permission p
+WHERE r.role_code='FACILITY_MANAGER'
+  AND p.permission_code IN ('contract.view','contract.create','contract.edit','contract.review','contract.activate','contract.terminate','contract.archive');
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
@@ -206,6 +234,14 @@ WHERE r.role_code='PROCUREMENT_OFFICER' AND (p.module_code='procurement' AND SUB
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
+WHERE r.role_code='PROCUREMENT_OFFICER' AND p.permission_code='contract.view';
+
+INSERT IGNORE INTO role_permission (role_id, permission_id)
+SELECT r.role_id, p.permission_id FROM role r JOIN permission p
+WHERE r.role_code='FINANCE_APPROVER' AND p.permission_code IN ('dashboard.view','reports.view','budget.approve','contract.view');
+
+INSERT IGNORE INTO role_permission (role_id, permission_id)
+SELECT r.role_id, p.permission_id FROM role r JOIN permission p
 WHERE r.role_code='RECORDS_OFFICER' AND (p.module_code='records' AND SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','create','edit','verify','export','manage')) OR (r.role_code='RECORDS_OFFICER' AND p.permission_code IN ('dashboard.view','reports.view'));
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
@@ -220,21 +256,26 @@ INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
 WHERE r.role_code='AUDITOR' AND p.permission_code IN ('dashboard.view','reports.view','reports.export','records.view','facility_requests.view','maintenance.view','assets.view','reservations.view','procurement.view');
 
+INSERT IGNORE INTO role_permission (role_id, permission_id)
+SELECT r.role_id, p.permission_id FROM role r JOIN permission p
+WHERE r.role_code='AUDITOR' AND p.permission_code='contract.view';
+
 -- 8. User-Role Assignments
 INSERT IGNORE INTO user_role (user_account_id, role_id, assigned_by_user_id)
 SELECT u.user_account_id, r.role_id, admin.user_account_id
 FROM (
-SELECT 'admin' username,'SYSTEM_ADMIN' role_code UNION ALL
-SELECT 'fam.admin','FAM_ADMIN' UNION ALL
+SELECT 'gsms-super-admin' username,'SYSTEM_ADMIN' role_code UNION ALL
+SELECT 'gsms-fam-admin','FAM_ADMIN' UNION ALL
 SELECT 'facility.manager','FACILITY_MANAGER' UNION ALL
 SELECT 'maintenance.supervisor','MAINTENANCE_SUPERVISOR' UNION ALL
 SELECT 'technician.one','TECHNICIAN' UNION ALL
 SELECT 'asset.custodian','ASSET_CUSTODIAN' UNION ALL
 SELECT 'reservation.officer','RESERVATION_OFFICER' UNION ALL
-SELECT 'procurement.officer','PROCUREMENT_OFFICER' UNION ALL
+SELECT 'gsms-scm-head','PROCUREMENT_OFFICER' UNION ALL
+SELECT 'gsms-fin-head','FINANCE_APPROVER' UNION ALL
 SELECT 'records.officer','RECORDS_OFFICER' UNION ALL
 SELECT 'requestor.user','REQUESTOR'
-) v JOIN user_account u ON u.username=v.username JOIN role r ON r.role_code=v.role_code JOIN user_account admin ON admin.username='admin';
+) v JOIN user_account u ON u.username=v.username JOIN role r ON r.role_code=v.role_code JOIN user_account admin ON admin.username='gsms-super-admin';
 
 -- 9. Buildings
 INSERT INTO building (building_code, building_name, address, description, status)
@@ -326,21 +367,21 @@ ON DUPLICATE KEY UPDATE category_name=VALUES(category_name), description=VALUES(
 -- 16. Contract Types
 INSERT INTO contract_type (type_code, type_name, description, status)
 VALUES
-('SVC','Service Contract','Recurring service engagement.','ACTIVE'),
-('SUP','Supply Contract','Supply and delivery agreement.','ACTIVE'),
+('SERVICE','Service Contract','Recurring service engagement.','ACTIVE'),
+('SUPPLY','Supply Contract','Supply and delivery agreement.','ACTIVE'),
 ('LEASE','Lease Agreement','Facility, space, or equipment lease.','ACTIVE'),
-('MNT','Maintenance Contract','Maintenance support agreement.','ACTIVE')
+('MAINTENANCE','Maintenance Contract','Maintenance support agreement.','ACTIVE')
 ON DUPLICATE KEY UPDATE type_name=VALUES(type_name), description=VALUES(description), status=VALUES(status);
 
 -- 17. Retention Schedules
-INSERT INTO retention_schedule (schedule_code, schedule_name, record_category, retention_trigger, retention_period_value, retention_period_unit, disposition_action, legal_basis, description, status, effective_date)
+INSERT INTO retention_schedule (schedule_code, schedule_name, record_category, retention_trigger, retention_trigger_basis, retention_period_value, retention_period_unit, disposition_action, legal_basis, description, status, effective_date)
 VALUES
-('RET-ADM-005','General Administrative Records','Administrative','Record closure',5,'YEAR','REVIEW_THEN_DISPOSE','Fictional agency records policy','Routine administrative records retained for five years.','ACTIVE','2026-01-01'),
-('RET-MNT-007','Maintenance Records','Maintenance','Work completion',7,'YEAR','ARCHIVE','Fictional maintenance retention policy','Maintenance records retained for asset lifecycle review.','ACTIVE','2026-01-01'),
-('RET-AST-010','Asset Records','Assets','Asset disposal',10,'YEAR','ARCHIVE','Fictional property accountability policy','Asset records retained after final disposition.','ACTIVE','2026-01-01'),
-('RET-PR-007','Procurement Records','Procurement','Final payment',7,'YEAR','REVIEW_THEN_DISPOSE','Fictional procurement retention policy','Procurement files retained for audit readiness.','ACTIVE','2026-01-01'),
-('RET-CON-010','Contracts and Agreements','Contracts','Contract expiration',10,'YEAR','ARCHIVE','Fictional contract retention policy','Contracts retained after expiration.','ACTIVE','2026-01-01')
-ON DUPLICATE KEY UPDATE schedule_name=VALUES(schedule_name), record_category=VALUES(record_category), retention_period_value=VALUES(retention_period_value), disposition_action=VALUES(disposition_action), status=VALUES(status);
+('RET-ADM-005','General Administrative Records','Administrative','Record closure','RECORD_CLOSURE',5,'YEAR','REVIEW_THEN_DISPOSE','Fictional agency records policy','Routine administrative records retained for five years.','ACTIVE','2026-01-01'),
+('RET-MNT-007','Maintenance Records','Maintenance','Work completion','WORK_COMPLETION',7,'YEAR','ARCHIVE','Fictional maintenance retention policy','Maintenance records retained for asset lifecycle review.','ACTIVE','2026-01-01'),
+('RET-AST-010','Asset Records','Assets','Asset disposal','ASSET_DISPOSAL',10,'YEAR','ARCHIVE','Fictional property accountability policy','Asset records retained after final disposition.','ACTIVE','2026-01-01'),
+('RET-PR-007','Procurement Records','Procurement','Final payment','FINAL_PAYMENT',7,'YEAR','REVIEW_THEN_DISPOSE','Fictional procurement retention policy','Procurement files retained for audit readiness.','ACTIVE','2026-01-01'),
+('RET-CON-010','Contracts and Agreements','Contracts','Contract expiration','CONTRACT_EXPIRATION',10,'YEAR','ARCHIVE','Fictional contract retention policy','Contracts retained after expiration.','ACTIVE','2026-01-01')
+ON DUPLICATE KEY UPDATE schedule_name=VALUES(schedule_name), record_category=VALUES(record_category), retention_trigger=VALUES(retention_trigger), retention_trigger_basis=VALUES(retention_trigger_basis), retention_period_value=VALUES(retention_period_value), disposition_action=VALUES(disposition_action), status=VALUES(status);
 
 -- 18. System Settings
 INSERT INTO system_setting (setting_key, setting_value, value_type, description, is_public, updated_by_user_id)
@@ -356,7 +397,7 @@ SELECT 'finance.currency','PHP','STRING','Default currency.',TRUE UNION ALL
 SELECT 'finance.fiscal_year_start','01-01','STRING','Fiscal year start month and day.',FALSE UNION ALL
 SELECT 'operations.business_hours','08:00-17:00 Mon-Fri','STRING','Default business hours.',TRUE UNION ALL
 SELECT 'navigation.default_landing_page','/dashboard','STRING','Default landing page after login.',TRUE
-) v LEFT JOIN user_account u ON u.username='admin'
+) v LEFT JOIN user_account u ON u.username='gsms-super-admin'
 ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), value_type=VALUES(value_type), description=VALUES(description), is_public=VALUES(is_public), updated_by_user_id=VALUES(updated_by_user_id);
 
 COMMIT;

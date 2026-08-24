@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Assigned Tasks</title>
+    <script src="../../assets/js/theme.js"></script>
+    <link href="../../assets/css/app.css" rel="stylesheet">
+    <script src="../../assets/js/api-client.js" defer></script>
+    <script src="../../assets/js/navigation.js" defer></script>
+    <script src="../../assets/js/sidebar.js" defer></script>
+    <script src="../../assets/js/profile-dropdown.js" defer></script>
+    <script src="../../assets/js/modal.js" defer></script>
+    <script src="../../assets/js/employee/portal.js" defer></script>
+    <script src="../../assets/js/employee/tasks.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body employee-portal-body" data-active-nav="employee-tasks" data-page-title="Assigned Tasks" data-page-heading="Assigned Tasks" data-page-description="Review and complete work assigned to you.">
+    <div id="app-shell" class="app-shell"><div id="app-sidebar-slot" class="app-sidebar-slot"></div><div class="app-main-panel"><div id="app-header-slot" class="shrink-0"></div><main id="app-content" class="app-main bg-surface-container-lowest"><div id="page-content" class="app-page-content employee-workspace"><div class="employee-shell facility-requests-shell">
+        <header class="facility-page-header employee-request-page-header employee-admin-header">
+            <div class="facility-title-block">
+                <h1 id="page-heading">Assigned Tasks</h1>
+                <p id="page-description">Review and complete work assigned to you.</p>
+            </div>
+        </header>
+        <section class="visitor-summary-strip employee-summary-strip" aria-label="Task summary">
+            <span><strong id="employee-approval-pending-count">0</strong> Pending Tasks</span>
+            <span id="employee-approval-scope" aria-live="polite">Only tasks assigned to your employee account appear here.</span>
+        </section>
+        <section class="facility-section" aria-labelledby="my-tasks-title">
+            <div class="facility-table-card employee-records-card">
+                <div class="facility-table-header">
+                    <div>
+                        <h2 id="my-tasks-title">Task Inbox</h2>
+                        <p>Open a task to view scoped details and available actions.</p>
+                    </div>
+                    <div class="facility-header-controls">
+                        <label class="facility-field facility-filter-field">
+                            <span class="sr-only">Task status</span>
+                            <select id="employee-task-status-filter">
+                                <option value="all">All Tasks</option>
+                                <option value="pending">Pending</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+                <div class="facility-table-scroll employee-records-table-wrap"><table class="facility-data-table employee-data-table"><thead><tr><th scope="col">Task</th><th scope="col">Reference</th><th scope="col">Module</th><th scope="col">Assigned</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead><tbody id="employee-tasks-body" aria-live="polite"></tbody></table></div>
+                <div id="employee-tasks-cards" class="employee-mobile-record-list" aria-live="polite"></div>
+            </div>
+        </section>
+    </div></div><div id="app-footer-slot" class="app-footer-slot"></div></main></div></div>
+</body>
+</html>

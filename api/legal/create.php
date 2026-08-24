@@ -50,7 +50,7 @@ try {
         }
         if ($attachedCount > 0) {
             try {
-                legalMatterSummaryService()->markPending((int) $item['id'], $user);
+                legalMatterAiAnalysisService()->markPending((int) $item['id'], $user);
             } catch (Throwable) {
                 // AI status preparation is secondary. Matter and document creation remain authoritative.
             }

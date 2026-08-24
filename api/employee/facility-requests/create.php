@@ -8,6 +8,9 @@ requireMethod('POST');
 requireCsrfToken();
 
 $user = currentEmployeeUser();
+if (!in_array('facility_requests.create', $user['permissions'] ?? [], true)) {
+    jsonResponse(false, 'You do not have permission to create facility requests.', [], 403);
+}
 $body = readJsonBody();
 
 $body['requested_by_employee_reference_id'] = (int) $user['employee_id'];
@@ -24,4 +27,3 @@ try {
 } catch (Throwable $e) {
     employeeFacilityRequestValidation($e);
 }
-

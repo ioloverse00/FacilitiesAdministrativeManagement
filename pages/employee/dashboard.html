@@ -25,18 +25,18 @@
             <div id="app-header-slot" class="shrink-0"></div>
             <main id="app-content" class="app-main bg-surface-container-lowest">
                 <div id="page-content" class="app-page-content employee-workspace">
-                    <div class="employee-shell">
-                        <header class="employee-page-header">
-                            <div>
-                                <p class="employee-eyebrow">Employee Portal</p>
+                    <div class="employee-shell facility-requests-shell">
+                        <header class="facility-page-header employee-request-page-header employee-admin-header">
+                            <div class="facility-title-block">
                                 <h1>Welcome back, <span id="employee-welcome-name">Employee</span></h1>
                                 <p><strong id="employee-welcome-department">Loading...</strong></p>
                             </div>
-                            <div class="employee-header-actions">
-                                <a class="btn-primary dashboard-action-button" href="facility-requests.html"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Submit Facility Request</a>
-                                <a class="btn-secondary dashboard-action-button" href="room-reservations.html"><span class="material-symbols-outlined" aria-hidden="true">event</span>Request Room</a>
+                            <div class="facility-header-actions">
+                                <a class="btn-primary dashboard-action-button" href="room-reservations.html"><span class="material-symbols-outlined" aria-hidden="true">event</span>Request Room</a>
                             </div>
                         </header>
+
+                        <section id="employee-summary-cards" class="visitor-summary-strip employee-summary-strip" aria-label="My overview" aria-live="polite"></section>
 
                         <section class="employee-home-grid" aria-label="Personal work status">
                             <div class="employee-home-panel" aria-labelledby="employee-attention-title">
@@ -53,13 +53,6 @@
                                 </div>
                                 <div id="employee-next-up" class="employee-next-up" aria-live="polite"></div>
                             </div>
-                        </section>
-
-                        <section class="fam-section" aria-labelledby="employee-summary-title">
-                            <div class="fam-section-heading employee-section-heading">
-                                <h2 id="employee-summary-title">My Overview</h2>
-                            </div>
-                            <div id="employee-summary-cards" class="employee-summary-grid" aria-live="polite"></div>
                         </section>
 
                         <section class="fam-section" aria-labelledby="employee-activity-title">

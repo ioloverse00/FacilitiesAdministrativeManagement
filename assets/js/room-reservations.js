@@ -9,6 +9,12 @@
     const state = { view: window.matchMedia('(max-width: 520px)').matches ? 'day' : 'month', anchor: new Date(), room: 'all', status: 'all', search: '', page: 1, perPage: 10, sort: 'start_datetime', direction: 'asc', events: [], rows: [], pagination: { total: 0, total_pages: 1 }, options: {}, details: new Map() };
     const fmtTime = value => { const d = value instanceof Date ? value : toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'Time unavailable'; };
     const fmtDateTime = value => { const d = toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not applicable'; };
+    const fileSize = bytes => {
+        const value = Number(bytes || 0);
+        if (!value) return 'Size unavailable';
+        if (value < 1048576) return `${Math.ceil(value / 1024)} KB`;
+        return `${(value / 1048576).toFixed(value < 10485760 ? 1 : 0)} MB`;
+    };
     const badge = value => `<span class="facility-badge facility-status-${String(value || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${esc(title(value || 'Not applicable'))}</span>`;
     function reservationQueueStatus(event) {
         const status = String(event.status || '').toUpperCase();
@@ -76,9 +82,9 @@
     }
 
     function eventButton(event) {
-        const time = fmtTime(event.start), room = event.room || 'Room unavailable', purpose = event.purpose || event.reservationNo || 'Reservation';
-        const label = `${time} ${room} ${purpose} ${title(event.status)} ${title(event.approval)}`;
-        return `<button class="reservation-event reservation-event-${tone(event)}" type="button" data-reservation-id="${esc(event.id)}" aria-label="${esc(label)}" title="${esc(label)}"><span class="reservation-event-time">${esc(time)}</span><strong>${esc(room)}</strong><span>${esc(purpose)}</span></button>`;
+        const time = fmtTime(event.start), room = event.room || 'Room unavailable', requestType = title(event.reservationType || 'Reservation');
+        const label = `${time} ${room} ${requestType} ${title(event.status)} ${title(event.approval)}`;
+        return `<button class="reservation-event reservation-event-${tone(event)}" type="button" data-reservation-id="${esc(event.id)}" aria-label="${esc(label)}" title="${esc(label)}"><span class="reservation-event-time">${esc(time)}</span><strong>${esc(room)}</strong><span>${esc(requestType)}</span></button>`;
     }
 
     function days(start, end) {
@@ -117,8 +123,8 @@
 
     function focusRow(event) {
         const room = event.room || 'Room unavailable';
-        const purpose = event.purpose || event.reservationNo || 'Reservation';
-        return `<button class="reservation-focus-row reservation-event-${tone(event)}" type="button" data-reservation-id="${esc(event.id)}"><span>${esc(fmtTime(event.start))}-${esc(fmtTime(event.end))}</span><strong>${esc(room)}</strong><small>${esc(purpose)}</small>${badge(reservationQueueStatus(event))}</button>`;
+        const requestType = title(event.reservationType || 'Reservation');
+        return `<button class="reservation-focus-row reservation-event-${tone(event)}" type="button" data-reservation-id="${esc(event.id)}"><span>${esc(fmtTime(event.start))}-${esc(fmtTime(event.end))}</span><strong>${esc(room)}</strong><small>${esc(requestType)}</small>${badge(reservationQueueStatus(event))}</button>`;
     }
 
     function renderFocusPanels() {
@@ -159,7 +165,7 @@
         qs('reservation-next-page').disabled = state.page >= pages;
         body.innerHTML = state.rows.map(row => {
             const actions = `<button type="button" role="menuitem" data-open-reservation-details="${esc(row.id)}">View Details</button>`;
-            return `<tr><td class="facility-request-number">${trunc(row.reservationNo, 'table-cell-primary')}</td><td><div class="facility-subject-cell table-cell-stack">${trunc(row.purpose || 'Reservation', 'table-cell-primary')}${trunc(`${row.attendees || 0} attendees`, 'table-cell-secondary')}</div></td><td>${trunc(row.room || 'Not assigned')}</td><td class="facility-date-cell">${trunc(fmtDateTime(row.start))}</td><td>${badge(row.status)}</td><td class="facility-actions-cell"><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-reservation-menu="${esc(row.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${esc(row.reservationNo)}">&#8942;</button><div class="facility-action-dropdown hidden" data-reservation-menu-panel="${esc(row.id)}" role="menu">${actions}</div></div></td></tr>`;
+            return `<tr><td class="facility-request-number">${trunc(row.reservationNo, 'table-cell-primary')}</td><td><div class="facility-subject-cell table-cell-stack">${trunc(title(row.reservationType || 'Reservation'), 'table-cell-primary')}${trunc(`${row.attendees || 0} attendees`, 'table-cell-secondary')}</div></td><td>${trunc(row.room || 'Not assigned')}</td><td class="facility-date-cell">${trunc(fmtDateTime(row.start))}</td><td>${badge(row.status)}</td><td class="facility-actions-cell"><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-reservation-menu="${esc(row.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${esc(row.reservationNo)}">&#8942;</button><div class="facility-action-dropdown hidden" data-reservation-menu-panel="${esc(row.id)}" role="menu">${actions}</div></div></td></tr>`;
         }).join('');
         window.FAMTableAudit?.check(body.closest('table'), 'reservation-table');
     }
@@ -167,20 +173,56 @@
     function detail(label, value, className = '') { return `<dl class="facility-detail-row ${esc(className)}"><dt>${esc(label)}</dt><dd>${esc(value || 'Not applicable')}</dd></dl>`; }
     function detailGrid(content) { return `<div class="detail-grid">${content}</div>`; }
     function lines(items, empty) { return items?.length ? `<ul class="facility-detail-list">${items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : `<p>${esc(empty)}</p>`; }
+    function disclosure(titleText, content, open = false) {
+        return `<details class="visitor-detail-disclosure"${open ? ' open' : ''}><summary>${esc(titleText)}</summary>${content}</details>`;
+    }
+    function aiSummary(item) {
+        const ai = item.ai_request_summary || {};
+        if (String(ai.status || '').toUpperCase() === 'READY' && ai.summary) return esc(ai.summary);
+        if (['FAILED', 'NO_READABLE_SOURCE', 'TIMEOUT', 'RATE_LIMITED'].includes(String(ai.status || '').toUpperCase())) return 'AI summary is unavailable. Review the request letter as the authoritative source.';
+        if (String(ai.status || '').toUpperCase() === 'PENDING') return 'AI summary is still being prepared.';
+        return 'AI summary is not available for this reservation.';
+    }
+    function requestLetterLinks(item) {
+        if (!item.request_letter) return '<p>No request letter is attached to this reservation.</p>';
+        const id = encodeURIComponent(item.id);
+        const letter = item.request_letter || {};
+        const meta = [letter.fileName || 'File unavailable', String(letter.extension || letter.mimeType || '').toUpperCase(), fileSize(letter.fileSize), letter.uploadedAt ? `Uploaded ${fmtDateTime(letter.uploadedAt)}` : 'Current request letter'].filter(Boolean).join(' · ');
+        return `<article class="document-file-row reservation-request-letter-row"><div><span class="material-symbols-outlined document-file-icon" aria-hidden="true">description</span><div><strong>Request Letter</strong><small>${esc(meta)}</small></div></div><div class="document-file-actions"><a href="../api/reservations/request-letter.php?id=${id}&mode=view" target="_blank" rel="noopener">View</a><a href="../api/reservations/request-letter.php?id=${id}&mode=download" target="_blank" rel="noopener">Download</a></div></article>`;
+    }
+    function historyTitle(row) {
+        const next = String(row.new_status || '').toUpperCase();
+        const old = String(row.old_status || '').toUpperCase();
+        if (!old && next === 'SUBMITTED') return 'Reservation Created';
+        if (next === 'APPROVED') return 'Reservation Approved';
+        if (next === 'REJECTED') return 'Reservation Rejected';
+        if (next === 'CANCELLED') return 'Reservation Cancelled';
+        if (next === 'CHECKED_IN') return 'Reservation Checked In';
+        if (next === 'COMPLETED') return 'Reservation Completed';
+        if (next === 'NO_SHOW') return 'Reservation Marked No Show';
+        return old && next && old !== next ? 'Reservation Updated' : title(next || 'Reservation Updated');
+    }
+    function historyTimeline(rows) {
+        if (!rows?.length) return '<p>No reservation history recorded.</p>';
+        return `<ol class="facility-history-list visitor-activity-timeline reservation-history-timeline">${rows.map(row => {
+            const timestamp = fmtDateTime(row.changed_at);
+            const reason = row.change_reason ? `<p>${esc(row.change_reason)}</p>` : '';
+            return `<li><strong>${esc(historyTitle(row))}</strong><span>${esc(timestamp)} · Actor unavailable</span>${reason}</li>`;
+        }).join('')}</ol>`;
+    }
     function drawerShell(message, retryId) {
         return `<div class="facility-details-modal-panel"><div class="facility-details-modal-header"><div><p>Room Reservation</p><span class="facility-details-modal-request-number">Details</span><h2 id="reservation-drawer-title">Reservation Details</h2></div><button class="facility-details-modal-close" type="button" data-close-reservation-drawer aria-label="Close reservation details">&times;</button></div><div class="facility-details-modal-body" aria-live="polite"><div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">info</span><span>${esc(message)}</span>${retryId ? `<button class="facility-text-button" type="button" data-reservation-retry="${esc(retryId)}">Retry</button>` : ''}</div></div></div>`;
     }
     function drawerDetails(item) {
         const participants = (item.participants || []).map(p => `${p.full_name || 'Participant'} - ${title(p.participant_role || 'participant')} (${title(p.attendance_status || 'pending')})`);
-        const history = (item.history || []).map(h => `${title(h.old_status || 'Created')} to ${title(h.new_status)} - ${fmtDateTime(h.changed_at)}${h.change_reason ? ` - ${h.change_reason}` : ''}`);
         const actions = adminActions(item);
-        const general = detailGrid(`${detail('Reservation No.', item.reservationNo)}${detail('Status', title(item.status))}${detail('Approval Status', title(item.approval))}${detail('Purpose', item.purpose, 'detail-item--full')}`);
+        const general = detailGrid(`${detail('Reservation No.', item.reservationNo)}${detail('Status', title(item.status))}${detail('Approval Status', title(item.approval))}${detail('Reservation Type', title(item.reservationType || 'MEETING'))}`);
         const schedule = detailGrid(`${detail('Start', fmtDateTime(item.start))}${detail('End', fmtDateTime(item.end))}${detail('Attendee Count', item.attendees)}`);
         const room = detailGrid(`${detail('Facility Space', item.room)}${detail('Building', item.building)}${detail('Floor', item.floor)}${detail('Room Type', item.roomType)}${detail('Capacity', item.capacity)}`);
         const requester = detailGrid(`${detail('Name', item.requester)}${detail('Employee No.', item.employeeNumber)}${detail('Department', item.department)}`);
-        const setup = detailGrid(`${detail('Setup Requirements', item.lifecycle?.setup_requirements, 'detail-item--full')}${detail('Setup Buffer', `${item.lifecycle?.setup_buffer_minutes || 0} min`)}${detail('Cleanup Buffer', `${item.lifecycle?.cleanup_buffer_minutes || 0} min`)}`);
         const attendance = detailGrid(`${detail('Checked In', fmtDateTime(item.lifecycle?.checked_in_at))}${detail('Checked Out', fmtDateTime(item.lifecycle?.checked_out_at))}`);
-        return `<div class="facility-details-modal-panel"><div class="facility-details-modal-header"><div><p>Room Reservation</p><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h2 id="reservation-drawer-title">${esc(item.purpose || 'Reservation Details')}</h2></div><button class="facility-details-modal-close" type="button" data-close-reservation-drawer aria-label="Close reservation details">&times;</button></div><div class="facility-details-modal-body"><div class="facility-detail-grid"><section><h3>General Information</h3>${general}</section><section><h3>Schedule</h3>${schedule}</section><section><h3>Room Information</h3>${room}</section><section><h3>Requester</h3>${requester}</section><section><h3>Setup Requirements</h3>${setup}</section><section><h3>Attendance</h3>${attendance}</section><section><h3>Participants</h3>${lines(participants, 'No participants recorded.')}</section><section class="facility-detail-wide"><h3>History and Remarks</h3>${lines(history, 'No reservation history recorded.')}</section></div></div>${actions ? `<div class="facility-dialog-actions">${actions}</div>` : ''}</div>`;
+        const approvalHistory = `${historyTimeline(item.history || [])}${participants.length ? `<h3 class="reservation-accordion-subhead">Participants</h3>${lines(participants, 'No participants recorded.')}` : ''}`;
+        return `<div class="facility-details-modal-panel"><div class="facility-details-modal-header"><div><p>Room Reservation</p><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h2 id="reservation-drawer-title">${esc(item.room || 'Reservation Details')}</h2></div><button class="facility-details-modal-close" type="button" data-close-reservation-drawer aria-label="Close reservation details">&times;</button></div><div class="facility-details-modal-body"><div class="visitor-detail-accordion reservation-detail-accordion">${disclosure('General Information', general, true)}${disclosure('Schedule', schedule, true)}${disclosure('Room Information', room)}${disclosure('Requester', requester, true)}${disclosure('AI Request Summary', `<p>${aiSummary(item)}</p>`, true)}${disclosure('Request Letter', requestLetterLinks(item), true)}${disclosure('Attendance', attendance)}${disclosure('Approval / History', approvalHistory)}</div></div>${actions ? `<div class="facility-dialog-actions">${actions}</div>` : ''}</div>`;
     }
     function adminActions(item) {
         const status = String(item.status || '').toUpperCase();

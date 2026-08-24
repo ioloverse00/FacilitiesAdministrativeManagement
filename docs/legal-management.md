@@ -26,6 +26,53 @@ Legal Management automatically stores each supporting file as a Document Managem
 
 Each successful attachment logs `LEGAL_DOCUMENT_ATTACHED` in legal matter history and the system activity log.
 
+For `CONTRACT_RELATED` matters, Legal Management also initiates a contract metadata extraction pass after the supporting document is stored and linked. Gemini may extract candidate agreement metadata such as agreement reference, effective date, expiration date, and agreement status from the source document itself. These candidates are not authoritative until an authorized Legal/Admin user reviews, edits if needed, and confirms them through the supporting-document metadata review action.
+
+Closed legal matters remain read-only for matter lifecycle/content changes. Confirming linked document contract metadata is allowed as a controlled Document Management metadata correction because it updates the document record and linked retention calculation, not the closed Legal Matter lifecycle.
+
+## Records Retention Mapping
+
+Each Legal supporting document also creates a linked Records Retention record through Document Management. The retention schedule is chosen from the matter's authoritative `matter_type`, not from AI output and not from the generic `LEGAL_MANAGEMENT` source module.
+
+- `PROPERTY_DAMAGE`, `FACILITY_INCIDENT`, `VISITOR_INCIDENT`, `COMPLAINT`, `CLAIM`, `COMPLIANCE`, and `OTHER` map to General Administrative Records (`RET-ADM-005`) with a record-closure trigger.
+- `CONTRACT_RELATED` maps to Contracts and Agreements (`RET-CON-010`) with a contract-expiration trigger.
+
+`COMPLIANCE` maps to General Administrative Records in the current build because there is no active compliance-specific retention schedule. Existing supporting document links, history, holds, and document versions are preserved when retention mapping is corrected.
+
+For contract-related matters, Records Retention does not read the AI Matter Summary as a trigger source. The required flow is:
+
+PDF evidence -> structured contract metadata extraction -> human confirmation -> canonical `document.expiration_date` -> deterministic `CONTRACT_EXPIRATION` trigger resolution -> policy eligibility calculation -> optional Records Retention AI disposition decision support.
+
+If extraction fails or the candidate expiration date is not confirmed, the linked retention record remains `WAITING_FOR_TRIGGER`.
+
+## Unified Legal AI Analysis
+
+Before the single-call refactor, Legal AI used three independent Gemini requests:
+
+- PDF/source bundle -> Summary Gemini call
+- PDF/source bundle -> Party extraction Gemini call
+- PDF/source bundle -> Action suggestions Gemini call
+
+After the refactor, the normal initial and full re-analysis flow is:
+
+- PDF/source bundle -> one Gemini 3.6 call -> structured Summary + Parties + Actions + key dates -> section-level validation and persistence
+
+The authoritative bundled service is `LegalMatterAiAnalysisService`, exposed by `api/legal/analyze-ai.php`. It resolves readable Legal supporting sources once, sends them once, and persists each valid section independently. Existing targeted endpoints remain available as explicit legacy/section recovery routes, but the browser no longer calls them automatically after create or during the main Re-analyze AI action.
+
+The unified request keeps the configured Legal model at `gemini-3.6-flash` through `GEMINI_LEGAL_ANALYSIS_MODEL`, falling back to existing Legal summary/model conventions. Timeout uses `GEMINI_LEGAL_ANALYSIS_TIMEOUT_SECONDS`, with backward-compatible fallback to the previous Legal summary timeout. Retry policy allows at most one retry for timeout, transport, or provider service-unavailable failures. It does not retry quota/rate-limit, authentication, invalid model, malformed structured output, or local validation failures.
+
+Section outcomes are authoritative for rendering:
+
+- Summary can persist `READY`, `NO_READABLE_SOURCE`, or `FAILED` without requiring party/action success.
+- Parties can populate AI-owned `legal_matter_party` rows, return a legitimate empty result, or fail validation independently.
+- Actions continue to create pending `legal_matter_action_suggestion` rows only; official actions are never created by AI without human review.
+
+Human-maintained parties, accepted official actions, dismissed suggestion history, lifecycle transitions, assignment, retention, Contract integration, Document Management ownership, and legal hold behavior are unchanged.
+
+Safe history includes run-level events such as `LEGAL_AI_ANALYSIS_STARTED`, `LEGAL_AI_ANALYSIS_COMPLETED`, and `LEGAL_AI_ANALYSIS_FAILED`, plus section events where useful for UI status and audit. History metadata may include model, elapsed milliseconds, source count, attempt count, and section statuses. Raw prompts, raw Gemini payloads, source file contents, API keys, provider headers, and chain-of-thought are not stored.
+
+Known browser limitation: after create, the matter is saved first and the browser triggers one background `analyze-ai.php` request. If the page is closed immediately, the saved matter and documents remain authoritative; an authorized user can later use Re-analyze AI to run the bundled analysis.
+
 ## AI-Powered Matter Summarization
 
 When a new matter is submitted with readable supporting evidence, Legal Management performs one controlled Gemini request after the matter and document records are saved. The result is stored on the legal matter as derived metadata:
@@ -50,7 +97,7 @@ AI states:
 - `NO_READABLE_SOURCE`: no supported readable source was available
 - `STALE`: supporting documents changed after the previous result
 
-Adding a supporting document or uploading a new current document version marks existing AI summary output stale. Authorized users may explicitly regenerate the AI Matter Summary. Viewing matter details never triggers Gemini calls.
+Adding a supporting document or uploading a new current document version marks existing AI summary output stale. Authorized users may explicitly run Re-analyze AI, which refreshes summary, parties, and action suggestions through one bundled Gemini call. Viewing matter details never triggers Gemini calls.
 
 ## Safety and Human Authority
 
@@ -203,16 +250,20 @@ Authorized Legal/Admin users can:
 - accept an AI suggestion into an official action
 - dismiss an AI suggestion
 
+When a new matter is created with readable supporting evidence, the UI triggers one unified AI request for summary, party extraction, and action/deadline suggestion extraction. This AI task is secondary to matter creation. A provider failure must not block the saved legal matter or create fake parties/actions.
+
 AI action analysis reads only current readable supporting documents linked to the selected Legal Matter, plus matter metadata such as type, priority, and existing actions/suggestions for duplicate avoidance. It creates pending suggestions, not official actions. The prompt must not invent legal obligations, statutory deadlines, court dates, hearings, sanctions, penalties, responsibility, liability, or conclusions.
 
 Accepted suggestions become official `legal_matter_action` records with `source = AI` only after Admin/Head review. The reviewer may edit the title, type, description, assignee, and due date before creating the official action. Dismissed suggestions remain non-authoritative and suppress the same unchanged suggestion from immediately returning during re-analysis.
 
-AI suggestions alone do not block resolution or closure. Only official `PENDING` and `IN_PROGRESS` actions are tracked for due soon/overdue behavior and resolution guards.
+Official actions follow a strict lifecycle: `PENDING` actions must be started before they can be completed. Execution controls for Start and Complete are available only while the parent Legal Matter is `IN_PROGRESS`, and the server enforces the same rule. Completing an official action requires a completion note/action result, plus the existing completed timestamp and actor metadata. Completed and cancelled actions are terminal.
+
+AI suggestions alone do not block resolution or closure. Only official `PENDING` and `IN_PROGRESS` actions are tracked for due soon/overdue behavior and resolution guards. Completed and cancelled official actions do not block resolution.
 
 Legal matters cannot be resolved or closed while official actions remain `PENDING` or `IN_PROGRESS`. The server blocks the transition with:
 
 `Complete or cancel all open legal actions before resolving this matter.`
 
-The Legal Matter details modal shows `Actions & Deadlines` as a collapsed accordion below `Parties Involved` and above assignment/supporting document sections. The AI Matter Summary remains always visible, and Matter Information remains the only expanded accordion by default.
+The Legal Matter details modal shows `Assignment` above `Parties Involved`, followed by `Actions & Deadlines` and supporting document sections. The AI Matter Summary remains always visible, and Matter Information remains the only expanded accordion by default.
 
 Safe history events include `LEGAL_ACTION_ADDED`, `LEGAL_ACTION_UPDATED`, `LEGAL_ACTION_STARTED`, `LEGAL_ACTION_COMPLETED`, `LEGAL_ACTION_CANCELLED`, `LEGAL_AI_ACTIONS_ANALYZED`, `LEGAL_AI_ACTION_SUGGESTED`, `LEGAL_AI_ACTION_ACCEPTED`, and `LEGAL_AI_ACTION_DISMISSED`. These events log workflow context without storing supporting document contents.

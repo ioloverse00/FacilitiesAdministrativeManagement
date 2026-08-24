@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Organization' . DIRECTORY_SEPARATOR . 'FamEmployeeEligibilityService.php';
+
 final class LegalMatterActionService
 {
     public const ACTION_TYPES = [
@@ -27,7 +29,7 @@ final class LegalMatterActionService
     private const OPEN_STATUSES = ['PENDING', 'IN_PROGRESS'];
     private const DUE_SOON_DAYS = 3;
 
-    public function __construct(private readonly PDO $pdo)
+    public function __construct(private readonly PDO $pdo, private readonly ?FamEmployeeEligibilityService $employeeEligibility = null)
     {
     }
 
@@ -67,7 +69,7 @@ final class LegalMatterActionService
         if ($matter === null) {
             return null;
         }
-        $this->assertMatterNotClosed($matter);
+        $this->assertMatterActionMutable($matter);
         $clean = $this->validateAction($data);
         if ($this->duplicateActionExists($matterId, $clean)) {
             throw new InvalidArgumentException(json_encode(['action' => 'This legal action already exists for this matter.'], JSON_THROW_ON_ERROR));
@@ -109,7 +111,7 @@ final class LegalMatterActionService
     {
         $action = $this->action($matterId, $actionId);
         if ($action === null) return null;
-        $this->assertMatterNotClosed($this->matter($matterId));
+        $this->assertMatterActionMutable($this->matter($matterId));
         if (in_array((string) $action['status'], ['COMPLETED', 'CANCELLED'], true)) {
             throw new InvalidArgumentException(json_encode(['status' => 'Completed or cancelled actions cannot be edited.'], JSON_THROW_ON_ERROR));
         }
@@ -136,7 +138,7 @@ final class LegalMatterActionService
     {
         $suggestion = $this->suggestion($matterId, $suggestionId);
         if ($suggestion === null) return null;
-        $this->assertMatterNotClosed($this->matter($matterId));
+        $this->assertMatterActionMutable($this->matter($matterId));
         $payload = [
             'title' => $data['title'] ?? $suggestion['suggested_title'],
             'action_type' => $data['action_type'] ?? $suggestion['suggested_action_type'],
@@ -155,7 +157,7 @@ final class LegalMatterActionService
     {
         $suggestion = $this->suggestion($matterId, $suggestionId);
         if ($suggestion === null) return null;
-        $this->assertMatterNotClosed($this->matter($matterId));
+        $this->assertMatterActionMutable($this->matter($matterId));
         $reason = $this->nullableText($data['reason'] ?? null, 255);
         $this->markSuggestion($suggestionId, 'DISMISSED', (int) $user['id'], null, $reason);
         $this->history($matterId, 'LEGAL_AI_ACTION_DISMISSED', 'AI action suggestion dismissed.', ['suggestion_id' => $suggestionId, 'reason' => $reason], $user);
@@ -167,9 +169,13 @@ final class LegalMatterActionService
         return $this->transitionAction($matterId, $actionId, 'IN_PROGRESS', $user);
     }
 
-    public function completeAction(int $matterId, int $actionId, array $user): ?array
+    public function completeAction(int $matterId, int $actionId, array $data, array $user): ?array
     {
-        return $this->transitionAction($matterId, $actionId, 'COMPLETED', $user);
+        $completionNote = $this->text($data['completion_note'] ?? ($data['action_result'] ?? ''), 2000);
+        if ($completionNote === '') {
+            throw new InvalidArgumentException(json_encode(['completion_note' => 'Enter the completion note or action result.'], JSON_THROW_ON_ERROR));
+        }
+        return $this->transitionAction($matterId, $actionId, 'COMPLETED', $user, null, $completionNote);
     }
 
     public function cancelAction(int $matterId, int $actionId, array $data, array $user): ?array
@@ -183,7 +189,7 @@ final class LegalMatterActionService
 
     public function storeSuggestion(int $matterId, array $clean): bool
     {
-        $this->assertMatterNotClosed($this->matter($matterId));
+        $this->assertMatterActionMutable($this->matter($matterId));
         if ($this->duplicateSuggestionOrActionExists($matterId, $clean)) {
             return false;
         }
@@ -212,18 +218,25 @@ final class LegalMatterActionService
         return self::ACTION_TYPES;
     }
 
-    private function transitionAction(int $matterId, int $actionId, string $next, array $user, ?string $reason = null): ?array
+    private function transitionAction(int $matterId, int $actionId, string $next, array $user, ?string $reason = null, ?string $completionNote = null): ?array
     {
         $action = $this->action($matterId, $actionId);
         if ($action === null) return null;
-        $this->assertMatterNotClosed($this->matter($matterId));
+        $matter = $this->matter($matterId);
+        $this->assertMatterActionMutable($matter);
+        if (in_array($next, ['IN_PROGRESS', 'COMPLETED'], true) && ($matter['status'] ?? '') !== 'IN_PROGRESS') {
+            throw new InvalidArgumentException(json_encode(['status' => 'Legal actions can only be started or completed after the matter begins processing.'], JSON_THROW_ON_ERROR));
+        }
         $current = (string) $action['status'];
         $allowed = [
-            'PENDING' => ['IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
+            'PENDING' => ['IN_PROGRESS', 'CANCELLED'],
             'IN_PROGRESS' => ['COMPLETED', 'CANCELLED'],
             'COMPLETED' => [],
             'CANCELLED' => [],
         ];
+        if ($current === 'PENDING' && $next === 'COMPLETED') {
+            throw new InvalidArgumentException(json_encode(['status' => 'Start this legal action before marking it completed.'], JSON_THROW_ON_ERROR));
+        }
         if (!in_array($next, $allowed[$current] ?? [], true)) {
             throw new InvalidArgumentException(json_encode(['status' => "Cannot move action from $current to $next."], JSON_THROW_ON_ERROR));
         }
@@ -234,7 +247,9 @@ final class LegalMatterActionService
         if ($next === 'COMPLETED') {
             $sets[] = 'completed_at = NOW()';
             $sets[] = 'completed_by_user_id = :user_id';
+            $sets[] = 'completion_note = :completion_note';
             $params['user_id'] = (int) $user['id'];
+            $params['completion_note'] = $completionNote;
             $event = 'LEGAL_ACTION_COMPLETED';
             $description = 'Legal action completed.';
         } elseif ($next === 'CANCELLED') {
@@ -247,7 +262,11 @@ final class LegalMatterActionService
             $description = 'Legal action cancelled.';
         }
         $this->pdo->prepare('UPDATE legal_matter_action SET ' . implode(', ', $sets) . ' WHERE legal_matter_id = :matter_id AND legal_matter_action_id = :action_id AND deleted_at IS NULL')->execute($params);
-        $this->history($matterId, $event, $description, ['action_id' => $actionId, 'from' => $current, 'to' => $next], $user);
+        $metadata = ['action_id' => $actionId, 'from' => $current, 'to' => $next];
+        if ($completionNote !== null) {
+            $metadata['completion_note'] = $completionNote;
+        }
+        $this->history($matterId, $event, $description, $metadata, $user);
         return $this->matterPayload($matterId);
     }
 
@@ -261,10 +280,10 @@ final class LegalMatterActionService
         $errors = [];
         if ($title === '') $errors['title'] = 'Enter an action title.';
         if (!in_array($type, self::ACTION_TYPES, true)) $errors['action_type'] = 'Choose a valid action type.';
-        if ($assignedId !== null && !$this->employeeExists($assignedId)) $errors['assigned_employee_reference_id'] = 'Choose a valid employee.';
         if ($errors) {
             throw new InvalidArgumentException(json_encode($errors, JSON_THROW_ON_ERROR));
         }
+        ($this->employeeEligibility ?? new FamEmployeeEligibilityService($this->pdo))->assertCrossDepartmentContact($assignedId);
         return [
             'title' => $title,
             'action_type' => $type,
@@ -352,6 +371,7 @@ final class LegalMatterActionService
             'sourceDocumentId' => $row['source_document_id'] === null ? null : (int) $row['source_document_id'],
             'deadlineBasis' => (string) ($row['deadline_basis'] ?? ''),
             'recommendationReason' => (string) ($row['recommendation_reason'] ?? ''),
+            'completionNote' => (string) ($row['completion_note'] ?? ''),
             'createdAt' => (string) $row['created_at'],
             'completedAt' => (string) ($row['completed_at'] ?? ''),
             'cancelledAt' => (string) ($row['cancelled_at'] ?? ''),
@@ -407,10 +427,10 @@ final class LegalMatterActionService
         return ['actions' => $this->actionsForMatter($matterId), 'actionSuggestions' => $this->suggestionsForMatter($matterId)];
     }
 
-    private function assertMatterNotClosed(?array $matter): void
+    private function assertMatterActionMutable(?array $matter): void
     {
-        if (($matter['status'] ?? '') === 'CLOSED') {
-            throw new InvalidArgumentException(json_encode(['status' => 'This legal matter is closed and is read-only.'], JSON_THROW_ON_ERROR));
+        if (in_array((string) ($matter['status'] ?? ''), ['RESOLVED', 'CLOSED', 'CANCELLED'], true)) {
+            throw new InvalidArgumentException(json_encode(['status' => 'This legal matter is read-only for legal action changes.'], JSON_THROW_ON_ERROR));
         }
     }
 

@@ -12,7 +12,31 @@
 
     function visibleModalElements() {
         return Array.from(document.querySelectorAll('.facility-dialog, .facility-details-modal, .facility-drawer, .admin-org-drawer-backdrop, [data-modal-backdrop]'))
-            .filter(element => !element.hidden && !element.classList.contains('hidden'));
+            .filter(element => !element.hidden && !element.classList.contains('hidden'))
+            .sort((a, b) => modalLayerValue(a) - modalLayerValue(b) || documentPositionValue(a, b));
+    }
+
+    function modalLayerValue(element) {
+        const value = Number.parseInt(window.getComputedStyle(element).zIndex, 10);
+        return Number.isFinite(value) ? value : 0;
+    }
+
+    function documentPositionValue(a, b) {
+        if (a === b) return 0;
+        return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    }
+
+    function bringToFront(element) {
+        if (!element) return element;
+        document.body.appendChild(element);
+        const highestLayer = visibleModalElements()
+            .filter(modal => modal !== element)
+            .reduce((highest, modal) => Math.max(highest, modalLayerValue(modal)), 9999);
+        const nextLayer = highestLayer + 20;
+        element.style.setProperty('z-index', String(nextLayer), 'important');
+        const panel = element.querySelector('.facility-dialog-panel, .facility-details-modal-panel, [role="dialog"]');
+        panel?.style.setProperty('z-index', String(nextLayer + 1), 'important');
+        return element;
     }
 
     function syncModalScrollLock() {
@@ -57,6 +81,7 @@
         lastFocusedElement = document.activeElement;
         modal.classList.remove('hidden');
         modal.setAttribute('aria-hidden', 'false');
+        bringToFront(modal);
         void modal.offsetWidth;
         modal.classList.remove('opacity-0');
         modal.classList.add('opacity-100');
@@ -94,14 +119,20 @@
         }, 200);
     }
 
-    function showToast(toastMessage) {
+    function showToast(toastMessage, options = {}) {
         const container = document.getElementById('dash-toast-container');
         if (!container) return;
 
+        const normalizedOptions = typeof options === 'string' ? { type: options } : options;
+        const message = String(toastMessage ?? '');
+        const inferredError = /\b(error|failed|unable|invalid|required|denied|rejected|validation)\b/i.test(message);
+        const type = normalizedOptions.type || (inferredError ? 'error' : 'success');
+        const icon = type === 'error' ? 'close' : 'check';
+
         const toast = document.createElement('div');
-        toast.className = 'fam-toast fam-toast-enter';
-        toast.innerHTML = '<span class="fam-toast-icon material-symbols-outlined" aria-hidden="true">check</span><span class="fam-toast-message"></span>';
-        toast.querySelector('.fam-toast-message').textContent = toastMessage;
+        toast.className = `fam-toast fam-toast-${type} fam-toast-enter`;
+        toast.innerHTML = `<span class="fam-toast-icon material-symbols-outlined" aria-hidden="true">${icon}</span><span class="fam-toast-message"></span>`;
+        toast.querySelector('.fam-toast-message').textContent = message;
         container.appendChild(toast);
         void toast.offsetWidth;
         toast.classList.remove('fam-toast-enter');
@@ -110,7 +141,6 @@
             setTimeout(() => toast.remove(), 300);
         }, 3500);
     }
-
     function confirmAction(modalId, toastMessage) {
         closeModal(modalId);
         showToast(toastMessage);
@@ -160,6 +190,7 @@
                     </div>
                 </form>
             `;
+            bringToFront(modal);
             const finish = value => {
                 animateElementClose(modal, () => {
                     modal.innerHTML = '';
@@ -273,6 +304,12 @@
             if (topModal) trapFocus(event, topModal);
             if (event.key !== 'Escape') return;
             closeTableMenus();
+            if (topModal?.id === 'fam-action-dialog') {
+                event.preventDefault();
+                event.stopPropagation();
+                topModal.querySelector('[data-action-dialog-cancel]')?.click();
+                return;
+            }
             document.querySelectorAll('[data-modal-backdrop]:not(.hidden)').forEach(modal => closeModal(modal.id));
         });
 
@@ -289,7 +326,8 @@
         confirmAction,
         showToast,
         confirm: confirmDialog,
-        prompt: promptDialog
+        prompt: promptDialog,
+        bringToFront
     };
 
     window.FAMModal.closeElement = animateElementClose;

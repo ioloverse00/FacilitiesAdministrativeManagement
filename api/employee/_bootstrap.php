@@ -31,6 +31,12 @@ function currentEmployeeUser(): array
             'access_denied_reason' => 'missing_employee_linkage',
         ], 403);
     }
+    if (($data['persona']['is_employee_portal_allowed'] ?? false) !== true) {
+        jsonResponse(false, 'Employee Portal access is restricted to authorized external department heads.', [
+            'access_denied_reason' => 'persona_not_employee_portal',
+            'persona' => $data['persona']['code'] ?? PersonaService::UNAUTHORIZED_OR_UNRESOLVED,
+        ], 403);
+    }
 
     return $data;
 }
@@ -49,4 +55,3 @@ function employeePermissions(array $user): array
 
     return array_values(array_unique($existing));
 }
-

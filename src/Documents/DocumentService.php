@@ -265,17 +265,85 @@ final class DocumentService
         return is_string($reference) && $reference !== '' ? $reference : null;
     }
 
-    public function uploadVersion(int $documentId, array $data, array $file, array $user): ?array
+    public function storeContractMetadataCandidate(int $documentId, array $candidate, int $userId): void
+    {
+        $payload = [
+            'agreement_reference' => $this->nullableText($candidate['agreement_reference'] ?? null, 100),
+            'effective_date' => $this->nullableDate($candidate['effective_date'] ?? null),
+            'expiration_date' => $this->nullableDate($candidate['expiration_date'] ?? null),
+            'agreement_status' => $this->agreementStatus($candidate['agreement_status'] ?? null),
+            'confidence' => is_array($candidate['confidence'] ?? null) ? $candidate['confidence'] : [],
+        ];
+        $this->pdo->prepare("UPDATE document SET contract_metadata_status = 'PENDING_CONFIRMATION', contract_metadata_candidate_json = :candidate, contract_metadata_source = 'AI_EXTRACTED', updated_at = NOW() WHERE document_id = :id AND deleted_at IS NULL")->execute([
+            'candidate' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            'id' => $documentId,
+        ]);
+        $this->logActivity('DOCUMENT_CONTRACT_METADATA_ANALYZED', 'Contract Metadata Analyzed', $documentId, $userId);
+    }
+
+    public function storeContractMetadataUnavailable(int $documentId, string $stage, int $userId): void
+    {
+        $this->pdo->prepare("UPDATE document SET contract_metadata_status = 'UNAVAILABLE', contract_metadata_candidate_json = :candidate, contract_metadata_source = 'AI_UNAVAILABLE', updated_at = NOW() WHERE document_id = :id AND deleted_at IS NULL")->execute([
+            'candidate' => json_encode(['failure_stage' => mb_substr($stage, 0, 80)], JSON_THROW_ON_ERROR),
+            'id' => $documentId,
+        ]);
+        $this->logActivity('DOCUMENT_CONTRACT_METADATA_UNAVAILABLE', 'Contract Metadata Unavailable', $documentId, $userId);
+    }
+
+    public function confirmContractMetadata(int $documentId, array $data, array $user): ?array
     {
         if ($this->show($documentId) === null) {
             return null;
         }
+        $agreementReference = $this->nullableText($data['agreement_reference'] ?? null, 100);
+        $effectiveDate = $this->nullableDate($data['effective_date'] ?? null);
+        $expirationDate = $this->nullableDate($data['expiration_date'] ?? null);
+        $agreementStatus = $this->agreementStatus($data['agreement_status'] ?? null);
+        if ($effectiveDate !== null && $expirationDate !== null && $effectiveDate > $expirationDate) {
+            throw new InvalidArgumentException(json_encode(['expiration_date' => 'Expiration date must be on or after the effective date.'], JSON_THROW_ON_ERROR));
+        }
+        $conflict = $this->contractMetadataConflict($documentId, $expirationDate);
+        if ($conflict !== null) {
+            throw new InvalidArgumentException(json_encode(['expiration_date' => 'Another confirmed contract document for this legal matter has a different expiration date (' . $conflict['document_number'] . ': ' . $conflict['expiration_date'] . '). Review the linked contract documents before confirming.'], JSON_THROW_ON_ERROR));
+        }
 
-        $upload = $this->validateUpload($file);
+        $this->pdo->beginTransaction();
+        try {
+            $this->pdo->prepare("UPDATE document SET effective_date = :effective_date, expiration_date = :expiration_date, agreement_reference = :agreement_reference, agreement_status = :agreement_status, contract_metadata_status = 'CONFIRMED', contract_metadata_source = 'AI_EXTRACTED_CONFIRMED', contract_metadata_confirmed_by_user_id = :user_id, contract_metadata_confirmed_at = NOW(), updated_at = NOW() WHERE document_id = :id AND deleted_at IS NULL")->execute([
+                'effective_date' => $effectiveDate,
+                'expiration_date' => $expirationDate,
+                'agreement_reference' => $agreementReference,
+                'agreement_status' => $agreementStatus,
+                'user_id' => (int) $user['id'],
+                'id' => $documentId,
+            ]);
+            $this->resolveLinkedRetentionRecords($documentId, (int) $user['id']);
+            $this->logActivity('DOCUMENT_CONTRACT_METADATA_CONFIRMED', 'Contract Metadata Confirmed', $documentId, (int) $user['id']);
+            $this->pdo->commit();
+        } catch (Throwable $exception) {
+            $this->pdo->rollBack();
+            throw $exception;
+        }
+
+        return $this->show($documentId);
+    }
+
+    public function uploadVersion(int $documentId, array $data, array $file, array $user): ?array
+    {
         $summary = $this->text($data['change_summary'] ?? '', 1000);
         $stored = null;
         $this->pdo->beginTransaction();
         try {
+            $documentStatus = $this->documentStatusForUpdate($documentId);
+            if ($documentStatus === null) {
+                $this->pdo->rollBack();
+                return null;
+            }
+            if ($documentStatus === 'ARCHIVED') {
+                throw new InvalidArgumentException(json_encode(['status' => 'Archived documents cannot receive new versions.'], JSON_THROW_ON_ERROR));
+            }
+
+            $upload = $this->validateUpload($file);
             $next = (int) $this->scalar('SELECT COALESCE(MAX(version_number),0) + 1 FROM document_version WHERE document_id = :id AND deleted_at IS NULL', ['id' => $documentId]);
             $stored = $this->storeUploadedFile($upload, $documentId, $next);
             $this->pdo->prepare('UPDATE document_version SET is_current = FALSE WHERE document_id = :id')->execute(['id' => $documentId]);
@@ -293,6 +361,15 @@ final class DocumentService
         }
 
         return $this->show($documentId);
+    }
+
+    private function documentStatusForUpdate(int $documentId): ?string
+    {
+        $statement = $this->pdo->prepare('SELECT document_status FROM document WHERE document_id = :id AND deleted_at IS NULL FOR UPDATE');
+        $statement->execute(['id' => $documentId]);
+        $status = $statement->fetchColumn();
+
+        return $status === false ? null : (string) $status;
     }
 
     public function archive(int $documentId, array $user): ?array
@@ -453,15 +530,15 @@ final class DocumentService
 
     private function createLinkedRecord(int $documentId, string $documentNumber, array $clean, array $user): void
     {
-        $scheduleId = $this->retentionScheduleFor($clean['related_module']);
+        $scheduleId = $this->resolveRetentionScheduleForSource($clean['related_module'], $clean['related_reference']);
         if ($scheduleId === null || empty($user['employee_id'])) {
             return;
         }
         $schedule = $this->retentionSchedule($scheduleId);
-        $retentionStart = $clean['document_date'] ?? date('Y-m-d');
-        $dispositionDate = RetentionService::calculateScheduledDispositionDate($retentionStart, $schedule);
+        $recordDate = $clean['document_date'] ?? date('Y-m-d');
+        $triggerBasis = RetentionService::triggerBasisForSchedule($schedule);
         $recordNumber = $this->nextRecordNumber();
-        $statement = $this->pdo->prepare('INSERT INTO record (record_number, record_title, record_description, record_type, retention_schedule_id, originating_department_reference_id, record_owner_employee_reference_id, source_module, source_entity_type, source_entity_id, record_date, retention_start_date, scheduled_disposition_date, record_status, confidentiality_level, created_by_user_id, updated_by_user_id, created_at, updated_at) VALUES (:record_number, :title, :description, :type, :schedule_id, :department_id, :owner_id, :source_module, :source_entity_type, NULL, :record_date, :retention_start, :disposition_date, :status, :confidentiality, :created_by, :updated_by, NOW(), NOW())');
+        $statement = $this->pdo->prepare('INSERT INTO record (record_number, record_title, record_description, record_type, retention_schedule_id, originating_department_reference_id, record_owner_employee_reference_id, source_module, source_entity_type, source_entity_id, record_date, retention_start_date, retention_trigger_basis, retention_trigger_date, policy_eligibility_date, administrative_review_date_override, scheduled_disposition_date, retention_trigger_state, record_status, confidentiality_level, created_by_user_id, updated_by_user_id, created_at, updated_at) VALUES (:record_number, :title, :description, :type, :schedule_id, :department_id, :owner_id, :source_module, :source_entity_type, NULL, :record_date, :retention_start, :trigger_basis, NULL, NULL, NULL, NULL, :trigger_state, :status, :confidentiality, :created_by, :updated_by, NOW(), NOW())');
         $recordType = ucwords(strtolower(str_replace('_', ' ', $clean['related_module'])));
         $statement->execute([
             'record_number' => $recordNumber,
@@ -473,9 +550,10 @@ final class DocumentService
             'owner_id' => (int) $user['employee_id'],
             'source_module' => strtolower($clean['related_module']),
             'source_entity_type' => $clean['related_reference'] ?: 'DOCUMENT',
-            'record_date' => $retentionStart,
-            'retention_start' => $retentionStart,
-            'disposition_date' => $dispositionDate,
+            'record_date' => $recordDate,
+            'retention_start' => $recordDate,
+            'trigger_basis' => $triggerBasis,
+            'trigger_state' => 'WAITING_FOR_TRIGGER',
             'status' => $clean['status'],
             'confidentiality' => $clean['confidentiality_level'],
             'created_by' => (int) $user['id'],
@@ -487,6 +565,7 @@ final class DocumentService
             'document_id' => $documentId,
             'user_id' => (int) $user['id'],
         ]);
+        (new RetentionService($this->pdo))->resolveAndApplyRetentionTrigger($recordId, $schedule, null, (int) $user['id']);
     }
 
     private function nextDocumentNumber(): string
@@ -509,15 +588,55 @@ final class DocumentService
         return sprintf('REC-%s-%04d', $year, $next);
     }
 
-    private function retentionScheduleFor(string $relatedModule): ?int
+    private function resolveRetentionScheduleForSource(string $sourceModule, string $sourceReference, array $sourceContext = []): ?int
+    {
+        $module = strtoupper($sourceModule);
+        if ($module === 'LEGAL_MANAGEMENT') {
+            return $this->retentionScheduleForLegalMatter($sourceReference);
+        }
+
+        return $this->retentionScheduleForModule($module);
+    }
+
+    private function retentionScheduleForLegalMatter(string $matterNumber): ?int
+    {
+        $matterType = '';
+        if (trim($matterNumber) !== '') {
+            $matterType = (string) $this->scalar(
+                'SELECT matter_type FROM legal_matter WHERE deleted_at IS NULL AND matter_number = :matter_number LIMIT 1',
+                ['matter_number' => $matterNumber]
+            );
+        }
+
+        $code = match (strtoupper($matterType)) {
+            'CONTRACT_RELATED' => 'RET-CON-010',
+            'PROPERTY_DAMAGE',
+            'FACILITY_INCIDENT',
+            'VISITOR_INCIDENT',
+            'COMPLAINT',
+            'CLAIM',
+            'COMPLIANCE',
+            'OTHER' => 'RET-ADM-005',
+            default => 'RET-ADM-005',
+        };
+
+        return $this->scheduleIdByCode($code);
+    }
+
+    private function retentionScheduleForModule(string $relatedModule): ?int
     {
         $code = match ($relatedModule) {
             'FACILITY_RESERVATION' => 'RET-ADM-005',
             'VISITOR_MANAGEMENT' => 'RET-ADM-005',
-            'LEGAL_MANAGEMENT' => 'RET-CON-010',
             'CONTRACT_MANAGEMENT' => 'RET-CON-010',
             default => 'RET-ADM-005',
         };
+
+        return $this->scheduleIdByCode($code);
+    }
+
+    private function scheduleIdByCode(string $code): ?int
+    {
         $id = $this->scalar("SELECT retention_schedule_id FROM retention_schedule WHERE schedule_code = :code AND status = 'ACTIVE' LIMIT 1", ['code' => $code]);
         if ($id !== false && $id !== null) {
             return (int) $id;
@@ -603,6 +722,14 @@ final class DocumentService
             'confidentiality' => (string) $row['confidentiality_level'],
             'status' => (string) $row['document_status'],
             'documentDate' => (string) ($row['document_date'] ?? ''),
+            'effectiveDate' => (string) ($row['effective_date'] ?? ''),
+            'expirationDate' => (string) ($row['expiration_date'] ?? ''),
+            'agreementReference' => (string) ($row['agreement_reference'] ?? ''),
+            'agreementStatus' => (string) ($row['agreement_status'] ?? ''),
+            'contractMetadataStatus' => (string) ($row['contract_metadata_status'] ?? 'NOT_ANALYZED'),
+            'contractMetadataSource' => (string) ($row['contract_metadata_source'] ?? ''),
+            'contractMetadataConfirmedAt' => (string) ($row['contract_metadata_confirmed_at'] ?? ''),
+            'contractMetadataCandidate' => $this->decodeJsonObject($row['contract_metadata_candidate_json'] ?? null),
             'createdBy' => (string) ($row['uploaded_by_name'] ?? 'System'),
             'owner' => (string) ($row['owner_name'] ?? ''),
             'createdAt' => (string) $row['created_at'],
@@ -662,6 +789,49 @@ final class DocumentService
         ];
     }
 
+    private function resolveLinkedRetentionRecords(int $documentId, int $userId): void
+    {
+        $statement = $this->pdo->prepare('SELECT r.record_id, rs.* FROM record_document rd INNER JOIN record r ON r.record_id = rd.record_id AND r.deleted_at IS NULL LEFT JOIN retention_schedule rs ON rs.retention_schedule_id = r.retention_schedule_id WHERE rd.document_id = :id');
+        $statement->execute(['id' => $documentId]);
+        $retention = new RetentionService($this->pdo);
+        foreach ($statement->fetchAll() as $row) {
+            if (!is_array($row) || empty($row['record_id'])) {
+                continue;
+            }
+            $retention->resolveAndApplyRetentionTrigger((int) $row['record_id'], $row, null, $userId);
+        }
+    }
+
+    private function contractMetadataConflict(int $documentId, ?string $expirationDate): ?array
+    {
+        if ($expirationDate === null) {
+            return null;
+        }
+
+        $statement = $this->pdo->prepare("SELECT other.document_number, other.expiration_date
+            FROM record_document rd
+            INNER JOIN record r ON r.record_id = rd.record_id AND r.deleted_at IS NULL
+            INNER JOIN record r2 ON r2.deleted_at IS NULL
+                AND r2.source_module = r.source_module
+                AND r2.source_entity_type COLLATE utf8mb4_unicode_ci = r.source_entity_type COLLATE utf8mb4_unicode_ci
+            INNER JOIN record_document rd2 ON rd2.record_id = r2.record_id
+            INNER JOIN document other ON other.document_id = rd2.document_id AND other.deleted_at IS NULL
+            WHERE rd.document_id = :document_id
+              AND r.source_module = 'legal_management'
+              AND other.document_id <> :document_id
+              AND other.contract_metadata_status = 'CONFIRMED'
+              AND other.expiration_date IS NOT NULL
+              AND other.expiration_date <> :expiration_date
+            LIMIT 1");
+        $statement->execute([
+            'document_id' => $documentId,
+            'expiration_date' => $expirationDate,
+        ]);
+        $row = $statement->fetch();
+
+        return is_array($row) ? $row : null;
+    }
+
     private function relatedLabel(string $packed): string
     {
         if ($packed === '') {
@@ -702,6 +872,35 @@ final class DocumentService
             return null;
         }
         return (new DateTimeImmutable((string) $value))->format('Y-m-d');
+    }
+
+    private function nullableDate(mixed $value): ?string
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+        return $this->date($value);
+    }
+
+    private function nullableText(mixed $value, int $max): ?string
+    {
+        $text = $this->text($value ?? '', $max);
+        return $text === '' ? null : $text;
+    }
+
+    private function agreementStatus(mixed $value): ?string
+    {
+        $status = strtoupper($this->text($value ?? '', 30));
+        return in_array($status, ['ACTIVE', 'EXPIRED', 'TERMINATED', 'RENEWED', 'UNKNOWN'], true) ? $status : null;
+    }
+
+    private function decodeJsonObject(mixed $value): array
+    {
+        if (!is_string($value) || trim($value) === '') {
+            return [];
+        }
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? $decoded : [];
     }
 
     private function text(mixed $value, int $max): string

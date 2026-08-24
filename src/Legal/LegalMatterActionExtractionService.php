@@ -47,6 +47,15 @@ final class LegalMatterActionExtractionService
         return $this->payload($matterId);
     }
 
+    public function markPending(int $matterId, array $user): void
+    {
+        $matter = $this->matter($matterId);
+        if ($matter === null || ($matter['status'] ?? '') === 'CLOSED') {
+            return;
+        }
+        $this->history($matterId, 'LEGAL_AI_ACTIONS_PENDING', 'AI action recommendation extraction queued.', ['status' => 'PENDING'], $user);
+    }
+
     private function validateCandidate(array $candidate, array $matter): ?array
     {
         $title = $this->nullableText($candidate['title'] ?? null, 255);
@@ -241,15 +250,39 @@ final class LegalMatterActionExtractionService
     {
         $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
         if (!is_string($body)) throw new RuntimeException('GEMINI_REQUEST_INVALID');
+        $timeout = max(5, (int) env('GEMINI_LEGAL_ACTION_TIMEOUT_SECONDS', 60));
+        $headers = ['Content-Type: application/json', 'Accept: application/json'];
+        $attempts = 0;
+        $maxAttempts = 2;
+        $lastException = null;
+
+        while ($attempts < $maxAttempts) {
+            $attempts++;
+            try {
+                return $this->postJsonOnce($url, $body, $headers, $timeout, $payload);
+            } catch (RuntimeException $exception) {
+                $lastException = $exception;
+                if ($attempts >= $maxAttempts || !$this->isRetryableFailure($exception->getMessage())) {
+                    throw $exception;
+                }
+            }
+        }
+
+        throw $lastException ?? new RuntimeException('GEMINI_REQUEST_FAILED');
+    }
+
+    private function postJsonOnce(string $url, string $body, array $headers, int $timeout, array $payload): array
+    {
         $ch = curl_init($url);
         if ($ch === false) throw new RuntimeException('GEMINI_TRANSPORT_ERROR');
-        curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body, CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'], CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => max(5, (int) env('GEMINI_LEGAL_ACTION_TIMEOUT_SECONDS', 35))]);
+        curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body, CURLOPT_HTTPHEADER => $headers, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => $timeout]);
         $raw = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $error = curl_error($ch);
+        $errorCode = (int) curl_errno($ch);
         curl_close($ch);
         if ($raw === false || $status < 200 || $status >= 300) {
-            throw new RuntimeException($error !== '' ? 'GEMINI_TRANSPORT_ERROR' : 'GEMINI_HTTP_' . $status);
+            throw new RuntimeException($this->geminiError((string) ($raw ?: ''), $status, $error, $errorCode, $payload));
         }
         $decoded = json_decode((string) $raw, true);
         if (!is_array($decoded)) throw new RuntimeException('GEMINI_RESPONSE_INVALID');
@@ -309,4 +342,38 @@ final class LegalMatterActionExtractionService
     private function text(mixed $value, int $max): string { return mb_substr(trim((string) $value), 0, $max); }
     private function nullableText(mixed $value, int $max): ?string { $text = $this->text($value ?? '', $max); return $text === '' ? null : $text; }
     private function safeFailureStage(string $message): string { $stage = strtok($message, ' '); return is_string($stage) && preg_match('/^[A-Z0-9_]+$/', $stage) ? $stage : 'AI_REQUEST_FAILED'; }
+    private function isRetryableFailure(string $message): bool { $stage = strtok($message, ' '); return in_array($stage, ['GEMINI_TIMEOUT', 'GEMINI_TRANSPORT_ERROR', 'GEMINI_SERVICE_UNAVAILABLE'], true); }
+    private function geminiError(string $raw, int $status, string $transportError, int $transportErrorCode, array $payload): string
+    {
+        $category = match (true) {
+            defined('CURLE_OPERATION_TIMEDOUT') && $transportErrorCode === CURLE_OPERATION_TIMEDOUT => 'GEMINI_TIMEOUT',
+            $transportError !== '' => 'GEMINI_TRANSPORT_ERROR',
+            $status === 400 => 'GEMINI_HTTP_400',
+            $status === 401 || $status === 403 => 'GEMINI_KEY_INVALID',
+            $status === 404 => 'GEMINI_MODEL_INVALID',
+            $status === 408 || $status === 504 => 'GEMINI_TIMEOUT',
+            $status === 429 => 'GEMINI_QUOTA_OR_RATE_LIMIT',
+            $status >= 500 => 'GEMINI_SERVICE_UNAVAILABLE',
+            $status > 0 => 'GEMINI_HTTP_' . $status,
+            default => 'GEMINI_REQUEST_FAILED',
+        };
+        $decoded = json_decode($raw, true);
+        $error = is_array($decoded) && is_array($decoded['error'] ?? null) ? $decoded['error'] : [];
+        $details = [
+            'category' => $category,
+            'http_status' => $status,
+            'gemini_status' => is_string($error['status'] ?? null) ? $error['status'] : null,
+            'gemini_code' => isset($error['code']) ? (int) $error['code'] : null,
+            'message' => $this->sanitizeGeminiMessage(is_string($error['message'] ?? null) ? $error['message'] : $transportError),
+            'structured_schema_included' => isset($payload['generationConfig']['response_schema']),
+        ];
+        return $category . ' ' . json_encode($details, JSON_UNESCAPED_SLASHES);
+    }
+    private function sanitizeGeminiMessage(string $message): string
+    {
+        $message = preg_replace('/key=[^&\s]+/i', 'key=[redacted]', $message) ?? $message;
+        $message = preg_replace('/AIza[0-9A-Za-z_\-]+/', '[redacted-api-key]', $message) ?? $message;
+        $message = preg_replace('/[A-Za-z0-9+\/]{120,}={0,2}/', '[redacted-long-token]', $message) ?? $message;
+        return trim($message);
+    }
 }
