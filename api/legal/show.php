@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . '_live_bootstrap.php';
 requireMethod('GET');
 $user = currentApiUser();
-LegalPolicy::requirePermission($user, 'legal.manage');
+LegalPolicy::requirePermission($user, 'legal.view');
 $item = legalMatterService()->show(idParam());
 if ($item === null) {
     jsonResponse(false, 'Legal matter not found.', [], 404);

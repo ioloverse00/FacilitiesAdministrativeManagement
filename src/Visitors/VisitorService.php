@@ -83,9 +83,9 @@ final class VisitorService
         if ($errors) throw new InvalidArgumentException(json_encode($errors));
         $this->pdo->beginTransaction();
         try {
-            $this->assertNoActiveVisitForEmail($this->blankNull($data['email_address'] ?? null));
             $visitorType = (string)$data['visitor_type'];
-            $visitorId = $this->createVisitor($data);
+            $visitorId = $this->resolveVisitor($data);
+            $this->assertNoActiveVisitForIdentity($visitorId, $data);
             $reference = $this->nextReference();
             $badgeId = (int)$data['badge_id'];
             $stmt = $this->pdo->prepare("INSERT INTO visit (visit_number, visitor_id, visitor_type, host_employee_reference_id, destination_department_reference_id, destination_space_id, purpose, visit_description, scheduled_arrival, scheduled_departure, actual_time_in, actual_time_out, visit_status, approval_status, registration_source, company_or_school, identity_verified, identity_verified_at, identity_verified_by_user_id, visitor_badge_id, remarks, created_by_user_id, updated_by_user_id, created_at, updated_at) VALUES (:ref,:visitor_id,:visitor_type,:host,:department,:space,:purpose,:description,NOW(),NULL,NOW(),NULL,'CHECKED_IN','NOT_REQUIRED','WALK_IN',:company,1,NOW(),:verified_by,:badge_id,:remarks,:created_by,:updated_by,NOW(),NOW())");
@@ -116,6 +116,18 @@ final class VisitorService
         return array_map(fn($row) => $this->safeBadgeAssignment($row), $stmt->fetchAll());
     }
 
+    public function activeVisitForIdentity(array $data): ?array
+    {
+        $visitorId = $this->findVisitorByIdentity($data, false) ?? 0;
+        $row = $this->findActiveVisitForIdentity($visitorId, $data, false);
+        if (!$row) return null;
+        return [
+            'visitor_reference' => $row['visit_number'],
+            'status' => $row['visit_status'],
+            'badge_code' => $row['badge_number'],
+        ];
+    }
+
     public function checkOutByBadge(string $badgeNumber, ?string $remarks, array $user): array
     {
         $badgeNumber = trim($badgeNumber);
@@ -144,8 +156,8 @@ final class VisitorService
         if ($errors) throw new InvalidArgumentException(json_encode($errors));
         $this->pdo->beginTransaction();
         try {
-            $this->assertNoActiveVisitForEmail($this->blankNull($data['email_address'] ?? null));
-            $visitorId = $this->createVisitor($data);
+            $visitorId = $this->resolveVisitor($data);
+            $this->assertNoActiveVisitForIdentity($visitorId, $data);
             $reference = $this->nextReference();
             $status = (($data['approval_status'] ?? '') === 'PENDING') ? 'PENDING_REVIEW' : 'ARRIVED';
             $approval = $status === 'PENDING_REVIEW' ? 'PENDING' : 'NOT_REQUIRED';
@@ -244,7 +256,8 @@ final class VisitorService
         if (!in_array((string)($d['visitor_type'] ?? ''), self::RECEPTION_TYPES, true)) $e['visitor_type'] = 'Select a valid visitor type.';
         if (!in_array((string)($d['identification_type'] ?? ''), array_diff(self::ID_TYPES, ['NONE']), true)) $e['identification_type'] = 'ID type is required.';
         if (trim((string)($d['visit_purpose'] ?? '')) === '') $e['visit_purpose'] = 'Purpose is required.';
-        if (empty($d['destination_department_reference_id']) && empty($d['facility_space_id'])) $e['destination'] = 'Select a department or facility/room for this visit.';
+        if (empty($d['destination_department_reference_id'])) $e['destination_department_reference_id'] = 'Select a department for this visit.';
+        if (empty($d['facility_space_id'])) $e['facility_space_id'] = 'Select a facility/room for this visit.';
         if (empty($d['badge_id'])) $e['badge_id'] = 'Select an available visitor badge.';
         if (($d['email_address'] ?? '') !== '' && !filter_var((string)$d['email_address'], FILTER_VALIDATE_EMAIL)) $e['email_address'] = 'Enter a valid email address.';
         if (($d['mobile_number'] ?? '') !== '' && !preg_match('/^[0-9+() .-]{7,30}$/', (string)$d['mobile_number'])) $e['mobile_number'] = 'Enter a valid mobile number.';
@@ -389,8 +402,13 @@ final class VisitorService
     }
 
     private function createVisitor(array $d): int { $this->pdo->prepare("INSERT INTO visitor (visitor_uuid, first_name, middle_name, last_name, organization_name, visitor_type, email_address, contact_number, id_type, identification_last4, status, created_at, updated_at) VALUES (UUID(),:first,NULL,:last,:org,:type,:email,:mobile,:id_type,:last4,'ACTIVE',NOW(),NOW())")->execute($this->visitorParams($d)); return (int)$this->pdo->lastInsertId(); }
-    private function assertNoActiveVisitForEmail(?string $email): void { if ($email === null) return; $s=$this->pdo->prepare("SELECT vi.visit_id FROM visit vi INNER JOIN visitor v ON v.visitor_id=vi.visitor_id WHERE LOWER(v.email_address)=:email AND vi.deleted_at IS NULL AND v.deleted_at IS NULL AND vi.visit_status IN ('PENDING_REVIEW','APPROVED','ARRIVED','CHECKED_IN') LIMIT 1 FOR UPDATE"); $s->execute(['email'=>strtolower(trim($email))]); if ($s->fetchColumn() !== false) throw new DomainException('You already have an active visitor registration. Please complete or check out from your current visit before registering another visit.'); }
+    private function resolveVisitor(array $d): int { $existing=$this->findVisitorByIdentity($d); if($existing){ $this->pdo->prepare("UPDATE visitor SET first_name=COALESCE(NULLIF(:first,''),first_name),last_name=COALESCE(NULLIF(:last,''),last_name),organization_name=COALESCE(:org,organization_name),visitor_type=COALESCE(:type,visitor_type),email_address=COALESCE(:email,email_address),contact_number=COALESCE(:mobile,contact_number),id_type=COALESCE(:id_type,id_type),identification_last4=COALESCE(:last4,identification_last4),updated_at=NOW() WHERE visitor_id=:id")->execute($this->visitorParams($d)+['id'=>$existing]); return $existing; } return $this->createVisitor($d); }
+    private function findVisitorByIdentity(array $d, bool $lock = true): ?int { $params=$this->visitorParams($d); $suffix=$lock?' FOR UPDATE':''; if($params['id_type'] && $params['last4']){ $s=$this->pdo->prepare("SELECT visitor_id FROM visitor WHERE deleted_at IS NULL AND id_type=:id_type AND identification_last4=:last4 ORDER BY updated_at DESC, visitor_id DESC LIMIT 1".$suffix); $s->execute(['id_type'=>$params['id_type'],'last4'=>$params['last4']]); $id=$s->fetchColumn(); if($id) return (int)$id; } if($params['email']){ $s=$this->pdo->prepare("SELECT visitor_id FROM visitor WHERE deleted_at IS NULL AND LOWER(email_address)=:email ORDER BY updated_at DESC, visitor_id DESC LIMIT 1".$suffix); $s->execute(['email'=>strtolower($params['email'])]); $id=$s->fetchColumn(); if($id) return (int)$id; } if($params['mobile']){ $s=$this->pdo->prepare("SELECT visitor_id FROM visitor WHERE deleted_at IS NULL AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(contact_number,' ',''),'-',''),'(',''),')',''),'.','')=:mobile ORDER BY updated_at DESC, visitor_id DESC LIMIT 1".$suffix); $s->execute(['mobile'=>$this->normalizedMobile($params['mobile'])]); $id=$s->fetchColumn(); if($id) return (int)$id; } return null; }
+    private function assertNoActiveVisitForIdentity(int $visitorId, array $d): void { $row=$this->findActiveVisitForIdentity($visitorId,$d,true); if($row) throw new DomainException('This visitor already has an active visit ('.(string)$row['visit_number'].'). Check out the existing visit before creating another.'); }
+    private function findActiveVisitForIdentity(int $visitorId, array $d, bool $lock = true): ?array { $params=$this->visitorParams($d); $where=[]; $query=[]; if($visitorId>0){ $where[]='vi.visitor_id=:visitor_id'; $query['visitor_id']=$visitorId; } if($params['id_type'] && $params['last4']){ $where[]='(v.id_type=:id_type AND v.identification_last4=:last4)'; $query['id_type']=$params['id_type']; $query['last4']=$params['last4']; } if($params['email']){ $where[]='LOWER(v.email_address)=:email'; $query['email']=strtolower($params['email']); } if($params['mobile']){ $where[]="REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(v.contact_number,' ',''),'-',''),'(',''),')',''),'.','')=:mobile"; $query['mobile']=$this->normalizedMobile($params['mobile']); } if(!$where) return null; $suffix=$lock?' FOR UPDATE':''; $s=$this->pdo->prepare("SELECT vi.visit_number, vi.visit_status, bg.badge_number FROM visit vi INNER JOIN visitor v ON v.visitor_id=vi.visitor_id LEFT JOIN visitor_badge bg ON bg.visitor_badge_id=vi.visitor_badge_id WHERE vi.deleted_at IS NULL AND v.deleted_at IS NULL AND vi.visit_status IN ('PENDING_REVIEW','APPROVED','ARRIVED','CHECKED_IN') AND (".implode(' OR ',$where).") ORDER BY vi.created_at DESC, vi.visit_id DESC LIMIT 1".$suffix); $s->execute($query); $row=$s->fetch(); return is_array($row)?$row:null; }
+    private function assertNoActiveVisitForEmail(?string $email): void { if ($email === null) return; $this->assertNoActiveVisitForIdentity(0, ['full_name'=>'Visitor Check','visitor_type'=>'GUEST','email_address'=>$email]); }
     private function visitorParams(array $d): array { [$first,$last]=$this->nameParts((string)$d['full_name']); return ['first'=>$first,'last'=>$last,'org'=>$this->blankNull($d['organization_name'] ?? null),'type'=>$d['visitor_type'],'email'=>$this->blankNull($d['email_address'] ?? null),'mobile'=>$this->blankNull($d['mobile_number'] ?? null),'id_type'=>$this->blankNull($d['identification_type'] ?? null),'last4'=>$this->blankNull($d['identification_last4'] ?? null)]; }
+    private function normalizedMobile(string $value): string { return preg_replace('/[\\s().-]+/', '', trim($value)) ?? trim($value); }
     private function nameParts(string $name): array { $name=trim(preg_replace('/\s+/', ' ', $name)); $parts=explode(' ', $name); if(count($parts)===1) return [$name,'Visitor']; $last=array_pop($parts); return [implode(' ', $parts), $last]; }
     private function nextReference(): string { $year=(int)date('Y'); $this->pdo->exec("INSERT INTO visitor_sequence (sequence_year,last_number) VALUES ($year,0) ON DUPLICATE KEY UPDATE sequence_year=sequence_year"); $stmt=$this->pdo->query("SELECT last_number FROM visitor_sequence WHERE sequence_year=$year FOR UPDATE"); $next=(int)$stmt->fetchColumn()+1; $this->pdo->exec("UPDATE visitor_sequence SET last_number=$next WHERE sequence_year=$year"); return sprintf('VIS-%d-%04d',$year,$next); }
     private function lockedVisit(int $id): ?array { $s=$this->pdo->prepare('SELECT * FROM visit WHERE visit_id=:id AND deleted_at IS NULL FOR UPDATE'); $s->execute(['id'=>$id]); $r=$s->fetch(); return is_array($r)?$r:null; }

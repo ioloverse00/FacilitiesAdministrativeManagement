@@ -48,6 +48,12 @@ final class RetentionService
         return (int) $pdo->query($sql)->fetchColumn();
     }
 
+    public static function countRecordsRequiringReview(PDO $pdo): int
+    {
+        $sql = self::baseSelectStatic('COUNT(DISTINCT r.record_id)') . ' WHERE r.deleted_at IS NULL AND (' . self::dueStateSql('OVERDUE') . ' OR ' . self::dueStateSql('DUE_FOR_REVIEW') . ')';
+        return (int) $pdo->query($sql)->fetchColumn();
+    }
+
     public static function calculateScheduledDispositionDate(?string $startDate, ?array $schedule): ?string
     {
         if ($startDate === null || $startDate === '' || $schedule === null || self::isPermanentSchedule($schedule)) {
@@ -405,7 +411,7 @@ final class RetentionService
     public function attentionQueue(int $limit = 5): array
     {
         $limit = max(1, min(20, $limit));
-        $where = "r.deleted_at IS NULL AND (" . self::dueStateSql('OVERDUE') . ' OR ' . self::dueStateSql('DUE_FOR_REVIEW') . ' OR ' . self::dueStateSql('WAITING_FOR_TRIGGER') . ')';
+        $where = "r.deleted_at IS NULL AND (" . self::dueStateSql('OVERDUE') . ' OR ' . self::dueStateSql('DUE_FOR_REVIEW') . ')';
         $rows = $this->rows($this->baseSelect($this->selectColumns()) . " WHERE $where ORDER BY r.scheduled_disposition_date ASC, r.updated_at DESC LIMIT $limit");
         return array_map(fn (array $row): array => $this->shape($row), $rows);
     }

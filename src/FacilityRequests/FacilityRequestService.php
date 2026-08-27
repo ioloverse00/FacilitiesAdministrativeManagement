@@ -124,7 +124,6 @@ final class FacilityRequestService
         return ['items'=>array_map(fn($r)=>$this->shape($r), $stmt->fetchAll()), 'pagination'=>['page'=>$page,'per_page'=>$perPage,'total'=>$total,'total_pages'=>(int)ceil($total/$perPage)], 'summary'=>$this->summary($where, $params), 'filters'=>['search'=>$query['search']??'', 'status'=>$query['status']??null]];
     }
 
-
     private function summary(string $where, array $params): array
     {
         $sql = "SELECT

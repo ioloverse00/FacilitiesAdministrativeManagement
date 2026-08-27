@@ -104,7 +104,16 @@
     async function verifyProtectedSession() {
         if (!window.FAMApi) return true;
         try {
-            await window.FAMApi.me();
+            const auth = await window.FAMApi.me();
+            const persona = auth.user?.persona || {};
+            if (persona.is_fam_portal_allowed !== true) {
+                if (persona.is_employee_portal_allowed === true) {
+                    window.location.replace('../pages/employee/dashboard.html');
+                } else {
+                    window.location.replace('../errors/403.html');
+                }
+                return false;
+            }
             return true;
         } catch (error) {
             if (error.status === 401) {

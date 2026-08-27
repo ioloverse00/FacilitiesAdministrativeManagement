@@ -16,6 +16,8 @@
         return `${(value / 1048576).toFixed(value < 10485760 ? 1 : 0)} MB`;
     };
     const badge = value => `<span class="facility-badge facility-status-${String(value || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${esc(title(value || 'Not applicable'))}</span>`;
+    const can = permission => (window.FAMApi?.currentUser?.permissions || []).includes(permission);
+    const canAny = permissions => permissions.some(can);
     function reservationQueueStatus(event) {
         const status = String(event.status || '').toUpperCase();
         const approval = String(event.approval || '').toUpperCase();
@@ -226,13 +228,16 @@
     }
     function adminActions(item) {
         const status = String(item.status || '').toUpperCase();
+        const approval = String(item.approval || '').toUpperCase();
+        const canApprove = can('reservations.approve');
+        const canOperate = canAny(['reservations.edit', 'reservations.manage']);
         const buttons = [];
-        if (status === 'SUBMITTED') {
+        if (canApprove && status === 'SUBMITTED') {
             buttons.push(`<button class="btn-primary dashboard-action-button" type="button" data-reservation-action="approve" data-action-id="${esc(item.id)}">Approve</button>`);
             buttons.push(`<button class="btn-secondary dashboard-action-button" type="button" data-reservation-action="reject" data-action-id="${esc(item.id)}">Reject</button>`);
         }
-        if (['SUBMITTED','APPROVED'].includes(status)) buttons.push(`<button class="btn-secondary dashboard-action-button" type="button" data-reservation-action="cancel" data-action-id="${esc(item.id)}">Cancel Reservation</button>`);
-        if (status === 'APPROVED' && String(item.approval || '').toUpperCase() === 'APPROVED' && !item.lifecycle?.checked_in_at && toDate(item.end) < new Date()) {
+        if (canOperate && ['SUBMITTED','APPROVED'].includes(status)) buttons.push(`<button class="btn-secondary dashboard-action-button" type="button" data-reservation-action="cancel" data-action-id="${esc(item.id)}">Cancel Reservation</button>`);
+        if (canOperate && status === 'APPROVED' && approval === 'APPROVED' && !item.lifecycle?.checked_in_at && toDate(item.end) < new Date()) {
             buttons.push(`<button class="btn-secondary dashboard-action-button" type="button" data-reservation-action="no-show" data-action-id="${esc(item.id)}">Mark No Show</button>`);
         }
         return buttons.join('');

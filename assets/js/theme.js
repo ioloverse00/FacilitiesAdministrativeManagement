@@ -2,6 +2,8 @@
     const storageKey = 'fam-theme-preference';
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const valid = new Set(['light', 'dark', 'system']);
+    // Dark Mode temporarily disabled pending post-core-UAT visual validation.
+    const darkModeTemporarilyDisabled = true;
 
     function storedPreference() {
         try {
@@ -12,16 +14,18 @@
     }
 
     function preference() {
+        if (darkModeTemporarilyDisabled) return 'light';
         const saved = storedPreference();
         return valid.has(saved) ? saved : 'system';
     }
 
     function resolved(pref = preference()) {
+        if (darkModeTemporarilyDisabled) return 'light';
         return pref === 'system' ? (mediaQuery.matches ? 'dark' : 'light') : pref;
     }
 
     function apply(pref = preference(), emit = true) {
-        const nextPreference = valid.has(pref) ? pref : 'system';
+        const nextPreference = darkModeTemporarilyDisabled ? 'light' : (valid.has(pref) ? pref : 'system');
         const resolvedTheme = resolved(nextPreference);
         document.documentElement.dataset.themePreference = nextPreference;
         document.documentElement.dataset.theme = resolvedTheme;
@@ -33,6 +37,7 @@
     }
 
     function setPreference(pref) {
+        if (darkModeTemporarilyDisabled) return apply('light');
         const next = valid.has(pref) ? pref : 'system';
         try {
             localStorage.setItem(storageKey, next);

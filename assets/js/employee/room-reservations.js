@@ -7,6 +7,12 @@
     const fmtDate = value => { const d = toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not available'; };
     const fmtTime = value => { const d = toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'Not available'; };
     const fmtDateTime = value => { const d = toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not available'; };
+    const fileSize = bytes => {
+        const value = Number(bytes || 0);
+        if (!value) return '';
+        if (value < 1048576) return `${Math.ceil(value / 1024)} KB`;
+        return `${(value / 1048576).toFixed(value < 10485760 ? 1 : 0)} MB`;
+    };
     const api = path => `../../api/employee/reservations/${path}`;
     const isoDate = value => {
         const d = toDate(value);
@@ -520,41 +526,42 @@
 
     function detail(label, value, className = '') { return `<dl class="facility-detail-row ${esc(className)}"><dt>${esc(label)}</dt><dd>${esc(value || 'Not available')}</dd></dl>`; }
     function detailGrid(content) { return `<div class="detail-grid">${content}</div>`; }
-    function aiSummary(item) {
-        const ai = item.ai_request_summary || {};
-        if (String(ai.status || '').toUpperCase() === 'READY' && ai.summary) return esc(ai.summary);
-        if (['FAILED', 'NO_READABLE_SOURCE', 'TIMEOUT', 'RATE_LIMITED'].includes(String(ai.status || '').toUpperCase())) return 'AI summary is unavailable. The request letter remains available for review.';
-        if (String(ai.status || '').toUpperCase() === 'PENDING') return 'AI summary is still being prepared.';
-        return 'AI summary is not available for this reservation.';
-    }
     function requestLetterLinks(item, base = 'request-letter.php') {
         if (!item.request_letter) return '<p>No request letter is attached to this reservation.</p>';
         const id = encodeURIComponent(item.id);
-        return `<div class="document-file-actions"><a href="${esc(api(`${base}?id=${id}&mode=view`))}" target="_blank" rel="noopener">View</a><a href="${esc(api(`${base}?id=${id}&mode=download`))}" target="_blank" rel="noopener">Download</a></div><p class="fam-muted">${esc(item.request_letter.fileName || 'Request letter')}</p>`;
+        const letter = item.request_letter || {};
+        const meta = [
+            letter.fileName,
+            String(letter.extension || letter.mimeType || '').toUpperCase(),
+            fileSize(letter.fileSize),
+            letter.uploadedAt ? `Uploaded ${fmtDateTime(letter.uploadedAt)}` : ''
+        ].filter(Boolean).join(' · ');
+        return `<article class="document-file-row reservation-request-letter-row"><div><span class="material-symbols-outlined document-file-icon" aria-hidden="true">description</span><div><strong>Request Letter</strong>${meta ? `<small>${esc(meta)}</small>` : ''}</div></div><div class="document-file-actions"><a href="${esc(api(`${base}?id=${id}&mode=view`))}" target="_blank" rel="noopener">View</a><a href="${esc(api(`${base}?id=${id}&mode=download`))}" target="_blank" rel="noopener">Download</a></div></article>`;
     }
     function actionHelper(item) {
-        if (item.allowed_actions?.check_in_not_yet) return `<p class="fam-muted employee-reservation-action-note">Check-in will be available 30 minutes before your reservation.</p>`;
-        if (item.allowed_actions?.check_in_ended) return `<p class="fam-muted employee-reservation-action-note">The check-in period has ended.</p>`;
+        if (item.allowed_actions?.check_in_not_yet) return 'Check-in will be available 30 minutes before your reservation.';
+        if (item.allowed_actions?.check_in_ended) return 'The check-in period has ended.';
         return '';
     }
     function workflowActions(item) {
         const actions = [];
+        const helper = actionHelper(item);
         if (item.allowed_actions?.check_in) actions.push(`<button class="btn-primary dashboard-action-button" type="button" data-check-in-reservation="${esc(item.id)}">Check In</button>`);
         if (item.allowed_actions?.check_out) actions.push(`<button class="btn-primary dashboard-action-button" type="button" data-check-out-reservation="${esc(item.id)}">Check Out</button>`);
         if (item.allowed_actions?.cancel) actions.push(`<button class="btn-secondary dashboard-action-button" type="button" data-cancel-reservation="${esc(item.id)}">Cancel Reservation</button>`);
         actions.push('<button class="btn-secondary dashboard-action-button" type="button" data-close-dialog>Done</button>');
-        return `${actionHelper(item)}<div class="facility-dialog-actions">${actions.join('')}</div>`;
+        return `<div class="facility-dialog-actions employee-reservation-detail-footer">${helper ? `<p class="fam-muted employee-reservation-action-note">${esc(helper)}</p>` : '<span aria-hidden="true"></span>'}<div class="employee-reservation-footer-actions">${actions.join('')}</div></div>`;
     }
     function renderDetails(dialog, item) {
         const history = (item.history || []).map(row => `<li><strong>${esc(title(row.new_status))}</strong><span>${esc(fmtDateTime(row.changed_at))}</span>${row.change_reason ? `<p>${esc(row.change_reason)}</p>` : ''}</li>`).join('');
-        const reservationDetails = detailGrid(`${detail('Reservation Number', item.reservationNo)}${detail('Status', statusLabel(item))}${detail('Approval Status', title(item.approval))}${detail('Expected Attendees', item.attendees)}${detail('Reservation Type', title(item.reservationType || 'MEETING'))}${detail('Setup Requirements', item.lifecycle?.setup_requirements, 'detail-item--full')}${detail('Cancellation / Rejection Reason', item.lifecycle?.cancellation_reason || item.lifecycle?.remarks, 'detail-item--full')}`);
+        const reason = item.lifecycle?.cancellation_reason || item.lifecycle?.remarks || '';
+        const reservationDetails = detailGrid(`${detail('Reservation Number', item.reservationNo)}${detail('Status', statusLabel(item))}${detail('Approval Status', title(item.approval))}${detail('Expected Attendees', item.attendees)}${detail('Reservation Type', title(item.reservationType || 'MEETING'))}${String(reason).trim() ? detail('Cancellation / Rejection Reason', reason, 'detail-item--full') : ''}`);
         const scheduleRoom = detailGrid(`${detail('Room', item.room)}${detail('Building', item.building)}${detail('Date', fmtDate(item.start))}${detail('Start Time', fmtTime(item.start))}${detail('End Time', fmtTime(item.end))}${detail('Approved At', fmtDateTime(item.lifecycle?.approved_at))}${detail('Check In Time', fmtDateTime(item.lifecycle?.checked_in_at))}${detail('Check Out Time', fmtDateTime(item.lifecycle?.checked_out_at))}`);
         dialog.innerHTML = `<div class="facility-dialog-panel employee-request-details">
             <div class="facility-details-modal-header"><div><p>My Room Reservations</p><span class="facility-details-modal-request-number">${esc(item.reservationNo)}</span><h2>${esc(item.room || 'Reservation Details')}</h2></div><button class="facility-details-modal-close" type="button" data-close-dialog aria-label="Close reservation details">&times;</button></div>
             <div class="facility-details-modal-body"><div class="visitor-detail-accordion">
                 <details class="visitor-detail-disclosure" open><summary>Reservation Details</summary>${reservationDetails}</details>
                 <details class="visitor-detail-disclosure" open><summary>Schedule and Room</summary>${scheduleRoom}</details>
-                <details class="visitor-detail-disclosure" open><summary>AI Request Summary</summary><p>${aiSummary(item)}</p></details>
                 <details class="visitor-detail-disclosure" open><summary>Request Letter</summary>${requestLetterLinks(item)}</details>
                 <details class="visitor-detail-disclosure"><summary>Activity History</summary>${history ? `<ol class="facility-history-list visitor-activity-timeline">${history}</ol>` : '<p>No activity history recorded.</p>'}</details>
             </div></div>

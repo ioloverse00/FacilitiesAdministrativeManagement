@@ -6,6 +6,8 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Reservations' . DIRECTORY
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Visitors' . DIRECTORY_SEPARATOR . 'VisitorService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Documents' . DIRECTORY_SEPARATOR . 'DocumentService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'RecordsRetention' . DIRECTORY_SEPARATOR . 'RetentionService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Contracts' . DIRECTORY_SEPARATOR . 'ContractService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterService.php';
 
 final class LiveDataService
 {
@@ -17,12 +19,16 @@ final class LiveDataService
         $visitors = new VisitorService($this->pdo);
         $documents = new DocumentService($this->pdo);
         $retention = new RetentionService($this->pdo);
+        $contracts = new ContractService($this->pdo);
+        $legal = new LegalMatterService($this->pdo);
         $reservationSummary = $reservations->dashboardSummary();
         $visitorSummary = $visitors->dashboardSummary();
         $documentSummary = $documents->dashboardSummary();
+        $retentionAttentionCount = RetentionService::countRecordsRequiringReview($this->pdo);
+        $contractSummary = $contracts->dashboardSummary();
+        $legalSummary = $legal->dashboardSummary();
         return [
             'generatedAt' => date('c'),
-            'alerts' => $this->alerts(),
             'kpis' => [
                 'reservationsToday' => $reservationSummary['today'] ?? 0,
                 'reservationsPendingApproval' => $reservationSummary['pending_approval'] ?? 0,
@@ -30,24 +36,28 @@ final class LiveDataService
                 'visitorsToday' => $visitorSummary['today'] ?? 0,
                 'activeDocuments' => $documentSummary['active'] ?? 0,
                 'recentDocuments' => $documentSummary['recent'] ?? 0,
-                'recordsDispositionDue' => RetentionService::countRecordsDueForReview($this->pdo),
+                'recordsDispositionDue' => $retentionAttentionCount,
+                'contractsPendingReviewApproval' => $contractSummary['pendingReviewApproval'] ?? 0,
+                'contractsActive' => $contractSummary['active'] ?? 0,
+                'contractsExpiringSoon' => $contractSummary['expiringSoon'] ?? 0,
+                'legalOpen' => $legalSummary['open'] ?? 0,
+                'legalCritical' => $legalSummary['critical'] ?? 0,
             ],
             'charts' => [
                 'reservation_activity' => $reservations->lastSevenDaysActivity(),
                 'operational_overview' => [
-                    'labels' => ['Pending Reservations', 'Visitors Checked In', 'Retention Reviews Due'],
+                    'labels' => ['Pending Reservations', 'Visitors Currently Inside', 'Retention Attention', 'Open Legal Matters'],
                     'values' => [
                         $reservationSummary['pending_approval'] ?? 0,
                         $visitorSummary['checked_in'] ?? 0,
-                        RetentionService::countRecordsDueForReview($this->pdo),
+                        $retentionAttentionCount,
+                        $legalSummary['open'] ?? 0,
                     ],
                 ],
             ],
             'todaySchedule' => $reservations->todayOperationalSchedule(),
-            'visitorReceptionActivity' => $visitors->receptionActivity(),
             'retentionAttention' => $retention->attentionQueue(),
             'recentActivities' => $this->recentActivities(),
-            'requestActions' => []
         ];
     }
 
@@ -198,8 +208,7 @@ final class LiveDataService
     private function procurementSummary(): array { return ['open'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND status NOT IN ('COMPLETED','CANCELLED','REJECTED')"),'pending_approval'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND approval_status='PENDING'"),'integration_issues'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND integration_status IN ('FAILED','ERROR')"),'estimated_total'=>(float)$this->scalar("SELECT COALESCE(SUM(estimated_total),0) FROM procurement_request WHERE deleted_at IS NULL")]; }
     private function recordSummary(): array { return ['total'=>$this->count('record'),'active'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND record_status='ACTIVE'"),'disposition_due'=>RetentionService::countRecordsDueForReview($this->pdo),'restricted'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND confidentiality_level IN ('CONFIDENTIAL','RESTRICTED')")]; }
 
-    private function alerts(): array { return array_map(fn($r)=>['severity'=>$r['priority'],'message'=>$r['title'],'count'=>1,'href'=>$r['action_url']], $this->rows("SELECT priority,title,action_url FROM notification WHERE is_dismissed=0 AND is_read=0 ORDER BY created_at DESC LIMIT 5")); }
-    private function recentActivities(): array { return $this->rows("SELECT event_title activity, module_code module, entity_reference reference, occurred_at time, event_type status FROM activity_event WHERE module_code IN ('RESERVATIONS','VISITORS','documents','retention') ORDER BY occurred_at DESC LIMIT 10"); }
+    private function recentActivities(): array { return $this->rows("SELECT event_title activity, module_code module, entity_reference reference, occurred_at time, event_type status FROM activity_event WHERE module_code IN ('RESERVATIONS','VISITORS','documents','retention','contract_management','LEGAL_MANAGEMENT') ORDER BY occurred_at DESC LIMIT 10"); }
 
     private function shapeMaintenance(array $r): array { return ['id'=>(int)$r['maintenance_work_order_id'],'workOrderNo'=>$r['work_order_number'],'title'=>$r['problem_description'],'asset'=>$r['asset_name'] ?: null,'space'=>$r['space_name'],'building'=>$r['building_name'],'priority'=>$r['priority'],'status'=>$r['status'],'maintenanceType'=>$r['maintenance_type'],'assignedTo'=>$r['assigned_to_name'],'scheduledStart'=>$r['scheduled_start_at'],'scheduledEnd'=>$r['scheduled_end_at'],'createdAt'=>$r['created_at'],'facilityRequest'=>$r['facility_request_number']]; }
     private function shapeAsset(array $r): array { return ['id'=>(int)$r['asset_id'],'assetCode'=>$r['asset_code'],'propertyNumber'=>$r['property_number'],'assetName'=>$r['asset_name'],'category'=>$r['category_name'],'brand'=>$r['brand'],'model'=>$r['model'],'serialNumber'=>$r['serial_number'],'location'=>trim(($r['building_name']??'').' / '.($r['space_name']??''),' /'),'custodian'=>$r['custodian_name'],'condition'=>$r['condition_status'],'lifecycle'=>$r['lifecycle_status'],'nextMaintenance'=>$r['next_maintenance_date'],'supplier'=>$r['supplier_name'],'createdAt'=>$r['created_at']]; }

@@ -46,7 +46,8 @@
         ['Liza Mendoza', 'EMP-0205', 'Training', 'Asset Custodian', 'Suspended', 'Jul 19, 2026 1:15 PM']
     ];
     const roles = ['System Administrator', 'FAM Administrator', 'Facility Manager', 'Maintenance Supervisor', 'Technician', 'Asset Custodian', 'Reservation Officer', 'Procurement Officer', 'Records Officer', 'Requestor', 'Approver', 'Auditor'];
-    const modules = ['Dashboard', 'Facilities Reservation', 'Visitor Management', 'Document Management', 'Records Retention & Compliance', 'Reports', 'Administration'];
+    // Reports & Analytics temporarily disabled pending post-core-UAT implementation.
+    const modules = ['Dashboard', 'Facilities Reservation', 'Visitor Management', 'Document Management', 'Records Retention & Compliance', 'Administration'];
     const perms = ['View', 'Create', 'Edit', 'Assign', 'Approve', 'Complete', 'Verify', 'Export', 'Manage', 'Delete'];
 
     function formatUpdatedAt() {
@@ -218,7 +219,7 @@
                 ${sectionGroup('General Information', `<div class="admin-form-grid">${field('System Display Name', 'Facilities & Administrative Management')}${field('Organization Name', 'Great Solomon Manpower Services Inc.')}${field('Organization Logo', 'Logo placeholder')}</div>`)}
                 ${sectionGroup('Timezone & Localization', `<div class="admin-form-grid">${selectField('Default Timezone', 'Asia/Manila', ['Asia/Manila', 'UTC', 'Asia/Singapore'])}${selectField('Default Language', 'English', ['English', 'Filipino'])}${selectField('Date Format', 'MMM DD, YYYY', ['MMM DD, YYYY', 'YYYY-MM-DD', 'DD/MM/YYYY'])}${selectField('Time Format', '12-hour', ['12-hour', '24-hour'])}${selectField('Currency', 'PHP', ['PHP', 'USD'])}${selectField('Fiscal Year Start', 'January', ['January', 'April', 'July', 'October'])}</div>`)}
                 ${sectionGroup('Business Hours', `<div class="admin-form-grid">${field('Working Days', 'Monday to Friday')}${field('Business Hours Start', '8:00 AM')}${field('Business Hours End', '5:00 PM')}</div>`)}
-                ${sectionGroup('System Defaults', `<div class="admin-form-grid">${selectField('Default Landing Page', 'Dashboard', ['Dashboard', 'Reports & Analytics'])}</div>`)}`;
+                ${sectionGroup('System Defaults', `<div class="admin-form-grid">${selectField('Default Landing Page', 'Dashboard', ['Dashboard'])}</div>`)}`;
         },
         organization() {
             return `${sectionHeader('Organization & Facilities', 'Manage operational reference lists for departments, buildings, spaces, room types, and amenities.')}

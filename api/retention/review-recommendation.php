@@ -4,6 +4,7 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . '_live_bootstrap.php';
 requireMethod('POST');
 $user = currentApiUser();
 RetentionPolicy::requirePermission($user, 'retention.review');
+requireCsrfToken();
 try {
     $recommendation = dispositionRecommendationService()->review(idParam(), $_POST, $user);
     if ($recommendation === null) jsonResponse(false, 'Disposition recommendation not found.', [], 404);

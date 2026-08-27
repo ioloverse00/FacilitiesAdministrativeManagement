@@ -27,7 +27,9 @@ function currentApiUser(): array
         jsonResponse(false, 'Authentication required.', [], 401);
     }
     $auth->touchSession();
-    return $user->toArray();
+    $data = $user->toArray();
+    requireFamPortalUser($data);
+    return $data;
 }
 
 function requirePermission(array $user, string $permission): void

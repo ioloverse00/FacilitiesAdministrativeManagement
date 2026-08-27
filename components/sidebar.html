@@ -8,11 +8,11 @@
     </div>
 
     <nav class="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-2" aria-label="Primary">
-        <a class="sidebar-main-link" href="../pages/dashboard.html" data-nav-key="dashboard">
+        <a class="sidebar-main-link" href="../pages/dashboard.html" data-nav-key="dashboard" data-requires-permission="dashboard.view">
             <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">dashboard</span>
             <span class="font-label font-medium text-sm">Dashboard</span>
         </a>
-        <a class="sidebar-main-link" href="../pages/room-reservations.html" data-nav-key="room-reservations">
+        <a class="sidebar-main-link" href="../pages/room-reservations.html" data-nav-key="room-reservations" data-requires-permission="reservations.view">
             <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">meeting_room</span>
             <span class="font-label font-medium text-sm">Facilities Reservation</span>
         </a>
@@ -28,7 +28,7 @@
             <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">gavel</span>
             <span class="font-label font-medium text-sm">Legal Management</span>
         </a>
-        <a class="sidebar-main-link" href="../pages/records.html" data-nav-key="records">
+        <a class="sidebar-main-link" href="../pages/records.html" data-nav-key="records" data-requires-permission="records.view">
             <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">folder</span>
             <span class="font-label font-medium text-sm">Document Management</span>
         </a>
@@ -36,11 +36,8 @@
             <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">fact_check</span>
             <span class="font-label font-medium text-sm">Records Retention &amp; Compliance</span>
         </a>
-        <a class="sidebar-main-link" href="../pages/reports.html" data-nav-key="reports">
-            <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">insert_chart</span>
-            <span class="font-label font-medium text-sm">Reports &amp; Analytics</span>
-        </a>
-        <a class="sidebar-main-link" href="../pages/settings.html" data-nav-key="settings">
+        <!-- Reports & Analytics temporarily disabled pending post-core-UAT implementation. -->
+        <a class="sidebar-main-link" href="../pages/settings.html" data-nav-key="settings" data-requires-permission="administration.view">
             <span class="sidebar-main-link-icon material-symbols-outlined" aria-hidden="true">settings</span>
             <span class="font-label font-medium text-sm">FAM Administration</span>
         </a>

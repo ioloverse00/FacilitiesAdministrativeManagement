@@ -1,9 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>Facilities & Administrative Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
     <script src="../assets/js/theme.js"></script>
     <link href="../assets/css/app.css" rel="stylesheet">
     <script src="../assets/js/subsystems.js" defer></script>
@@ -23,7 +24,7 @@
     data-breadcrumb-title="Dashboard"
     data-active-nav="dashboard"
     data-page-heading="Facilities & Administrative Dashboard"
-    data-page-description="Overview of official FAM modules, compliance activity, reports, and shared administration.">
+    data-page-description="Overview of official FAM modules, compliance activity, and shared administration.">
     <div id="app-shell" class="app-shell">
         <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
         <div class="app-main-panel">
@@ -34,17 +35,14 @@
                         <header class="fam-page-header">
                             <div class="fam-title-block">
                                 <h1 id="dashboard-heading">Facilities &amp; Administrative Dashboard</h1>
-                                <p id="dashboard-copy">Overview of official FAM modules, compliance activity, reports, and shared administration.</p>
+                                <p id="dashboard-copy">Overview of official FAM modules, compliance activity, and shared administration.</p>
                                 <span id="dashboard-last-updated" class="fam-last-updated">Last updated: Loading...</span>
                             </div>
                             <div class="fam-header-actions">
                                 <button id="dashboard-refresh" class="fam-icon-button" type="button" aria-label="Refresh dashboard data">
                                     <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
                                 </button>
-                                <a class="btn-primary dashboard-action-button" href="../pages/reports.html">
-                                    <span class="material-symbols-outlined" aria-hidden="true">insert_chart</span>
-                                    Generate Report
-                                </a>
+                                <!-- Reports & Analytics temporarily disabled pending post-core-UAT implementation. -->
                             </div>
                         </header>
 
@@ -62,11 +60,11 @@
                             <div class="fam-chart-grid">
                                 <article class="fam-card fam-chart-card" aria-labelledby="reservation-activity-title">
                                     <div class="fam-card-header">
-                                        <h3 id="reservation-activity-title">Reservation Activity &mdash; Last 7 Days</h3>
+                                        <h3 id="reservation-activity-title">Scheduled Reservations &mdash; Last 7 Days</h3>
                                     </div>
                                     <div id="reservation-activity-state" class="fam-chart-state" aria-live="polite"></div>
                                     <div class="fam-chart-box">
-                                        <canvas id="reservation-activity-chart" aria-label="Reservation Activity - Last 7 Days" role="img">Reservation activity chart for the last 7 days.</canvas>
+                                        <canvas id="reservation-activity-chart" aria-label="Scheduled Reservations - Last 7 Days" role="img">Scheduled reservations chart for the last 7 days.</canvas>
                                     </div>
                                 </article>
                                 <article class="fam-card fam-chart-card" aria-labelledby="operational-overview-title">
@@ -89,16 +87,16 @@
                             <section class="fam-section" aria-labelledby="schedule-title">
                                 <div class="fam-section-heading">
                                     <h2 id="schedule-title">Today's Facilities Schedule</h2>
-                                    <a class="fam-link" href="../pages/room-reservations.html">View Facilities Schedule</a>
+                                    <a class="fam-link" href="../pages/room-reservations.html" data-requires-permission="reservations.view">View Facilities Schedule</a>
                                 </div>
                                 <div id="today-schedule" class="fam-card fam-timeline" data-state-container aria-live="polite"></div>
                             </section>
                             <section class="fam-section" aria-labelledby="retention-attention-title">
                                 <div class="fam-section-heading">
                                     <h2 id="retention-attention-title">Retention Attention Queue</h2>
-                                    <a class="fam-link" href="../pages/records-retention.html">Open Records Retention</a>
+                                    <a class="fam-link" href="../pages/records-retention.html" data-requires-permission="records.view">Open Records Retention</a>
                                 </div>
-                                <div id="retention-attention" class="fam-card fam-activity-list" data-state-container aria-live="polite"></div>
+                                <div id="retention-attention" class="fam-card fam-activity-list fam-retention-attention-list" data-state-container aria-live="polite"></div>
                             </section>
                             </div>
                         </section>
@@ -106,7 +104,7 @@
                         <section class="fam-section" aria-labelledby="activity-title">
                             <div class="fam-section-heading">
                                 <h2 id="activity-title">Recent Activity</h2>
-                                <a class="fam-link" href="../pages/reports.html">View All Activity</a>
+                                <!-- Reports & Analytics temporarily disabled pending post-core-UAT implementation. -->
                             </div>
                             <div id="recent-activity" class="fam-card fam-activity-list" data-state-container aria-live="polite"></div>
                         </section>

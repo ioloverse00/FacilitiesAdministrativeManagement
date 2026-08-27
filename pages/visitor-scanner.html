@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>Visitor Reception Console</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
     <script src="../assets/js/theme.js"></script>
     <link href="../assets/css/app.css" rel="stylesheet">
     <script src="../assets/js/navigation.js" defer></script>
@@ -72,8 +73,8 @@
                                         <div class="facility-form-grid">
                                             <label class="facility-field"><span>Visitor Type *</span><select name="visitor_type" required data-visitor-type-select></select></label>
                                             <label class="facility-field"><span>Purpose *</span><input name="visit_purpose" required></label>
-                                            <label class="facility-field"><span>Department</span><select name="destination_department_reference_id" data-department-select></select></label>
-                                            <label class="facility-field"><span>Facility / Room</span><select name="facility_space_id" data-space-select></select></label>
+                                            <label class="facility-field"><span>Department *</span><select name="destination_department_reference_id" required data-department-select></select></label>
+                                            <label class="facility-field"><span>Facility / Room *</span><select name="facility_space_id" required data-space-select></select></label>
                                             <label class="facility-field"><span>Host / Person to Visit</span><select name="host_employee_reference_id" data-host-select></select></label>
                                         </div>
                                     </section>

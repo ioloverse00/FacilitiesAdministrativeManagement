@@ -31,7 +31,9 @@
         'Visitor Management': 'badge',
         'Document Management': 'folder',
         'Records Retention': 'fact_check',
-        'Records Retention & Compliance': 'fact_check'
+        'Records Retention & Compliance': 'fact_check',
+        'Contract Management': 'contract',
+        'Legal Management': 'gavel'
     };
 
     function escapeHtml(value) {
@@ -56,22 +58,6 @@
     function formatUpdatedAt(value) {
         const date = value ? new Date(value) : new Date();
         return `Last updated: ${date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}, ${date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
-    }
-
-    function renderAlerts(alerts) {
-        const target = document.getElementById('dashboard-alerts');
-        if (!target) return;
-        if (!alerts?.length) {
-            target.innerHTML = stateMessage('No urgent items require attention.', 'check_circle');
-            return;
-        }
-        target.innerHTML = alerts.map(alert => `
-            <a class="fam-alert-card fam-alert-${String(alert.severity).toLowerCase()}" href="${alert.href}">
-                <span class="fam-alert-severity">${escapeHtml(alert.severity)}</span>
-                <span class="fam-alert-copy">${escapeHtml(alert.message)}</span>
-                <span class="fam-alert-count" aria-label="${escapeHtml(alert.count)} items">${escapeHtml(alert.count)}</span>
-            </a>
-        `).join('');
     }
 
     function renderKpis(kpis) {
@@ -201,7 +187,6 @@
         try {
             const data = await service.getDashboardPayload();
             document.getElementById('dashboard-last-updated').textContent = formatUpdatedAt(data.generatedAt);
-            renderAlerts(data.alerts);
             renderKpis(data.kpis);
             renderCharts(data.charts);
             renderTodaySchedule(data.todaySchedule);

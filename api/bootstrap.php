@@ -77,3 +77,13 @@ set_exception_handler(static function (Throwable $exception): void {
 
 startAuthSession();
 
+function requireFamPortalUser(array $user): void
+{
+    if (($user['persona']['is_fam_portal_allowed'] ?? false) !== true) {
+        jsonResponse(false, 'FAM portal access is restricted to authorized administrative and operational personas.', [
+            'access_denied_reason' => 'persona_not_fam_portal',
+            'persona' => $user['persona']['code'] ?? PersonaService::UNAUTHORIZED_OR_UNRESOLVED,
+        ], 403);
+    }
+}
+

@@ -116,6 +116,11 @@ final class LegalMatterService
         ];
     }
 
+    public function dashboardSummary(): array
+    {
+        return $this->summary();
+    }
+
     public function show(int $id): ?array
     {
         $statement = $this->pdo->prepare($this->baseSelect($this->selectColumns()) . ' WHERE lm.deleted_at IS NULL AND lm.legal_matter_id = :id GROUP BY lm.legal_matter_id LIMIT 1');

@@ -1,7 +1,7 @@
 (function () {
   const qs = s => document.querySelector(s);
   const qsa = s => Array.from(document.querySelectorAll(s));
-  const state = { options: {}, issuedBadges: [], activeBadge: null, idScan: initialScanState() };
+  const state = { options: {}, issuedBadges: [], activeBadge: null, idScan: initialScanState(), activeVisitCheck: initialActiveVisitState() };
   const ID_SCAN_CROP = { width: 0.94, height: 0.86 };
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const title = v => String(v || '').toLowerCase().split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -44,6 +44,10 @@
     };
   }
 
+  function initialActiveVisitState() {
+    return { token: 0, checking: false, blocked: false, stale: false, visit: null, error: '' };
+  }
+
   function optionRows(items, placeholder, labeler) {
     return `<option value="">${esc(placeholder)}</option>${(items || []).map(item => `<option value="${esc(item.id || item)}">${esc(labeler ? labeler(item) : title(item))}</option>`).join('')}`;
   }
@@ -59,15 +63,18 @@
     const visitorTypes = (state.options.visitor_types || []).filter(type => !['WALK_IN', 'VENDOR'].includes(type));
     qsa('[data-visitor-type-select]').forEach(select => fillSelect(select, visitorTypes, 'Select visitor type'));
     qsa('[data-id-type-select]').forEach(select => fillSelect(select, idTypes, 'Select ID type'));
-    qsa('[data-department-select]').forEach(select => fillSelect(select, state.options.departments, 'Optional', row => row.name || row.code));
-    qsa('[data-space-select]').forEach(select => fillSelect(select, state.options.facility_spaces, 'Optional', row => `${row.name}${row.building_name ? ' - ' + row.building_name : ''}`));
+    qsa('[data-department-select]').forEach(select => fillSelect(select, state.options.departments, 'Select department', row => row.name || row.code));
+    qsa('[data-space-select]').forEach(select => fillSelect(select, state.options.facility_spaces, 'Select facility / room', row => `${row.name}${row.building_name ? ' - ' + row.building_name : ''}`));
     qsa('[data-host-select]').forEach(select => fillSelect(select, state.options.host_employees, 'Optional', row => row.full_name || row.employee_number));
     renderBadges();
     renderIssuedBadges();
   }
 
   function renderBadges() {
-    qsa('[data-badge-select]').forEach(select => fillSelect(select, state.options.available_badges, 'Select available badge', row => row.badge_number));
+    qsa('[data-badge-select]').forEach(select => {
+      fillSelect(select, state.options.available_badges, 'Select available badge', row => row.badge_number);
+      syncEntryBlockedState();
+    });
   }
 
   function renderIssuedBadges() {
@@ -96,7 +103,7 @@
   }
 
   function destinationValid(data) {
-    return Boolean(data.destination_department_reference_id || data.facility_space_id);
+    return Boolean(data.destination_department_reference_id && data.facility_space_id);
   }
 
   function showError(form, selector, message) {
@@ -109,6 +116,8 @@
   function validationMessage(error) {
     const errors = error?.errors || {};
     return errors.destination
+      || errors.destination_department_reference_id
+      || errors.facility_space_id
       || errors.visitor_type
       || errors.visit_purpose
       || errors.badge_id
@@ -123,6 +132,107 @@
     if (box) box.hidden = true;
   }
 
+  function activeVisitMessage() {
+    const visit = state.activeVisitCheck.visit || {};
+    const ref = visit.visitor_reference || 'the existing visit';
+    return `This visitor already has an active visit (${ref}). Check out the existing visit before creating another.`;
+  }
+
+  function ensureActiveVisitAlert(form) {
+    if (!form) return null;
+    let alert = form.querySelector('[data-active-visit-alert]');
+    if (alert) return alert;
+    alert = document.createElement('div');
+    alert.className = 'facility-form-error';
+    alert.setAttribute('data-active-visit-alert', '');
+    alert.hidden = true;
+    const entryError = form.querySelector('[data-entry-error]');
+    if (entryError?.parentNode) entryError.parentNode.insertBefore(alert, entryError.nextSibling);
+    else form.prepend(alert);
+    return alert;
+  }
+
+  function renderActiveVisitAlert() {
+    const form = qs('#visitor-entry-form');
+    const alert = ensureActiveVisitAlert(form);
+    if (!alert) return;
+    if (state.activeVisitCheck.blocked && state.activeVisitCheck.visit) {
+      const visit = state.activeVisitCheck.visit;
+      const details = [visit.status ? `Status: ${title(visit.status)}` : '', visit.badge_code ? `Badge: ${visit.badge_code}` : ''].filter(Boolean).join(' · ');
+      alert.textContent = details ? `${activeVisitMessage()} ${details}` : activeVisitMessage();
+      alert.hidden = false;
+      return;
+    }
+    if (state.activeVisitCheck.error) {
+      alert.textContent = state.activeVisitCheck.error;
+      alert.hidden = false;
+      return;
+    }
+    alert.hidden = true;
+    alert.textContent = '';
+  }
+
+  function syncEntryBlockedState() {
+    const form = qs('#visitor-entry-form');
+    if (!form) return;
+    const locked = state.activeVisitCheck.checking || state.activeVisitCheck.blocked;
+    const submit = form.querySelector('[type="submit"]');
+    const badge = form.querySelector('[data-badge-select]');
+    if (submit) submit.disabled = locked;
+    if (badge) {
+      badge.disabled = locked;
+      if (state.activeVisitCheck.blocked) badge.value = '';
+    }
+    renderActiveVisitAlert();
+  }
+
+  function clearActiveVisitCheck(options = {}) {
+    state.activeVisitCheck = { ...initialActiveVisitState(), token: state.activeVisitCheck.token + 1 };
+    if (options.clearBadge !== false) {
+      const badge = qs('#visitor-entry-form [data-badge-select]');
+      if (badge) badge.value = '';
+    }
+    syncEntryBlockedState();
+  }
+
+  function activeVisitPayload(form) {
+    const data = dataFrom(form);
+    return {
+      full_name: data.full_name || 'Visitor Check',
+      visitor_type: data.visitor_type || 'GUEST',
+      email_address: data.email_address || '',
+      mobile_number: data.mobile_number || '',
+      identification_type: data.identification_type || '',
+      identification_last4: data.identification_last4 || ''
+    };
+  }
+
+  function hasStableIdentity(data) {
+    return Boolean((data.identification_type && data.identification_last4) || data.email_address || data.mobile_number);
+  }
+
+  async function verifyActiveVisitAfterScan(form) {
+    const data = activeVisitPayload(form);
+    if (!hasStableIdentity(data)) {
+      clearActiveVisitCheck({ clearBadge: false });
+      return;
+    }
+    const token = state.activeVisitCheck.token + 1;
+    state.activeVisitCheck = { token, checking: true, blocked: false, stale: false, visit: null, error: '' };
+    syncEntryBlockedState();
+    try {
+      const payload = await window.FAMApi.request('../api/visitors/active-visit.php', { method:'POST', body:data });
+      if (state.activeVisitCheck.token !== token) return;
+      const visit = payload.data?.visit || null;
+      state.activeVisitCheck = { token, checking: false, blocked: Boolean(payload.data?.has_active_visit && visit), stale: false, visit, error: '' };
+    } catch (error) {
+      if (state.activeVisitCheck.token !== token) return;
+      state.activeVisitCheck = { token, checking: false, blocked: false, stale: true, visit: null, error: 'Active visit could not be verified. The system will verify again when you check in.' };
+    } finally {
+      if (state.activeVisitCheck.token === token) syncEntryBlockedState();
+    }
+  }
+
   function setScanState(next) {
     state.idScan = { ...state.idScan, ...next };
   }
@@ -132,6 +242,7 @@
     clearCaptureBuffer();
     const worker = state.idScan.worker;
     state.idScan = { ...initialScanState(), worker };
+    clearActiveVisitCheck();
     updateConfirmedIndicator(false);
   }
 
@@ -150,10 +261,20 @@
 
   async function submitEntry(form) {
     clearError(form, '[data-entry-error]');
+    if (state.activeVisitCheck.checking) {
+      showError(form, '[data-entry-error]', 'Active visit verification is still in progress.');
+      return;
+    }
+    if (state.activeVisitCheck.blocked) {
+      showError(form, '[data-entry-error]', activeVisitMessage());
+      syncEntryBlockedState();
+      return;
+    }
     if (!form.reportValidity()) { focusFirstEmpty(form); return; }
     const data = dataFrom(form);
     if (!destinationValid(data)) {
-      showError(form, '[data-entry-error]', 'Select a department or facility/room for this visit.');
+      showError(form, '[data-entry-error]', !data.destination_department_reference_id ? 'Select a department for this visit.' : 'Select a facility/room for this visit.');
+      form.querySelector(!data.destination_department_reference_id ? '[name="destination_department_reference_id"]' : '[name="facility_space_id"]')?.focus();
       return;
     }
     const button = form.querySelector('[type="submit"]');
@@ -168,8 +289,9 @@
       await refreshOptions();
     } catch (error) {
       showError(form, '[data-entry-error]', validationMessage(error));
+      if (error.status === 409) refreshOptions().catch(() => {});
     } finally {
-      button.disabled = false;
+      button.disabled = state.activeVisitCheck.checking || state.activeVisitCheck.blocked;
     }
   }
 
@@ -800,6 +922,7 @@
     updateConfirmedIndicator(true);
     clearTemporaryImage();
     closeScanDialog({ preserveConfirmed: true });
+    verifyActiveVisitAfterScan(entry);
   }
 
   function selectIssuedBadge(badgeNumber) {
@@ -847,6 +970,10 @@
   function bind() {
     qs('#visitor-entry-form')?.addEventListener('submit', event => { event.preventDefault(); submitEntry(event.target); });
     qs('#visitor-entry-form')?.addEventListener('reset', () => setTimeout(resetScanState, 0));
+    qsa('#visitor-entry-form [name="identification_type"], #visitor-entry-form [name="identification_last4"], #visitor-entry-form [name="email_address"], #visitor-entry-form [name="mobile_number"]').forEach(field => {
+      field.addEventListener('input', () => clearActiveVisitCheck({ clearBadge: false }));
+      field.addEventListener('change', () => clearActiveVisitCheck({ clearBadge: false }));
+    });
     qs('[data-scan-id]')?.addEventListener('click', openIdCapture);
     qs('[data-issued-badge-select]')?.addEventListener('change', event => selectIssuedBadge(event.target.value));
     document.addEventListener('click', event => {

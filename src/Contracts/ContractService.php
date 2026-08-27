@@ -87,6 +87,11 @@ final class ContractService
         ];
     }
 
+    public function dashboardSummary(): array
+    {
+        return $this->summary();
+    }
+
     public function show(int|string $idOrNumber, array $user): ?array
     {
         ContractPolicy::requirePermission($user, 'contract.view');
