@@ -104,19 +104,11 @@ ON DUPLICATE KEY UPDATE employee_reference_id=VALUES(employee_reference_id), acc
 -- 5. Roles
 INSERT INTO role (role_code, role_name, description, status)
 VALUES
-('SYSTEM_ADMIN','System Administrator','Full technical administration access.','ACTIVE'),
-('FAM_ADMIN','FAM Administrator','Broad facilities administration access.','ACTIVE'),
-('FACILITY_MANAGER','Facility Manager','Manages facility requests, schedules, and operational verification.','ACTIVE'),
-('MAINTENANCE_SUPERVISOR','Maintenance Supervisor','Assigns and verifies maintenance work.','ACTIVE'),
-('TECHNICIAN','Technician','Works assigned maintenance records.','ACTIVE'),
-('ASSET_CUSTODIAN','Asset Custodian','Maintains asset register and transfers.','ACTIVE'),
-('RESERVATION_OFFICER','Reservation Officer','Reviews room reservations and visitor schedules.','ACTIVE'),
-('PROCUREMENT_OFFICER','Procurement Officer','Processes FAM procurement requests.','ACTIVE'),
-('FINANCE_APPROVER','Finance Approver','Reviews and approves budget-linked contract approval steps.','ACTIVE'),
-('RECORDS_OFFICER','Records Officer','Maintains documents, records, and retention schedules.','ACTIVE'),
-('REQUESTOR','Requestor','Creates and monitors own requests.','ACTIVE'),
-('APPROVER','Approver','Reviews approval requests.','ACTIVE'),
-('AUDITOR','Auditor','Read-only audit and reporting access.','ACTIVE')
+('FAM_SUPER_ADMIN','FAM Super Administrator','Highest FAM application authority.','ACTIVE'),
+('FAM_ADMIN','FAM Department Head','Department head of the FAM department with broad operational oversight.','ACTIVE'),
+('FAM_STAFF','FAM Staff','Ordinary FAM operational employee.','ACTIVE'),
+('DEPARTMENT_HEAD','Department Head','Head of a non-FAM department with department-scoped workflow access.','ACTIVE'),
+('EMPLOYEE','Employee','Ordinary employee self-service access.','ACTIVE')
 ON DUPLICATE KEY UPDATE role_name=VALUES(role_name), description=VALUES(description), status=VALUES(status);
 
 -- 6. Permissions
@@ -183,98 +175,158 @@ INSERT INTO permission (permission_code, permission_name, module_code, descripti
 ('budget.approve','Approve Budgets','budget','Approve budget-linked Contract Management approval steps.')
 ON DUPLICATE KEY UPDATE permission_name=VALUES(permission_name), module_code=VALUES(module_code), description=VALUES(description);
 
+INSERT INTO permission (permission_code, permission_name, module_code, description) VALUES
+('employee_portal.view','View Employee Portal','employee_portal','Access the employee self-service portal.'),
+('facility_requests.view_own','View Own Facility Requests','facility_requests','View facility requests owned by the authenticated employee.'),
+('reservations.view_own','View Own Reservations','reservations','View room reservations owned by the authenticated employee.'),
+('notifications.view_own','View Own Notifications','notifications','View notifications for the authenticated user.'),
+('profile.view_own','View Own Profile','profile','View the authenticated employee profile.')
+ON DUPLICATE KEY UPDATE permission_name=VALUES(permission_name), module_code=VALUES(module_code), description=VALUES(description);
+
+INSERT INTO permission (permission_code, permission_name, module_code, description) VALUES
+('document_templates.view','View Document Templates','document_templates','View the governed document template library.'),
+('document_templates.create','Create Document Templates','document_templates','Create active document templates.'),
+('document_templates.edit','Edit Document Templates','document_templates','Create new active document template versions.'),
+('document_templates.retire','Retire Document Templates','document_templates','Retire active document templates.')
+ON DUPLICATE KEY UPDATE permission_name=VALUES(permission_name), module_code=VALUES(module_code), description=VALUES(description);
+
 -- 7. Role-Permission Assignments
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='SYSTEM_ADMIN';
+WHERE r.role_code='FAM_SUPER_ADMIN'
+  AND (
+    p.permission_code IN (
+      'employee_portal.view',
+      'facility_requests.view_own',
+      'reservations.view_own',
+      'notifications.view_own',
+      'profile.view_own'
+    )
+    OR p.module_code IN ('dashboard','facility_requests','maintenance','assets','reservations','procurement','records','reports','administration')
+    OR p.permission_code LIKE 'contract.%'
+    OR p.permission_code IN ('document_templates.view','document_templates.create','document_templates.edit','document_templates.retire')
+    OR p.permission_code LIKE 'legal.%'
+    OR p.permission_code LIKE 'retention.%'
+    OR p.permission_code LIKE 'visitors.%'
+  );
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='SYSTEM_ADMIN' AND p.permission_code LIKE 'contract.%';
+WHERE r.role_code='FAM_ADMIN'
+  AND (
+    p.permission_code IN ('dashboard.view','reports.view','reports.export')
+    OR (p.module_code IN ('facility_requests','maintenance','assets','reservations','procurement','records') AND SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','create','edit','assign','approve','complete','verify','export','manage'))
+    OR p.permission_code LIKE 'contract.%'
+    OR p.permission_code IN ('document_templates.view','document_templates.create','document_templates.edit','document_templates.retire')
+    OR p.permission_code LIKE 'legal.%'
+    OR p.permission_code LIKE 'retention.%'
+    OR p.permission_code LIKE 'visitors.%'
+  )
+  AND p.module_code <> 'administration'
+  AND p.permission_code NOT LIKE 'administration.%';
+
+DELETE rp
+FROM role_permission rp
+JOIN role r ON r.role_id = rp.role_id
+JOIN permission p ON p.permission_id = rp.permission_id
+WHERE r.role_code = 'FAM_ADMIN'
+  AND (p.module_code = 'administration' OR p.permission_code LIKE 'administration.%');
+
+DELETE rp
+FROM role_permission rp
+JOIN role r ON r.role_id = rp.role_id
+JOIN permission p ON p.permission_id = rp.permission_id
+WHERE r.role_code IN ('FAM_STAFF','DEPARTMENT_HEAD','EMPLOYEE')
+  AND p.permission_code LIKE 'legal.%';
+
+DELETE rp
+FROM role_permission rp
+JOIN role r ON r.role_id = rp.role_id
+JOIN permission p ON p.permission_id = rp.permission_id
+WHERE r.role_code IN ('FAM_STAFF','DEPARTMENT_HEAD','EMPLOYEE')
+  AND p.permission_code LIKE 'document_templates.%';
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='FAM_ADMIN' AND (p.module_code<>'administration' OR SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','manage'));
+WHERE r.role_code='FAM_STAFF'
+  AND p.permission_code IN (
+    'dashboard.view',
+    'reports.view',
+    'facility_requests.view',
+    'facility_requests.create',
+    'facility_requests.edit',
+    'facility_requests.assign',
+    'facility_requests.complete',
+    'facility_requests.verify',
+    'maintenance.view',
+    'maintenance.edit',
+    'maintenance.complete',
+    'assets.view',
+    'assets.create',
+    'assets.edit',
+    'reservations.view',
+    'reservations.create',
+    'reservations.edit',
+    'visitors.view',
+    'visitors.review',
+    'visitors.create_walkin',
+    'visitors.checkin',
+    'visitors.checkout',
+    'procurement.view',
+    'procurement.create',
+    'procurement.edit',
+    'records.view',
+    'records.create',
+    'records.edit',
+    'contract.view',
+    'contract.create',
+    'contract.edit',
+    'contract.review',
+    'retention.view',
+    'retention.review'
+  );
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='FAM_ADMIN' AND p.permission_code LIKE 'contract.%';
+WHERE r.role_code='DEPARTMENT_HEAD'
+  AND p.permission_code IN (
+    'employee_portal.view',
+    'facility_requests.create',
+    'facility_requests.view_own',
+    'reservations.create',
+    'reservations.view_own',
+    'notifications.view_own',
+    'profile.view_own'
+  );
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='FACILITY_MANAGER' AND (
-  p.permission_code IN ('dashboard.view','reports.view','reports.export') OR
-  (p.module_code IN ('facility_requests','maintenance','reservations') AND SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','create','edit','assign','approve','complete','verify','export'))
-);
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='FACILITY_MANAGER'
-  AND p.permission_code IN ('contract.view','contract.create','contract.edit','contract.review','contract.activate','contract.terminate','contract.archive');
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='MAINTENANCE_SUPERVISOR' AND (p.permission_code='dashboard.view' OR (p.module_code='maintenance' AND SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','create','edit','assign','complete','verify','export')) OR p.permission_code IN ('facility_requests.view','assets.view'));
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='TECHNICIAN' AND p.permission_code IN ('dashboard.view','maintenance.view','maintenance.edit','maintenance.complete','assets.view','facility_requests.view');
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='ASSET_CUSTODIAN' AND (p.module_code='assets' AND SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','create','edit','export','manage')) OR (r.role_code='ASSET_CUSTODIAN' AND p.permission_code IN ('dashboard.view','reports.view'));
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='RESERVATION_OFFICER' AND (p.module_code='reservations' AND SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','create','edit','approve','export','manage')) OR (r.role_code='RESERVATION_OFFICER' AND p.permission_code='dashboard.view');
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='PROCUREMENT_OFFICER' AND (p.module_code='procurement' AND SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','create','edit','approve','export','manage')) OR (r.role_code='PROCUREMENT_OFFICER' AND p.permission_code IN ('dashboard.view','reports.view'));
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='PROCUREMENT_OFFICER' AND p.permission_code='contract.view';
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='FINANCE_APPROVER' AND p.permission_code IN ('dashboard.view','reports.view','budget.approve','contract.view');
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='RECORDS_OFFICER' AND (p.module_code='records' AND SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','create','edit','verify','export','manage')) OR (r.role_code='RECORDS_OFFICER' AND p.permission_code IN ('dashboard.view','reports.view'));
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='REQUESTOR' AND p.permission_code IN ('dashboard.view','facility_requests.view','facility_requests.create','reservations.view','reservations.create');
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='APPROVER' AND p.permission_code IN ('dashboard.view','facility_requests.view','facility_requests.approve','reservations.view','reservations.approve','procurement.view','procurement.approve');
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='AUDITOR' AND p.permission_code IN ('dashboard.view','reports.view','reports.export','records.view','facility_requests.view','maintenance.view','assets.view','reservations.view','procurement.view');
-
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id FROM role r JOIN permission p
-WHERE r.role_code='AUDITOR' AND p.permission_code='contract.view';
+WHERE r.role_code='EMPLOYEE'
+  AND p.permission_code IN (
+    'employee_portal.view',
+    'facility_requests.create',
+    'facility_requests.view_own',
+    'reservations.create',
+    'reservations.view_own',
+    'notifications.view_own',
+    'profile.view_own'
+  );
 
 -- 8. User-Role Assignments
 INSERT IGNORE INTO user_role (user_account_id, role_id, assigned_by_user_id)
 SELECT u.user_account_id, r.role_id, admin.user_account_id
 FROM (
-SELECT 'gsms-super-admin' username,'SYSTEM_ADMIN' role_code UNION ALL
+SELECT 'gsms-super-admin' username,'FAM_SUPER_ADMIN' role_code UNION ALL
 SELECT 'gsms-fam-admin','FAM_ADMIN' UNION ALL
-SELECT 'facility.manager','FACILITY_MANAGER' UNION ALL
-SELECT 'maintenance.supervisor','MAINTENANCE_SUPERVISOR' UNION ALL
-SELECT 'technician.one','TECHNICIAN' UNION ALL
-SELECT 'asset.custodian','ASSET_CUSTODIAN' UNION ALL
-SELECT 'reservation.officer','RESERVATION_OFFICER' UNION ALL
-SELECT 'gsms-scm-head','PROCUREMENT_OFFICER' UNION ALL
-SELECT 'gsms-fin-head','FINANCE_APPROVER' UNION ALL
-SELECT 'records.officer','RECORDS_OFFICER' UNION ALL
-SELECT 'requestor.user','REQUESTOR'
+SELECT 'facility.manager','FAM_STAFF' UNION ALL
+SELECT 'maintenance.supervisor','FAM_STAFF' UNION ALL
+SELECT 'technician.one','FAM_STAFF' UNION ALL
+SELECT 'asset.custodian','FAM_STAFF' UNION ALL
+SELECT 'reservation.officer','FAM_STAFF' UNION ALL
+SELECT 'records.officer','FAM_STAFF' UNION ALL
+SELECT 'gsms-scm-head','DEPARTMENT_HEAD' UNION ALL
+SELECT 'gsms-fin-head','DEPARTMENT_HEAD' UNION ALL
+SELECT 'requestor.user','EMPLOYEE'
 ) v JOIN user_account u ON u.username=v.username JOIN role r ON r.role_code=v.role_code JOIN user_account admin ON admin.username='gsms-super-admin';
 
 -- 9. Buildings
@@ -312,15 +364,15 @@ ON DUPLICATE KEY UPDATE space_name=VALUES(space_name), space_type=VALUES(space_t
 -- 12. Request Categories
 INSERT INTO request_category (category_code, category_name, description, default_priority, responsible_role_code, status)
 VALUES
-('GEN','General Facility Request','General facilities support request.','MEDIUM','FACILITY_MANAGER','ACTIVE'),
-('HVAC','HVAC','Heating, ventilation, and air conditioning service.','HIGH','MAINTENANCE_SUPERVISOR','ACTIVE'),
-('ELEC','Electrical','Electrical repair, inspection, and safety issues.','HIGH','MAINTENANCE_SUPERVISOR','ACTIVE'),
-('PLUMB','Plumbing','Water supply, drainage, and fixture concerns.','MEDIUM','MAINTENANCE_SUPERVISOR','ACTIVE'),
-('CLEAN','Cleaning and Sanitation','Janitorial and sanitation services.','LOW','FACILITY_MANAGER','ACTIVE'),
-('CARP','Carpentry','Furniture, partition, door, and woodwork support.','MEDIUM','MAINTENANCE_SUPERVISOR','ACTIVE'),
-('SAFE','Safety','Safety hazards, inspections, and compliance support.','HIGH','FACILITY_MANAGER','ACTIVE'),
-('EQUIP','Equipment','Facility equipment setup or troubleshooting.','MEDIUM','FACILITY_MANAGER','ACTIVE'),
-('TRANS','Transportation Service','Vehicle or transport coordination request.','MEDIUM','FACILITY_MANAGER','ACTIVE')
+('GEN','General Facility Request','General facilities support request.','MEDIUM','FAM_STAFF','ACTIVE'),
+('HVAC','HVAC','Heating, ventilation, and air conditioning service.','HIGH','FAM_STAFF','ACTIVE'),
+('ELEC','Electrical','Electrical repair, inspection, and safety issues.','HIGH','FAM_STAFF','ACTIVE'),
+('PLUMB','Plumbing','Water supply, drainage, and fixture concerns.','MEDIUM','FAM_STAFF','ACTIVE'),
+('CLEAN','Cleaning and Sanitation','Janitorial and sanitation services.','LOW','FAM_STAFF','ACTIVE'),
+('CARP','Carpentry','Furniture, partition, door, and woodwork support.','MEDIUM','FAM_STAFF','ACTIVE'),
+('SAFE','Safety','Safety hazards, inspections, and compliance support.','HIGH','FAM_STAFF','ACTIVE'),
+('EQUIP','Equipment','Facility equipment setup or troubleshooting.','MEDIUM','FAM_STAFF','ACTIVE'),
+('TRANS','Transportation Service','Vehicle or transport coordination request.','MEDIUM','FAM_STAFF','ACTIVE')
 ON DUPLICATE KEY UPDATE category_name=VALUES(category_name), description=VALUES(description), default_priority=VALUES(default_priority), responsible_role_code=VALUES(responsible_role_code), status=VALUES(status);
 
 -- 13. SLA Policies
@@ -367,10 +419,11 @@ ON DUPLICATE KEY UPDATE category_name=VALUES(category_name), description=VALUES(
 -- 16. Contract Types
 INSERT INTO contract_type (type_code, type_name, description, status)
 VALUES
-('SERVICE','Service Contract','Recurring service engagement.','ACTIVE'),
-('SUPPLY','Supply Contract','Supply and delivery agreement.','ACTIVE'),
-('LEASE','Lease Agreement','Facility, space, or equipment lease.','ACTIVE'),
-('MAINTENANCE','Maintenance Contract','Maintenance support agreement.','ACTIVE')
+('CLIENT_CONTRACT','Client Contract','Client-facing contract or agreement.','ACTIVE'),
+('EMPLOYEE_CONTRACT','Employee Contract','Employee contract or employment-related agreement.','ACTIVE'),
+('NDA','NDA / Confidentiality Agreement','Non-disclosure or confidentiality agreement.','ACTIVE'),
+('CONTRACT_AMENDMENT','Contract Amendment','Amendment to an existing contract.','ACTIVE'),
+('OTHER','Other','Other contract or agreement type.','ACTIVE')
 ON DUPLICATE KEY UPDATE type_name=VALUES(type_name), description=VALUES(description), status=VALUES(status);
 
 -- 17. Retention Schedules

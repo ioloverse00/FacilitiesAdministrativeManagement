@@ -5,7 +5,8 @@ declare(strict_types=1);
 final class ContractMetadataExtractionService
 {
     private const PROVIDER = 'GEMINI';
-    private const READABLE_MIME = ['application/pdf', 'image/jpeg', 'image/png'];
+    private const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    private const READABLE_MIME = ['application/pdf', 'image/jpeg', 'image/png', self::DOCX_MIME];
     private const MAX_SOURCE_BYTES = 10_000_000;
     private const STATUSES = ['ACTIVE', 'EXPIRED', 'TERMINATED', 'RENEWED', 'UNKNOWN'];
     private const CONFIDENCE = ['LOW', 'MEDIUM', 'HIGH'];
@@ -52,6 +53,17 @@ final class ContractMetadataExtractionService
         if (!in_array($mime, self::READABLE_MIME, true) || $size <= 0 || $size > self::MAX_SOURCE_BYTES || !is_file($path)) {
             return null;
         }
+        if ($mime === self::DOCX_MIME) {
+            $text = $this->extractDocxText($path);
+            if ($text === '') {
+                return null;
+            }
+            return $row + [
+                'textContent' => $text,
+                'mimeType' => 'text/plain',
+            ];
+        }
+
         $bytes = file_get_contents($path);
         if ($bytes === false || $bytes === '') {
             return null;
@@ -83,10 +95,7 @@ final class ContractMetadataExtractionService
                 'role' => 'user',
                 'parts' => [
                     ['text' => $this->instructions($document, $source)],
-                    ['inline_data' => [
-                        'mime_type' => (string) $source['mimeType'],
-                        'data' => (string) $source['base64'],
-                    ]],
+                    ...$this->sourceParts($source),
                 ],
             ]],
             'generationConfig' => [
@@ -95,6 +104,22 @@ final class ContractMetadataExtractionService
                 'response_schema' => $this->schema(),
             ],
         ];
+    }
+
+    private function sourceParts(array $source): array
+    {
+        if (isset($source['textContent'])) {
+            return [[
+                'text' => "Extract from this DOCX text export:\n\n" . (string) $source['textContent'],
+            ]];
+        }
+
+        return [[
+            'inline_data' => [
+                'mime_type' => (string) $source['mimeType'],
+                'data' => (string) $source['base64'],
+            ],
+        ]];
     }
 
     private function instructions(array $document, array $source): string
@@ -271,6 +296,64 @@ final class ContractMetadataExtractionService
     {
         $text = mb_substr(trim((string) $value), 0, $max);
         return $text === '' ? null : $text;
+    }
+
+    private function extractDocxText(string $absolutePath): string
+    {
+        if (!class_exists('ZipArchive')) {
+            return '';
+        }
+        $zip = new ZipArchive();
+        if ($zip->open($absolutePath) !== true) {
+            return '';
+        }
+        $xml = (string) ($zip->getFromName('word/document.xml') ?: '');
+        $zip->close();
+        if ($xml === '') {
+            return '';
+        }
+        if (!class_exists('XMLReader')) {
+            return $this->extractDocxTextFallback($xml);
+        }
+
+        $text = '';
+        $previousRunText = false;
+        $reader = new XMLReader();
+        if (!$reader->XML($xml, null, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING)) {
+            return '';
+        }
+        while ($reader->read()) {
+            if ($reader->nodeType === XMLReader::ELEMENT && $reader->localName === 't') {
+                $text .= $reader->readString();
+                $previousRunText = true;
+            } elseif ($reader->nodeType === XMLReader::ELEMENT && $reader->localName === 'tab') {
+                $text .= "\t";
+                $previousRunText = false;
+            } elseif ($reader->nodeType === XMLReader::ELEMENT && $reader->localName === 'br') {
+                $text .= "\n";
+                $previousRunText = false;
+            } elseif ($reader->nodeType === XMLReader::END_ELEMENT && $reader->localName === 'p') {
+                $text .= "\n";
+                $previousRunText = false;
+            } elseif ($reader->nodeType === XMLReader::ELEMENT && in_array($reader->localName, ['instrText', 'delText'], true) && $previousRunText) {
+                $text .= ' ';
+                $previousRunText = false;
+            }
+        }
+        $reader->close();
+        $text = preg_replace("/[ \t]+\n/", "\n", $text) ?? $text;
+        $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
+        return trim($text);
+    }
+
+    private function extractDocxTextFallback(string $xml): string
+    {
+        $xml = preg_replace('/<\/w:p>/', "\n", $xml) ?? $xml;
+        $xml = preg_replace('/<\/w:tab>/', "\t", $xml) ?? $xml;
+        $text = html_entity_decode(strip_tags($xml), ENT_QUOTES | ENT_XML1, 'UTF-8');
+        $text = preg_replace("/[ \t]+\n/", "\n", $text) ?? $text;
+        $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
+        return trim($text);
     }
 
     private function nullableDate(mixed $value): ?string

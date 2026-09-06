@@ -23,8 +23,26 @@
             const required = element.dataset.requiresPermission;
             if (required && !permissions.includes(required)) {
                 element.classList.add('hidden');
+                element.setAttribute('aria-hidden', 'true');
+            } else if (required) {
+                element.classList.remove('hidden');
+                element.removeAttribute('aria-hidden');
             }
         });
+    }
+
+    function hasPermission(permission) {
+        return (window.FAMApi?.currentUser?.permissions || []).includes(permission);
+    }
+
+    function enforcePagePermission() {
+        const required = document.body.dataset.requiresPermission;
+        if (!required || hasPermission(required)) {
+            return true;
+        }
+
+        window.location.replace('../errors/403.html');
+        return false;
     }
     function applyPageMetadata() {
         const config = window.pageConfig || {};
@@ -127,6 +145,7 @@
         try {
             await ensureApiClient();
             if (!await verifyProtectedSession()) return;
+            if (!enforcePagePermission()) return;
             await ensureDetailsModal();
             await ensureLiveModule();
 
@@ -137,6 +156,7 @@
             ]);
 
             applyPageMetadata();
+            applyPermissionVisibility();
             window.FAMNavigation?.initializeActiveNavigation();
             window.FAMSidebar?.initializeSidebar();
             window.FAMProfileDropdown?.initializeProfileDropdown();
@@ -163,7 +183,8 @@
     window.FAMLayout = {
         loadComponent,
         initializeLayout,
-        applyPageMetadata
+        applyPageMetadata,
+        applyPermissionVisibility
     };
 })();
 

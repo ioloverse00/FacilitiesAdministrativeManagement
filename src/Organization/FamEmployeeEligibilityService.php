@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class FamEmployeeEligibilityService
 {
     private const FAM_HANDLER_PERMISSIONS = ['legal.assign', 'legal.manage'];
-    private const EXCLUDED_HANDLER_ROLES = ['SYSTEM_ADMIN'];
+    private const EXCLUDED_HANDLER_ROLES = ['FAM_SUPER_ADMIN'];
 
     public function __construct(private readonly PDO $pdo)
     {

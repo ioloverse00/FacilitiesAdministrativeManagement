@@ -85,7 +85,7 @@ WHERE ua.account_status = 'ACTIVE'
   AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
   AND (
     p.permission_code IN ('facility_requests.manage','facility_requests.assign','facility_requests.approve')
-    OR r.role_code IN ('FAM_ADMIN','SYSTEM_ADMIN')
+    OR r.role_code IN ('FAM_ADMIN','FAM_SUPER_ADMIN')
   )
 ORDER BY ua.user_account_id
 SQL)->fetchAll();

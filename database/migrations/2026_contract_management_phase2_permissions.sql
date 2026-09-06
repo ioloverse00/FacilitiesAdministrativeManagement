@@ -20,16 +20,16 @@ INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
 FROM role r
 JOIN permission p ON p.permission_code LIKE 'contract.%'
-WHERE r.role_code IN ('SYSTEM_ADMIN', 'FAM_ADMIN');
+WHERE r.role_code IN ('FAM_SUPER_ADMIN', 'FAM_ADMIN');
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
 FROM role r
 JOIN permission p ON p.permission_code IN ('contract.view','contract.create','contract.edit','contract.review','contract.activate','contract.terminate','contract.archive')
-WHERE r.role_code = 'FACILITY_MANAGER';
+WHERE r.role_code = 'FAM_STAFF';
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
 FROM role r
 JOIN permission p ON p.permission_code = 'contract.view'
-WHERE r.role_code IN ('AUDITOR','PROCUREMENT_OFFICER');
+WHERE r.role_code = 'FAM_STAFF';

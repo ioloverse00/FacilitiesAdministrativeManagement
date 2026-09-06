@@ -65,7 +65,7 @@ Document Management remains the source of truth for file storage, metadata, vers
 
 ## Legal Management Links
 
-Legal supporting documents are ordinary Document Management records. Legal Management automatically assigns the canonical Legal category, applies the Legal category's restricted confidentiality default, sets `related_module` to `LEGAL_MANAGEMENT`, and sets `related_reference` to the legal matter number.
+Legal supporting documents are ordinary Document Management records. Legal Management automatically assigns the canonical Legal category, applies the `CONFIDENTIAL` classification, sets `related_module` to `LEGAL_MANAGEMENT`, and sets `related_reference` to the legal matter number.
 
 Users do not choose document category, related module, related record, or confidentiality when attaching evidence from Legal Management.
 
@@ -80,3 +80,15 @@ Legal AI Matter Summary is not stored as a document, file, or generated PDF. It 
 The Legal AI workflow may send only the current readable versions of documents linked to the specific Legal Matter being summarized. Raw Gemini responses, prompts, source file contents, and permanent storage paths are not exposed to the frontend.
 
 The Legal AI summary text is never an authoritative retention trigger source. Contract expiration dates become eligible for Records Retention only after they are stored as confirmed structured Document Management metadata. Confirmation records provenance through contract metadata status/source and confirmation actor/timestamp fields.
+
+## Template Management
+
+Document Template Management governs reusable master templates such as client service agreements, employee contracts, NDAs, and contract amendment templates. Templates are not individual contracts and do not generate contract-specific documents in this phase.
+
+In v1, the uploaded template file is the authoritative template content. Administrators prepare the reusable document outside the system, upload it, add business metadata, and save it as an active controlled master template. The normal admin workflow does not require typing contract text, template codes, source-module identifiers, placeholder syntax, version numbers, or a separate self-approval step.
+
+Template governance uses dedicated `document_templates.*` permissions rather than System Configuration permissions. FAM Super Admin and FAM Admin may manage and retire templates; FAM Staff, Department Head, and Employee users receive no template-governance permissions.
+
+Template files reuse the existing `document` and `document_version` storage model. The template tables store logical template metadata, version lifecycle status, historical approval metadata where it exists, and registered placeholder usage. Active template versions are immutable; changes require uploading a new version, which becomes the current active version immediately while prior versions remain in version history.
+
+The placeholder registry remains future-ready backend infrastructure using strict `{{namespace.field}}` syntax. It is not a required step in the normal v1 administrative workflow. Validation detects valid, duplicate, unknown, malformed, and unsupported placeholders without executing code, SQL, JavaScript, or runtime expressions.

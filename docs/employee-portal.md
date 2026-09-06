@@ -12,7 +12,17 @@ The Employee Portal is the requester-facing side of the FAM project. It provides
 - No separate employee login, session cookie, user table, or password storage was added.
 - No mock employee activity, facility request rows, room reservations, or notifications were added.
 
-Any authenticated account with a valid `user_account.employee_reference_id` linkage can load the Employee Portal.
+Accounts with the `DEPARTMENT_HEAD` or `EMPLOYEE` persona can load the Employee Portal when they also have a valid `user_account.employee_reference_id` linkage. FAM administrative roles use the FAM portal unless a future workflow explicitly grants separate employee-portal access.
+
+The canonical application roles are:
+
+- `FAM_SUPER_ADMIN` = FAM system super administrator
+- `FAM_ADMIN` = FAM Department Head
+- `FAM_STAFF` = ordinary FAM operational employee
+- `DEPARTMENT_HEAD` = head of a non-FAM department
+- `EMPLOYEE` = ordinary employee
+
+Organizational position and application authorization are separate concepts. A FAM Department Head belongs to the FAM department and uses `FAM_ADMIN`; non-FAM department heads use `DEPARTMENT_HEAD` and are verified through `department_reference.department_head_employee_reference_id`.
 
 ## Navigation
 
@@ -72,7 +82,7 @@ Employees submit reservations as `SUBMITTED / PENDING`, may cancel while `SUBMIT
 Employee portal access uses:
 
 - `employee_portal.view`
-- `reservations.create`
+- `facility_requests.create`
 - `facility_requests.view_own`
 - `reservations.create`
 - `reservations.view_own`

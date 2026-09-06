@@ -64,6 +64,7 @@ SELECT
     c.current_amount,
     c.currency_code,
     c.contract_status,
+    c.counterparty_name,
     supplier.supplier_name,
     dept.department_name,
     requester.full_name requested_by_name
@@ -108,13 +109,30 @@ SQL);
         }));
     }
 
-    return array_map(static function (array $row): array {
+    $canViewFinancials = in_array('budget.approve', $user['permissions'] ?? [], true)
+        || in_array('contract.manage', $user['permissions'] ?? [], true);
+
+    return array_map(static function (array $row) use ($canViewFinancials): array {
         $actionable = in_array((string) $row['task_status'], ['PENDING','IN_PROGRESS'], true)
             && (string) $row['approval_status'] === 'PENDING'
             && (int) $row['current_step_number'] === (int) $row['step_number']
             && (string) $row['step_status'] === 'PENDING'
             && (string) $row['decision'] === 'PENDING'
             && (string) $row['contract_status'] === 'FOR_APPROVAL';
+
+        $contract = [
+            'id' => (int) $row['entity_id'],
+            'number' => (string) $row['contract_number'],
+            'title' => (string) $row['contract_title'],
+            'counterparty' => ['name' => trim((string) ($row['counterparty_name'] ?? '')) !== '' ? (string) $row['counterparty_name'] : (string) ($row['supplier_name'] ?? '')],
+            'supplier' => (string) ($row['supplier_name'] ?? ''),
+            'owning_department' => (string) ($row['department_name'] ?? ''),
+            'status' => (string) $row['contract_status'],
+        ];
+        if ($canViewFinancials) {
+            $contract['amount'] = $row['current_amount'] === null ? null : (float) $row['current_amount'];
+            $contract['currency'] = (string) ($row['currency_code'] ?? '');
+        }
 
         return [
             'task_id' => (int) $row['workflow_task_id'],
@@ -136,16 +154,7 @@ SQL);
             'completed_at' => $row['task_completed_at'] ?? $row['decided_at'],
             'submitted_at' => $row['submitted_at'],
             'requested_by' => (string) ($row['requested_by_name'] ?? ''),
-            'contract' => [
-                'id' => (int) $row['entity_id'],
-                'number' => (string) $row['contract_number'],
-                'title' => (string) $row['contract_title'],
-                'supplier' => (string) ($row['supplier_name'] ?? ''),
-                'owning_department' => (string) ($row['department_name'] ?? ''),
-                'amount' => $row['current_amount'] === null ? null : (float) $row['current_amount'],
-                'currency' => (string) ($row['currency_code'] ?? ''),
-                'status' => (string) $row['contract_status'],
-            ],
+            'contract' => $contract,
         ];
     }, $rows);
 }

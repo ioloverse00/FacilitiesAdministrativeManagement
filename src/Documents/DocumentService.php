@@ -183,7 +183,7 @@ final class DocumentService
     {
         return [
             'categories' => $this->rows("SELECT document_category_id id, category_code code, category_name name, default_confidentiality_level default_confidentiality FROM document_category WHERE status='ACTIVE' AND category_code IN ('DOC-RES','DOC-VIS','DOC-ADM','DOC-LEGAL','DOC-CON') ORDER BY FIELD(category_code,'DOC-RES','DOC-VIS','DOC-ADM','DOC-LEGAL','DOC-CON'), category_name"),
-            'confidentiality_levels' => ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED'],
+            'confidentiality_levels' => ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL'],
             'statuses' => ['ACTIVE', 'ARCHIVED'],
             'related_modules' => [
                 ['code' => 'GENERAL_ADMINISTRATIVE', 'name' => 'General Administrative'],
@@ -199,9 +199,24 @@ final class DocumentService
     {
         $clean = $this->validateMetadata($data, true);
         $upload = $this->validateUpload($file);
-        $stored = null;
+        return $this->createFromValidatedUpload($clean, $upload, $user);
+    }
 
-        $this->pdo->beginTransaction();
+    public function createFromContent(array $data, string $content, string $fileName, string $mimeType, array $user): array
+    {
+        $clean = $this->validateMetadata($data, true);
+        $upload = $this->contentUpload($content, $fileName, $mimeType);
+        return $this->createFromValidatedUpload($clean, $upload, $user);
+    }
+
+    private function createFromValidatedUpload(array $clean, array $upload, array $user): array
+    {
+        $stored = null;
+        $ownsTransaction = !$this->pdo->inTransaction();
+
+        if ($ownsTransaction) {
+            $this->pdo->beginTransaction();
+        }
         try {
             $documentNumber = $this->nextDocumentNumber();
             $statement = $this->pdo->prepare('INSERT INTO document (document_number, document_category_id, document_title, document_description, document_status, confidentiality_level, current_version_number, document_date, uploaded_by_user_id, owner_employee_reference_id, created_at, updated_at) VALUES (:number, :category, :title, :description, :status, :confidentiality, 1, :document_date, :uploaded_by, :owner, NOW(), NOW())');
@@ -221,9 +236,13 @@ final class DocumentService
             $this->insertVersion($documentId, 1, $stored, $upload, $clean['change_summary'], (int) $user['id']);
             $this->createLinkedRecord($documentId, $documentNumber, $clean, $user);
             $this->logActivity('DOCUMENT_CREATED', 'Document Created', $documentId, (int) $user['id']);
-            $this->pdo->commit();
+            if ($ownsTransaction) {
+                $this->pdo->commit();
+            }
         } catch (Throwable $exception) {
-            $this->pdo->rollBack();
+            if ($ownsTransaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             if ($stored !== null && is_file($stored['absolute_path'])) {
                 @unlink($stored['absolute_path']);
             }
@@ -253,7 +272,7 @@ final class DocumentService
         }
         return [
             'document_category_id' => (int) $row['id'],
-            'confidentiality_level' => 'RESTRICTED',
+            'confidentiality_level' => 'CONFIDENTIAL',
         ];
     }
 
@@ -331,6 +350,18 @@ final class DocumentService
     public function uploadVersion(int $documentId, array $data, array $file, array $user): ?array
     {
         $summary = $this->text($data['change_summary'] ?? '', 1000);
+        $upload = $this->validateUpload($file);
+        return $this->uploadValidatedVersion($documentId, $upload, $summary, $user);
+    }
+
+    public function uploadVersionFromContent(int $documentId, string $content, string $fileName, string $mimeType, string $summary, array $user): ?array
+    {
+        $upload = $this->contentUpload($content, $fileName, $mimeType);
+        return $this->uploadValidatedVersion($documentId, $upload, $this->text($summary, 1000), $user);
+    }
+
+    private function uploadValidatedVersion(int $documentId, array $upload, string $summary, array $user): ?array
+    {
         $stored = null;
         $this->pdo->beginTransaction();
         try {
@@ -343,7 +374,6 @@ final class DocumentService
                 throw new InvalidArgumentException(json_encode(['status' => 'Archived documents cannot receive new versions.'], JSON_THROW_ON_ERROR));
             }
 
-            $upload = $this->validateUpload($file);
             $next = (int) $this->scalar('SELECT COALESCE(MAX(version_number),0) + 1 FROM document_version WHERE document_id = :id AND deleted_at IS NULL', ['id' => $documentId]);
             $stored = $this->storeUploadedFile($upload, $documentId, $next);
             $this->pdo->prepare('UPDATE document_version SET is_current = FALSE WHERE document_id = :id')->execute(['id' => $documentId]);
@@ -387,7 +417,7 @@ final class DocumentService
 
     public function downloadVersion(int $documentId, ?int $versionId): ?array
     {
-        $sql = 'SELECT dv.*, d.document_number, d.document_title FROM document_version dv INNER JOIN document d ON d.document_id = dv.document_id WHERE d.deleted_at IS NULL AND dv.deleted_at IS NULL AND dv.document_id = :document_id';
+        $sql = 'SELECT dv.*, d.document_number, d.document_title, d.confidentiality_level FROM document_version dv INNER JOIN document d ON d.document_id = dv.document_id WHERE d.deleted_at IS NULL AND dv.deleted_at IS NULL AND dv.document_id = :document_id';
         $params = ['document_id' => $documentId];
         if ($versionId !== null) {
             $sql .= ' AND dv.document_version_id = :version_id';
@@ -402,8 +432,8 @@ final class DocumentService
         if (!is_array($row)) {
             return null;
         }
-        $absolute = $this->storageRoot() . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string) $row['storage_path']);
-        if (!is_file($absolute)) {
+        $absolute = $this->resolveDocumentStoragePath((string) $row['storage_path']);
+        if ($absolute === null || !is_file($absolute)) {
             return null;
         }
 
@@ -412,7 +442,15 @@ final class DocumentService
             'download_name' => (string) $row['file_name'],
             'mime_type' => (string) ($row['mime_type'] ?: 'application/octet-stream'),
             'file_size' => (int) ($row['file_size'] ?? filesize($absolute)),
+            'document_version_id' => (int) $row['document_version_id'],
+            'confidentiality_level' => (string) $row['confidentiality_level'],
         ];
+    }
+
+    public function requiresStepUp(int $documentId): bool
+    {
+        $level = $this->scalar('SELECT confidentiality_level FROM document WHERE document_id = :id AND deleted_at IS NULL LIMIT 1', ['id' => $documentId]);
+        return strtoupper((string) $level) === 'CONFIDENTIAL';
     }
 
     private function validateMetadata(array $data, bool $creating): array
@@ -434,7 +472,7 @@ final class DocumentService
         if (!$this->categoryExists($categoryId)) {
             $errors['document_category_id'] = 'Choose a valid document category.';
         }
-        if (!in_array($confidentiality, ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED'], true)) {
+        if (!in_array($confidentiality, ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL'], true)) {
             $errors['confidentiality_level'] = 'Choose a valid confidentiality level.';
         }
         if (!in_array($status, ['ACTIVE', 'ARCHIVED'], true)) {
@@ -498,7 +536,7 @@ final class DocumentService
         $absolutePath = $absoluteDir . DIRECTORY_SEPARATOR . $storedName;
         $stored = is_uploaded_file($upload['tmp_name'])
             ? move_uploaded_file($upload['tmp_name'], $absolutePath)
-            : (PHP_SAPI === 'cli' && copy($upload['tmp_name'], $absolutePath));
+            : (!empty($upload['generated']) && copy($upload['tmp_name'], $absolutePath));
         if (!$stored) {
             throw new RuntimeException('Unable to store uploaded document.');
         }
@@ -665,7 +703,10 @@ final class DocumentService
 
     private function filters(array $query, bool $includeLegalDocuments = true): array
     {
-        $where = ['d.deleted_at IS NULL'];
+        $where = [
+            'd.deleted_at IS NULL',
+            'NOT EXISTS (SELECT 1 FROM document_template_version dtv WHERE dtv.document_id = d.document_id)',
+        ];
         $params = [];
         if (!$includeLegalDocuments) {
             $where[] = "NOT EXISTS (SELECT 1 FROM record_document rd_legal INNER JOIN record rec_legal ON rec_legal.record_id = rd_legal.record_id AND rec_legal.deleted_at IS NULL WHERE rd_legal.document_id = d.document_id AND rec_legal.source_module = 'legal_management')";
@@ -699,10 +740,11 @@ final class DocumentService
 
     private function summary(): array
     {
+        $repositoryWhere = 'deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM document_template_version dtv WHERE dtv.document_id = document.document_id)';
         return [
-            'active' => (int) $this->scalar("SELECT COUNT(*) FROM document WHERE deleted_at IS NULL AND document_status = 'ACTIVE'"),
-            'archived' => (int) $this->scalar("SELECT COUNT(*) FROM document WHERE deleted_at IS NULL AND document_status = 'ARCHIVED'"),
-            'recent' => (int) $this->scalar('SELECT COUNT(*) FROM document WHERE deleted_at IS NULL AND updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)'),
+            'active' => (int) $this->scalar("SELECT COUNT(*) FROM document WHERE $repositoryWhere AND document_status = 'ACTIVE'"),
+            'archived' => (int) $this->scalar("SELECT COUNT(*) FROM document WHERE $repositoryWhere AND document_status = 'ARCHIVED'"),
+            'recent' => (int) $this->scalar("SELECT COUNT(*) FROM document WHERE $repositoryWhere AND updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)"),
         ];
     }
 
@@ -866,6 +908,42 @@ final class DocumentService
         return substr(trim($name, " .\t\n\r\0\x0B"), 0, 180) ?: 'document';
     }
 
+    private function contentUpload(string $content, string $fileName, string $mimeType): array
+    {
+        $mimeType = strtolower(trim($mimeType));
+        $extensionMap = [
+            'text/html' => 'html',
+            'text/plain' => 'txt',
+            'application/pdf' => 'pdf',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            'application/vnd.ms-excel' => 'xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+            'image/png' => 'png',
+            'image/jpeg' => 'jpg',
+        ];
+        if (!isset($extensionMap[$mimeType])) {
+            $mimeType = 'text/plain';
+        }
+        $extension = $extensionMap[$mimeType];
+        $safeName = $this->safeFileName($fileName !== '' ? $fileName : 'template.' . $extension);
+        if (!str_ends_with(strtolower($safeName), '.' . $extension)) {
+            $safeName .= '.' . $extension;
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'fam-template-');
+        if ($tmp === false || file_put_contents($tmp, $content) === false) {
+            throw new RuntimeException('Unable to prepare template content.');
+        }
+        return [
+            'tmp_name' => $tmp,
+            'original_name' => $safeName,
+            'extension' => $extension,
+            'mime_type' => $mimeType,
+            'size' => strlen($content),
+            'generated' => true,
+        ];
+    }
+
     private function date(mixed $value): ?string
     {
         if ($value === null || $value === '') {
@@ -911,6 +989,23 @@ final class DocumentService
     private function storageRoot(): string
     {
         return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage';
+    }
+
+    private function resolveDocumentStoragePath(string $storagePath): ?string
+    {
+        $normalized = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $storagePath);
+        if ($normalized === '' || str_contains($normalized, '..')) {
+            return null;
+        }
+
+        $base = realpath($this->storageRoot() . DIRECTORY_SEPARATOR . 'documents');
+        $absolute = realpath($this->storageRoot() . DIRECTORY_SEPARATOR . $normalized);
+        if ($base === false || $absolute === false) {
+            return null;
+        }
+
+        $prefix = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return str_starts_with($absolute, $prefix) ? $absolute : null;
     }
 
     private function scalar(string $sql, array $params = []): mixed

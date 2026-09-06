@@ -84,7 +84,13 @@
         qs(config.refreshId)?.addEventListener('click', load);
         qs(config.resetId)?.addEventListener('click', () => { state.filters = {}; state.page = 1; const search = qs(config.searchId); if (search) search.value = ''; load(); });
         if (config.createId) qs(config.createId)?.addEventListener('click', () => window.FAMModal?.showToast('This workflow will be enabled in a later implementation step.'));
-        qs(config.exportId)?.addEventListener('click', () => window.FAMModal?.showToast('Live export will be enabled in a later implementation step.'));
+        qs(config.exportId)?.addEventListener('click', () => {
+            if (typeof config.exportUrl === 'function') {
+                window.location.href = config.exportUrl(params(state), state);
+                return;
+            }
+            window.FAMModal?.showToast('Live export will be enabled in a later implementation step.');
+        });
         qs(config.tableBodyId)?.addEventListener('click', e => { const button = e.target.closest('[data-live-view]'); if (button) show(button.dataset.liveView); });
         load();
     }

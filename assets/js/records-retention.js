@@ -71,6 +71,19 @@
         return p;
     }
 
+    function exportUrl() {
+        const p = new URLSearchParams({ report: 'documents_records', source: 'records' });
+        const search = qs('#retention-search')?.value.trim();
+        const schedule = qs('#retention-schedule-filter')?.value;
+        const status = qs('#retention-status-filter')?.value;
+        const hold = qs('#retention-hold-filter')?.value;
+        if (search) p.set('search', search);
+        if (schedule && schedule !== 'all') p.set('retention_schedule_id', schedule);
+        if (status && status !== 'all') p.set('status', status);
+        if (hold && hold !== 'all') p.set('legal_hold_status', hold);
+        return `../api/reports/export-csv.php?${p}`;
+    }
+
     async function load() {
         qs('#retention-loading-state')?.classList.remove('hidden');
         const payload = await window.FAMApi.request(api(`retention/index.php?${params()}`));
@@ -518,6 +531,7 @@
 
     function bind() {
         qs('#retention-refresh')?.addEventListener('click', () => load().catch(console.error));
+        qs('#retention-export')?.addEventListener('click', () => { window.location.href = exportUrl(); });
         qs('#retention-prev-page')?.addEventListener('click', () => { if (state.page > 1) { state.page--; load().catch(console.error); } });
         qs('#retention-next-page')?.addEventListener('click', () => { if (state.page < state.totalPages) { state.page++; load().catch(console.error); } });
         document.querySelectorAll('.retention-table [data-sort]').forEach(button => button.addEventListener('click', () => {

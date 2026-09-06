@@ -62,6 +62,22 @@ final class ReservationService
         return ['items'=>array_map(fn($r)=>$this->shape($r), $stmt->fetchAll()), 'pagination'=>['page'=>$page,'per_page'=>$perPage,'total'=>$total,'total_pages'=>(int)max(1, ceil($total / $perPage))], 'summary'=>$this->summary()];
     }
 
+    public function streamCsv(array $query, mixed $handle): void
+    {
+        $this->reconcileExpiredApprovedReservations();
+        $sortMap = ['reservation_number'=>'r.reservation_number','purpose'=>'r.purpose','start_datetime'=>'r.start_datetime','status'=>'r.status','approval_status'=>'r.approval_status','created_at'=>'r.created_at'];
+        $sort = (string) ($query['sort'] ?? 'start_datetime');
+        $direction = strtolower((string) ($query['direction'] ?? 'asc')) === 'desc' ? 'DESC' : 'ASC';
+        [$where, $params] = $this->filters($query);
+        fputcsv($handle, ['Reservation No.', 'Facility / Room', 'Reservation Type', 'Purpose', 'Requester', 'Department', 'Expected Attendees', 'Start Date/Time', 'End Date/Time', 'Reservation Status', 'Approval Status', 'Created', 'Updated']);
+        $statement = $this->pdo->prepare($this->baseSelect() . ' ' . $where . ' ORDER BY ' . ($sortMap[$sort] ?? $sortMap['start_datetime']) . ' ' . $direction);
+        foreach ($params as $key => $value) $statement->bindValue($key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        $statement->execute();
+        while ($row = $statement->fetch()) {
+            fputcsv($handle, array_map(fn($value) => $this->csvCell($value), [$row['reservation_number'], $row['space_name'], $row['reservation_type'], $row['purpose'], $row['requester_name'], $row['department_name'], $row['expected_attendees'], $row['start_datetime'], $row['end_datetime'], $row['status'], $row['approval_status'], $row['created_at'], $row['updated_at']]));
+        }
+    }
+
     public function calendar(array $query): array
     {
         return ['items'=>$this->list(array_merge($query, ['per_page'=>200,'sort'=>'start_datetime','direction'=>'asc']))['items']];
@@ -689,7 +705,7 @@ final class ReservationService
 
     private function reservationAdminRecipients(int $excludeUserId = 0, int $excludeEmployeeId = 0): array
     {
-        $rows = $this->query("SELECT DISTINCT ua.user_account_id FROM user_account ua INNER JOIN user_role ur ON ur.user_account_id=ua.user_account_id INNER JOIN role r ON r.role_id=ur.role_id LEFT JOIN role_permission rp ON rp.role_id=r.role_id LEFT JOIN permission p ON p.permission_id=rp.permission_id WHERE ua.account_status='ACTIVE' AND ua.deleted_at IS NULL AND (ur.expires_at IS NULL OR ur.expires_at>NOW()) AND (p.permission_code IN ('reservations.manage','reservations.approve') OR r.role_code IN ('FAM_ADMIN','SYSTEM_ADMIN','RESERVATION_OFFICER')) AND (:exclude_user_id_zero=0 OR ua.user_account_id<>:exclude_user_id_value) AND (:exclude_employee_id_zero=0 OR ua.employee_reference_id IS NULL OR ua.employee_reference_id<>:exclude_employee_id_value) ORDER BY ua.user_account_id", ['exclude_user_id_zero'=>$excludeUserId,'exclude_user_id_value'=>$excludeUserId,'exclude_employee_id_zero'=>$excludeEmployeeId,'exclude_employee_id_value'=>$excludeEmployeeId]);
+        $rows = $this->query("SELECT DISTINCT ua.user_account_id FROM user_account ua INNER JOIN user_role ur ON ur.user_account_id=ua.user_account_id INNER JOIN role r ON r.role_id=ur.role_id LEFT JOIN role_permission rp ON rp.role_id=r.role_id LEFT JOIN permission p ON p.permission_id=rp.permission_id WHERE ua.account_status='ACTIVE' AND ua.deleted_at IS NULL AND (ur.expires_at IS NULL OR ur.expires_at>NOW()) AND (p.permission_code IN ('reservations.manage','reservations.approve') OR r.role_code IN ('FAM_ADMIN','FAM_SUPER_ADMIN')) AND (:exclude_user_id_zero=0 OR ua.user_account_id<>:exclude_user_id_value) AND (:exclude_employee_id_zero=0 OR ua.employee_reference_id IS NULL OR ua.employee_reference_id<>:exclude_employee_id_value) ORDER BY ua.user_account_id", ['exclude_user_id_zero'=>$excludeUserId,'exclude_user_id_value'=>$excludeUserId,'exclude_employee_id_zero'=>$excludeEmployeeId,'exclude_employee_id_value'=>$excludeEmployeeId]);
         return array_map(static fn(array $row): int => (int)$row['user_account_id'], $rows);
     }
 
@@ -716,6 +732,7 @@ final class ReservationService
     private function exists(string $table, string $column, int $id, string $extra): bool { $stmt=$this->pdo->prepare("SELECT 1 FROM $table WHERE $column=:id AND $extra LIMIT 1"); $stmt->execute(['id'=>$id]); return (bool)$stmt->fetchColumn(); }
     private function query(string $sql, array $params=[]): array { $stmt=$this->pdo->prepare($sql); $stmt->execute($params); return $stmt->fetchAll(); }
     private function scalar(string $sql, array $params=[]): mixed { $stmt=$this->pdo->prepare($sql); $stmt->execute($params); return $stmt->fetchColumn(); }
+    private function csvCell(mixed $value): string { $cell = trim((string)($value ?? '')); return $cell !== '' && preg_match('/^[=+\-@]/', $cell) === 1 ? "'" . $cell : $cell; }
     private function distinct(string $table, string $column): array { return array_values(array_filter(array_map(fn($r)=>$r[$column], $this->query("SELECT DISTINCT `$column` FROM `$table` WHERE `$column` IS NOT NULL ORDER BY `$column`")))); }
     private function dateTime(string $value): string { return (new DateTimeImmutable($value, new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s'); }
     private function nullableDateTime(mixed $value): ?string { return $value === null || $value === '' ? null : $this->dateTime((string)$value); }

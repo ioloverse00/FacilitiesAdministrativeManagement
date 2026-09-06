@@ -65,6 +65,11 @@
     };
 
     const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    const text = (value, fallback = '') => String(value ?? '').trim() || fallback;
+    const initials = name => {
+        const parts = text(name, 'FAM User').split(/\s+/).filter(Boolean);
+        return ((parts[0]?.[0] || 'F') + (parts[1]?.[0] || 'M')).toUpperCase();
+    };
     const appBasePath = () => {
         const marker = '/pages/';
         const path = window.location.pathname;
@@ -121,9 +126,29 @@
             document.body.dataset.logoutHandlerInitialized = 'true';
             document.addEventListener('click', handleLogoutClick);
         }
+        renderAuthenticatedIdentity();
         initializeAccountMenu();
         initializeNotificationCenter();
         initializeThemeControl();
+    }
+
+    function renderAuthenticatedIdentity() {
+        const user = window.FAMApi?.currentUser || {};
+        const name = text(user.full_name, text(user.username, 'FAM User'));
+        const position = text(user.position, 'Position not available');
+        const email = text(user.email, text(user.username));
+        const values = {
+            'fam-header-avatar': initials(name),
+            'fam-header-name': name,
+            'fam-header-position': position,
+            'fam-menu-name': name,
+            'fam-menu-email': email
+        };
+
+        Object.entries(values).forEach(([id, value]) => {
+            const node = document.getElementById(id);
+            if (node) node.textContent = value;
+        });
     }
 
     function initializeAccountMenu() {
@@ -426,6 +451,7 @@
     }
 
     window.FAMProfileDropdown = {
-        initializeProfileDropdown
+        initializeProfileDropdown,
+        renderAuthenticatedIdentity
     };
 })();

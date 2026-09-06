@@ -13,5 +13,15 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Composer dependencies
+/vendor/
+
+# Runtime / uploaded documents
+/storage/documents/*
+!/storage/documents/.htaccess
+
+# Runtime reservation uploads
+/storage/reservations/
+
 # Generated auth test artifacts
 scripts/auth-cookies.txt

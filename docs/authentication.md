@@ -85,6 +85,20 @@ C:\xampp\php\php.exe scripts/set-demo-passwords.php --all "DemoPassword123!"
 
 Do not put real passwords in SQL files, URLs, frontend code, logs, or documentation.
 
+## Canonical Roles And Personas
+
+The application role model has five canonical roles:
+
+- `FAM_SUPER_ADMIN` = FAM system super administrator
+- `FAM_ADMIN` = FAM Department Head
+- `FAM_STAFF` = ordinary FAM operational employee
+- `DEPARTMENT_HEAD` = head of a non-FAM department
+- `EMPLOYEE` = ordinary employee
+
+Organizational position and application authorization are separate concepts. FAM department membership comes from `employee_reference.department_reference_id`; department-head identity comes from `department_reference.department_head_employee_reference_id`; application authorization comes from role and permission mappings.
+
+`FAM_SUPER_ADMIN`, `FAM_ADMIN`, and `FAM_STAFF` are routed to the FAM administrative portal. `DEPARTMENT_HEAD` and `EMPLOYEE` are routed to the employee self-service portal. A FAM Department Head uses `FAM_ADMIN`, not `DEPARTMENT_HEAD`.
+
 ## Session Cookies
 
 The session name is `ISMERS_FAM_SESSION`. Session cookies are HTTP-only, SameSite=Lax, strict-mode, cookie-only, and secure when the request is HTTPS or `AUTH_COOKIE_SECURE=true`.

@@ -36,12 +36,16 @@
                                 <span id="contract-updated" class="fam-last-updated">Last updated: Loading...</span>
                             </div>
                             <div class="facility-header-actions">
-                                <button id="contract-refresh" class="fam-icon-button" type="button" aria-label="Refresh contracts">
+                                <button id="contract-refresh" class="fam-icon-button" type="button" aria-label="Refresh" title="Refresh">
                                     <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
                                 </button>
-                                <button id="contract-new" class="btn-primary dashboard-action-button" type="button">
+                                <button id="contract-new" class="btn-secondary dashboard-action-button" type="button">
                                     <span class="material-symbols-outlined" aria-hidden="true">add_circle</span>
                                     New Contract
+                                </button>
+                                <button id="contract-export" class="btn-primary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                                    Export
                                 </button>
                             </div>
                         </header>
@@ -64,8 +68,6 @@
                                         <label class="facility-field facility-search-field"><span class="sr-only">Search</span><input id="contract-search" type="search" placeholder="Search contracts..."></label>
                                         <label class="facility-field document-filter-field"><span class="sr-only">Status</span><select id="contract-status-filter"><option value="all">All Statuses</option></select></label>
                                         <label class="facility-field document-filter-field"><span class="sr-only">Type</span><select id="contract-type-filter"><option value="all">All Types</option></select></label>
-                                        <label class="facility-field document-filter-field"><span class="sr-only">Department</span><select id="contract-department-filter"><option value="all">All Departments</option></select></label>
-                                        <label class="facility-field document-filter-field"><span class="sr-only">Administrator</span><select id="contract-handler-filter"><option value="all">All Administrators</option></select></label>
                                         <label class="facility-field document-filter-field"><span class="sr-only">Expiry</span><select id="contract-expiry-filter"><option value="all">All Expiry States</option><option value="expiring_soon">Expiring Soon</option></select></label>
                                     </div>
                                 </div>
@@ -80,10 +82,8 @@
                                                 <th><button type="button" class="facility-sort-button" data-sort="contract_number">Contract</button></th>
                                                 <th><button type="button" class="facility-sort-button" data-sort="title">Title</button></th>
                                                 <th>Counterparty</th>
-                                                <th>Department</th>
                                                 <th><button type="button" class="facility-sort-button" data-sort="end_date">End Date</button></th>
                                                 <th><button type="button" class="facility-sort-button" data-sort="status">Status</button></th>
-                                                <th>Administrator</th>
                                                 <th>Actions</th>
                                             </tr>
                                         </thead>

@@ -1,6 +1,7 @@
 ﻿(function () {
     document.addEventListener('fam:layout-ready', () => window.FAMLiveModule.init({
         apiBase: '../api/maintenance', loadingId: 'maintenance-loading-state', tableBodyId: 'maintenance-table', emptyId: 'maintenance-empty-state', countId: 'maintenance-table-count', paginationSelector: '.maintenance-workspace .facility-pagination', pageStatusId: 'maintenance-page-status', prevId: 'maintenance-prev-page', nextId: 'maintenance-next-page', searchId: 'maintenance-search', resetId: 'maintenance-reset-filters', refreshId: 'maintenance-refresh', exportId: 'maintenance-export', updatedId: 'maintenance-updated', recordLabel: 'maintenance work orders', emptyTitle: 'No maintenance work orders found.', emptyText: 'Work orders will appear here for assignment, processing, and verification.', defaultSort: 'created_at',
+        exportUrl: query => { const p = new URLSearchParams(query); p.delete('page'); p.delete('per_page'); return `../api/maintenance/export-csv.php?${p}`; },
         columns: [
             { key: 'workOrderNo', className: 'facility-request-number', render: (r,h) => h.truncate(r.workOrderNo, 'table-cell-primary') },
             { key: 'title', render: (r,h) => `<div class="facility-subject-cell table-cell-stack">${h.truncate(r.title, 'table-cell-primary')}</div>` },

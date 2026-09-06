@@ -8,7 +8,7 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO role (role_code, role_name, description, status)
 VALUES
-('FINANCE_APPROVER', 'Finance Approver', 'Reviews and approves budget-linked contract approval steps.', 'ACTIVE')
+('DEPARTMENT_HEAD', 'Department Head', 'Head of a non-FAM department with department-scoped workflow access.', 'ACTIVE')
 ON DUPLICATE KEY UPDATE
   role_name = VALUES(role_name),
   description = VALUES(description),
@@ -24,17 +24,11 @@ ON DUPLICATE KEY UPDATE
   employee_reference_id = VALUES(employee_reference_id),
   account_status = VALUES(account_status);
 
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id
-FROM role r
-JOIN permission p ON p.permission_code = 'budget.approve'
-WHERE r.role_code = 'FINANCE_APPROVER';
-
 INSERT IGNORE INTO user_role (user_account_id, role_id, assigned_by_user_id)
 SELECT u.user_account_id, r.role_id, admin.user_account_id
 FROM user_account u
 JOIN employee_reference e ON e.employee_reference_id = u.employee_reference_id
-JOIN role r ON r.role_code = 'FINANCE_APPROVER'
+JOIN role r ON r.role_code = 'DEPARTMENT_HEAD'
 JOIN user_account admin ON admin.username = 'gsms-super-admin'
 WHERE e.employee_number = 'EMP-2026-0013'
   AND u.username = 'gsms-fin-head';

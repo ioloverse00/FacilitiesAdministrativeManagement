@@ -10,6 +10,8 @@ try {
         jsonResponse(false, 'Contract not found.', [], 404);
     }
     jsonResponse(true, 'Contract lifecycle updated.', ['item' => $item]);
+} catch (ContractWorkflowException $e) {
+    jsonResponse(false, $e->getMessage(), ['code' => $e->errorCode(), 'details' => $e->details()], 409);
 } catch (DomainException $e) {
     jsonResponse(false, $e->getMessage(), [], 409);
 } catch (Throwable $e) {

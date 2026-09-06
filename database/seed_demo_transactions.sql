@@ -369,11 +369,11 @@ INSERT INTO contract (contract_number, contract_type_id, contract_title, contrac
 SELECT CONCAT('CON-2026-',LPAD(n.n,4,'0')), ct.contract_type_id, v.title, v.description, sup.supplier_reference_id, b.budget_reference_id, @manager_emp, v.start_date, v.end_date, v.amount, v.amount, 'PHP', v.status, 60
 FROM (SELECT 1 n UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5) n
 JOIN (
-SELECT 1 n,'MAINTENANCE' type_code,'Campus Preventive Maintenance Services' title,'Maintenance services for critical equipment.' description,'SUP-BRIGHT' supplier,'BUD-MNT-PM' budget,'2026-01-01' start_date,'2026-12-31' end_date,850000 amount,'ACTIVE' status UNION ALL
-SELECT 2,'SUPPLY','Facility Consumables Supply Agreement','Supply agreement for consumables.','SUP-ALPHA','BUD-FAC-OPS','2026-02-01','2027-01-31',420000,'ACTIVE' UNION ALL
-SELECT 3,'LEASE','Temporary Training Equipment Lease','Lease for training equipment.','SUP-CLEAR','BUD-ADM-SUP','2026-06-01','2026-08-15',120000,'ACTIVE' UNION ALL
-SELECT 4,'SERVICE','Technical Services Retainer','Technical support services.','SUP-BRIGHT','BUD-IT-EQP','2025-07-01','2026-06-30',300000,'EXPIRED' UNION ALL
-SELECT 5,'SERVICE','Archive Digitization Services','Records digitization support.','SUP-CLEAR','BUD-ADM-SUP','2026-03-01','2026-07-15',180000,'EXPIRED'
+SELECT 1 n,'CLIENT_CONTRACT' type_code,'Campus Preventive Maintenance Services' title,'Maintenance services for critical equipment.' description,'SUP-BRIGHT' supplier,'BUD-MNT-PM' budget,'2026-01-01' start_date,'2026-12-31' end_date,850000 amount,'ACTIVE' status UNION ALL
+SELECT 2,'CLIENT_CONTRACT','Facility Consumables Supply Agreement','Supply agreement for consumables.','SUP-ALPHA','BUD-FAC-OPS','2026-02-01','2027-01-31',420000,'ACTIVE' UNION ALL
+SELECT 3,'CLIENT_CONTRACT','Temporary Training Equipment Lease','Lease for training equipment.','SUP-CLEAR','BUD-ADM-SUP','2026-06-01','2026-08-15',120000,'ACTIVE' UNION ALL
+SELECT 4,'CLIENT_CONTRACT','Technical Services Retainer','Technical support services.','SUP-BRIGHT','BUD-IT-EQP','2025-07-01','2026-06-30',300000,'EXPIRED' UNION ALL
+SELECT 5,'CLIENT_CONTRACT','Archive Digitization Services','Records digitization support.','SUP-CLEAR','BUD-ADM-SUP','2026-03-01','2026-07-15',180000,'EXPIRED'
 ) v ON v.n=n.n JOIN contract_type ct ON ct.type_code=v.type_code JOIN supplier_reference sup ON sup.supplier_code=v.supplier JOIN budget_reference b ON b.budget_code=v.budget AND b.fiscal_year=2026
 ON DUPLICATE KEY UPDATE contract_status=VALUES(contract_status), end_date=VALUES(end_date), current_amount=VALUES(current_amount);
 
@@ -401,12 +401,12 @@ ON DUPLICATE KEY UPDATE pass_status=VALUES(pass_status), returned_at=VALUES(retu
 INSERT INTO workflow_task (task_reference, module_code, entity_type, entity_id, task_type, title, description, assigned_to_employee_reference_id, assigned_role_id, priority, status, due_at, created_by_user_id, created_at)
 SELECT CONCAT('TASK-2026-',LPAD(n.n,4,'0')), v.module_code, v.entity_type, v.entity_id, v.task_type, v.title, v.description, v.emp_id, r.role_id, v.priority, v.status, v.due_at, @fam_user, DATE_ADD(@demo_now, INTERVAL -n.n HOUR)
 FROM (
-SELECT 1 n,'facility_requests' module_code,'facility_request' entity_type,(SELECT facility_request_id FROM facility_request WHERE request_number='FR-2026-0003') entity_id,'ASSIGN_REQUEST' task_type,'Assign facility request' title,'Demo task for unassigned request.' description,@manager_emp emp_id,'FACILITY_MANAGER' role_code,'HIGH' priority,'PENDING' status,'2026-07-26 13:00:00' due_at UNION ALL
-SELECT 2,'reservations','facility_reservation',(SELECT facility_reservation_id FROM facility_reservation WHERE reservation_number='RR-2026-0004'),'APPROVE_RESERVATION','Approve reservation','Demo reservation approval task.',@manager_emp,'FACILITY_MANAGER','MEDIUM','PENDING','2026-07-26 16:00:00' UNION ALL
-SELECT 3,'maintenance','maintenance_work_order',(SELECT maintenance_work_order_id FROM maintenance_work_order WHERE work_order_number='WO-2026-0005'),'VERIFY_WORK_ORDER','Verify completed work order','Demo verification task.',@supervisor_emp,'MAINTENANCE_SUPERVISOR','MEDIUM','PENDING','2026-07-27 10:00:00' UNION ALL
-SELECT 4,'procurement','procurement_request',(SELECT procurement_request_id FROM procurement_request WHERE request_number='PR-2026-0001'),'APPROVE_PROCUREMENT','Approve procurement request','Demo procurement approval task.',NULL,'APPROVER','HIGH','PENDING','2026-07-26 15:00:00' UNION ALL
-SELECT 5,'records','record',(SELECT record_id FROM record WHERE record_number='REC-2026-0006'),'REVIEW_RECORD','Review expiring record','Demo record review task.',@records_emp,'RECORDS_OFFICER','MEDIUM','PENDING','2026-07-28 09:00:00' UNION ALL
-SELECT 6,'maintenance','maintenance_work_order',(SELECT maintenance_work_order_id FROM maintenance_work_order WHERE work_order_number='WO-2026-0008'),'CLOSE_WORK_ORDER','Close completed work order','Demo completed task.',@supervisor_emp,'MAINTENANCE_SUPERVISOR','LOW','COMPLETED','2026-07-25 09:00:00'
+SELECT 1 n,'facility_requests' module_code,'facility_request' entity_type,(SELECT facility_request_id FROM facility_request WHERE request_number='FR-2026-0003') entity_id,'ASSIGN_REQUEST' task_type,'Assign facility request' title,'Demo task for unassigned request.' description,@manager_emp emp_id,'FAM_STAFF' role_code,'HIGH' priority,'PENDING' status,'2026-07-26 13:00:00' due_at UNION ALL
+SELECT 2,'reservations','facility_reservation',(SELECT facility_reservation_id FROM facility_reservation WHERE reservation_number='RR-2026-0004'),'APPROVE_RESERVATION','Approve reservation','Demo reservation approval task.',@manager_emp,'FAM_ADMIN','MEDIUM','PENDING','2026-07-26 16:00:00' UNION ALL
+SELECT 3,'maintenance','maintenance_work_order',(SELECT maintenance_work_order_id FROM maintenance_work_order WHERE work_order_number='WO-2026-0005'),'VERIFY_WORK_ORDER','Verify completed work order','Demo verification task.',@supervisor_emp,'FAM_STAFF','MEDIUM','PENDING','2026-07-27 10:00:00' UNION ALL
+SELECT 4,'procurement','procurement_request',(SELECT procurement_request_id FROM procurement_request WHERE request_number='PR-2026-0001'),'APPROVE_PROCUREMENT','Approve procurement request','Demo procurement approval task.',NULL,'DEPARTMENT_HEAD','HIGH','PENDING','2026-07-26 15:00:00' UNION ALL
+SELECT 5,'records','record',(SELECT record_id FROM record WHERE record_number='REC-2026-0006'),'REVIEW_RECORD','Review expiring record','Demo record review task.',@records_emp,'FAM_STAFF','MEDIUM','PENDING','2026-07-28 09:00:00' UNION ALL
+SELECT 6,'maintenance','maintenance_work_order',(SELECT maintenance_work_order_id FROM maintenance_work_order WHERE work_order_number='WO-2026-0008'),'CLOSE_WORK_ORDER','Close completed work order','Demo completed task.',@supervisor_emp,'FAM_STAFF','LOW','COMPLETED','2026-07-25 09:00:00'
 ) v JOIN (SELECT 1 n UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6) n ON n.n=v.n LEFT JOIN role r ON r.role_code=v.role_code
 ON DUPLICATE KEY UPDATE status=VALUES(status), due_at=VALUES(due_at), assigned_to_employee_reference_id=VALUES(assigned_to_employee_reference_id);
 
@@ -463,7 +463,7 @@ SELECT 1 n,'LOGIN_SUCCESS' action,'security' module_code,'user_account' entity_t
 SELECT 2,'LOGIN_FAILED','security','user_account',@admin_user,NULL,JSON_OBJECT('status','failed','reason','demo invalid password') UNION ALL
 SELECT 3,'ACCESS_DENIED','security','permission',NULL,NULL,JSON_OBJECT('permission','administration.delete','result','denied') UNION ALL
 SELECT 4,'PROFILE_UPDATED','profile','employee_reference',@requestor_emp,JSON_OBJECT('contact','old demo'),JSON_OBJECT('contact','new demo') UNION ALL
-SELECT 5,'ROLE_PERMISSION_REVIEW','administration','role',NULL,NULL,JSON_OBJECT('role','AUDITOR','result','reviewed') UNION ALL
+SELECT 5,'ROLE_PERMISSION_REVIEW','administration','role',NULL,NULL,JSON_OBJECT('role','FAM_STAFF','result','reviewed') UNION ALL
 SELECT 6,'AI_CONNECTION_TEST','administration','external_system',NULL,NULL,JSON_OBJECT('result','success') UNION ALL
 SELECT 7,'INTEGRATION_SYNC','integration','external_system',NULL,NULL,JSON_OBJECT('system','HRIS','result','success') UNION ALL
 SELECT 8,'APPROVAL_ACTION','workflow','approval_request',NULL,JSON_OBJECT('status','PENDING'),JSON_OBJECT('status','APPROVED') UNION ALL
@@ -498,7 +498,7 @@ SELECT 'procurement','DEMO_procurement_request',(SELECT procurement_request_id F
 
 INSERT IGNORE INTO approval_step (approval_request_id, step_number, approver_employee_reference_id, approver_role_id, decision, decision_at, comments)
 SELECT ar.approval_request_id, 1, @manager_emp, r.role_id, CASE WHEN ar.approval_status='APPROVED' THEN 'APPROVED' ELSE 'PENDING' END, CASE WHEN ar.approval_status='APPROVED' THEN DATE_ADD(@demo_now, INTERVAL -4 HOUR) END, 'Demo approval step.'
-FROM approval_request ar LEFT JOIN role r ON r.role_code='APPROVER'
+FROM approval_request ar LEFT JOIN role r ON r.role_code='DEPARTMENT_HEAD'
 WHERE ar.entity_type LIKE 'DEMO_%' AND ar.requested_at BETWEEN '2026-01-01' AND '2026-12-31';
 
 COMMIT;

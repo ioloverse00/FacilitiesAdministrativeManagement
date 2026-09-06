@@ -78,10 +78,11 @@ INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
 FROM role r
 JOIN permission p ON p.permission_code LIKE 'legal.%'
-WHERE r.role_code IN ('SYSTEM_ADMIN','FAM_ADMIN');
+WHERE r.role_code IN ('FAM_SUPER_ADMIN','FAM_ADMIN');
 
-INSERT IGNORE INTO role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id
-FROM role r
-JOIN permission p ON p.permission_code = 'legal.view'
-WHERE r.role_code IN ('AUDITOR','FACILITY_MANAGER');
+DELETE rp
+FROM role_permission rp
+JOIN role r ON r.role_id = rp.role_id
+JOIN permission p ON p.permission_id = rp.permission_id
+WHERE r.role_code IN ('FAM_STAFF','DEPARTMENT_HEAD','EMPLOYEE')
+  AND p.permission_code LIKE 'legal.%';

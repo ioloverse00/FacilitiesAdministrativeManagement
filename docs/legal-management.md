@@ -19,7 +19,7 @@ New legal matters require at least one supporting document or evidence file. The
 
 Legal evidence uploads are limited to PDF, PNG, JPG, and JPEG files up to 10 MB each. All selected files are validated with the Document Management upload conventions, including size, extension, and MIME type checks, before the matter is created. If any selected file is invalid, creation is blocked and no partial legal matter or orphan document record is left behind.
 
-Legal Management automatically stores each supporting file as a Document Management record using the canonical Legal document category (`DOC-LEGAL`) and the category's restricted legal confidentiality default. The document is linked to the generated matter number using:
+Legal Management automatically stores each supporting file as a Document Management record using the canonical Legal document category (`DOC-LEGAL`) and the category's confidential legal classification. Legal RBAC determines who may access the document; the `CONFIDENTIAL` classification adds Email OTP step-up before secure view/download. The document is linked to the generated matter number using:
 
 - `related_module = LEGAL_MANAGEMENT`
 - `related_reference = LM-YYYY-NNNN`

@@ -55,6 +55,7 @@
   function activeFilters() { return Boolean(state.search.trim()) || ['status','priority','category_id','department_id','dateRange'].some(k => state[k] !== 'all'); }
   function resetVisible() { qs('#facility-reset-filters')?.classList.toggle('hidden', !activeFilters()); }
   function resetFilters() { Object.assign(state, { search: '', status: 'all', priority: 'all', category_id: 'all', department_id: 'all', assigned_to: 'all', sla_status: 'all', dateRange: 'all', sortKey: 'created_at', sortDirection: 'desc', page: 1, openActionMenu: null, openColumnMenu: null }); const s = qs('#facility-search'); if (s) s.value = ''; loadList(true); }
+  function exportUrl() { const p = new URLSearchParams({ report: 'facility_requests' }); if (state.search.trim()) p.set('search', state.search.trim()); ['status','priority','category_id','department_id'].forEach(k => { if (state[k] !== 'all') p.set(k, state[k]); }); const d = dateParams(); if (d.date_from) p.set('date_from', d.date_from); if (d.date_to) p.set('date_to', d.date_to); return `../api/reports/export-csv.php?${p}`; }
   function ensureDrawer() {
     const d = qs('#facility-request-drawer');
     if (d.parentElement !== document.body) document.body.appendChild(d);
@@ -124,7 +125,7 @@
     if (newRequestButton) newRequestButton.hidden = !can('facility_requests.create');
     newRequestButton?.addEventListener('click', openCreate);
     qs('#facility-refresh')?.addEventListener('click', () => loadList(true));
-    qs('#facility-export')?.addEventListener('click', () => toast('Export uses the current filtered live view.'));
+    qs('#facility-export')?.addEventListener('click', () => { window.location.href = exportUrl(); });
     qs('#facility-empty-state')?.addEventListener('click', e => { if (e.target.closest('[data-empty-clear]')) resetFilters(); });
     qs('.facility-requests-table')?.addEventListener('click', tableClick);
     document.addEventListener('click', docClick);

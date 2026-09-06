@@ -29,10 +29,10 @@ INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
 FROM role r
 JOIN permission p ON p.permission_code LIKE 'retention.%'
-WHERE r.role_code IN ('SYSTEM_ADMIN','FAM_ADMIN','RECORDS_OFFICER');
+WHERE r.role_code IN ('FAM_SUPER_ADMIN','FAM_ADMIN');
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
 FROM role r
 JOIN permission p ON p.permission_code = 'retention.view'
-WHERE r.role_code IN ('AUDITOR','FACILITY_MANAGER');
+WHERE r.role_code = 'FAM_STAFF';

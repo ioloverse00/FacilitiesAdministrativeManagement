@@ -36,20 +36,30 @@
                                 <span id="records-updated" class="fam-last-updated">Last updated: Loading...</span>
                             </div>
                             <div class="facility-header-actions">
-                                <button id="records-refresh" class="fam-icon-button" type="button" aria-label="Refresh documents">
+                                <button id="records-refresh" class="fam-icon-button" type="button" aria-label="Refresh" title="Refresh">
                                     <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                                </button>
+                                <button id="document-add" class="btn-secondary dashboard-action-button" type="button">
+                                    <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+                                    Add Document
+                                </button>
+                                <button id="template-add" class="btn-secondary dashboard-action-button" type="button" hidden>
+                                    <span class="material-symbols-outlined" aria-hidden="true">note_add</span>
+                                    Create Template
                                 </button>
                                 <button id="records-export" class="btn-primary dashboard-action-button" type="button">
                                     <span class="material-symbols-outlined" aria-hidden="true">download</span>
                                     Export
                                 </button>
-                                <button id="document-add" class="btn-primary dashboard-action-button" type="button">
-                                    <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
-                                    Add Document
-                                </button>
                             </div>
                         </header>
 
+                        <nav class="facility-tabs records-primary-tabs" role="tablist" aria-label="Document Management sections">
+                            <button id="records-tab-documents" class="facility-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="documents-panel" tabindex="0" data-records-tab="documents">Documents</button>
+                            <button id="records-tab-templates" class="facility-tab" type="button" role="tab" aria-selected="false" aria-controls="templates-panel" tabindex="-1" data-records-tab="templates" data-requires-permission="document_templates.view" hidden>Templates</button>
+                        </nav>
+
+                        <div id="documents-panel" role="tabpanel" aria-labelledby="records-tab-documents" data-records-panel="documents">
                         <section class="document-summary-strip" aria-label="Document summary">
                             <article>
                                 <span class="material-symbols-outlined" aria-hidden="true">description</span>
@@ -127,6 +137,78 @@
                                     <span id="records-page-status">Page 1 of 1</span>
                                     <button id="records-next-page" class="facility-page-button" type="button">Next</button>
                                 </div>
+                            </div>
+                        </section>
+                        </div>
+
+                        <section id="templates-panel" class="facility-section hidden" role="tabpanel" aria-labelledby="records-tab-templates" data-records-panel="templates">
+                            <section class="document-summary-strip" aria-label="Template summary">
+                                <article>
+                                    <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
+                                    <div><strong id="template-active-count">0</strong><p>Active Templates</p></div>
+                                </article>
+                                <article>
+                                    <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
+                                    <div><strong id="template-retired-count">0</strong><p>Retired Templates</p></div>
+                                </article>
+                                <article>
+                                    <span class="material-symbols-outlined" aria-hidden="true">update</span>
+                                    <div><strong id="template-recent-count">0</strong><p>Recent Template Updates</p></div>
+                                </article>
+                            </section>
+                            <div class="facility-table-card">
+                                <div class="facility-table-header">
+                                    <div>
+                                        <h2 id="templates-table-title">Template Library</h2>
+                                        <p id="templates-table-count">Loading templates...</p>
+                                    </div>
+                                    <div class="facility-header-controls template-header-controls">
+                                        <label class="facility-field facility-search-field">
+                                            <span class="sr-only">Search templates</span>
+                                            <input id="templates-search" type="search" placeholder="Search templates...">
+                                        </label>
+                                        <label class="facility-field document-filter-field">
+                                            <span class="sr-only">Template Type</span>
+                                            <select id="template-type-filter"><option value="all">All Types</option></select>
+                                        </label>
+                                        <label class="facility-field document-filter-field">
+                                            <span class="sr-only">Template Status</span>
+                                            <select id="template-status-filter"><option value="all">All Statuses</option></select>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div id="templates-loading-state" class="fam-state hidden">
+                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                    <span>Loading templates...</span>
+                                </div>
+                                <div class="facility-table-scroll">
+                                    <table class="facility-requests-table records-table template-records-table">
+                                        <colgroup>
+                                            <col class="template-col-template">
+                                            <col class="template-col-type">
+                                            <col class="template-col-version">
+                                            <col class="template-col-confidentiality">
+                                            <col class="template-col-status">
+                                            <col class="template-col-effective">
+                                            <col class="template-col-updated">
+                                            <col class="template-col-actions">
+                                        </colgroup>
+                                        <thead>
+                                            <tr>
+                                                <th>Template</th>
+                                                <th>Type</th>
+                                                <th>Current Version</th>
+                                                <th>Confidentiality</th>
+                                                <th>Status</th>
+                                                <th>Effective</th>
+                                                <th>Updated</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="templates-table"></tbody>
+                                    </table>
+                                </div>
+                                <div id="templates-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
                             </div>
                         </section>
 

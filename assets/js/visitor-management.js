@@ -26,6 +26,7 @@
   const trunc = (v, className = 'table-cell-truncate') => `<span class="${className}" title="${esc(v || 'Not applicable')}">${esc(v || 'Not applicable')}</span>`;
   function toast(m) { window.FAMModal?.showToast?.(m); }
   function params() { const p = new URLSearchParams({ page: state.page, per_page: state.perPage, sort: state.sort, direction: state.direction }); Object.entries(state.filters).forEach(([k, v]) => { if (v && v !== 'all') p.set(k, v); }); return p; }
+  function exportUrl() { const p = params(); p.delete('page'); p.delete('per_page'); return `../api/visitors/export-csv.php?${p}`; }
   function activeFilters() { return Object.values(state.filters).some(v => v && v !== 'all'); }
   function syncToolbar() {
     const search = qs('#visitor-search');
@@ -104,7 +105,7 @@
   function resetFilters() { state.filters = { search:'', visitor_type:'all', visit_status:'all' }; state.sort = 'scheduled_start_at'; state.direction = 'desc'; state.page = 1; state.openColumnMenu = null; syncToolbar(); load(); }
   function bind() {
     qs('#visitor-refresh')?.addEventListener('click', load);
-    qs('#visitor-export')?.addEventListener('click', () => toast('Visitor export will use the current filtered view when enabled.'));
+    qs('#visitor-export')?.addEventListener('click', () => { window.location.href = exportUrl(); });
     qs('#visitor-prev-page')?.addEventListener('click', () => { state.page = Math.max(1, state.page - 1); load(); });
     qs('#visitor-next-page')?.addEventListener('click', () => { state.page += 1; load(); });
     qs('#visitor-search')?.addEventListener('input', e => { state.filters.search = e.target.value; state.page = 1; clearTimeout(state.timer); state.timer = setTimeout(load, 300); });

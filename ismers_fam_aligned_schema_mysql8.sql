@@ -932,12 +932,12 @@ INSERT INTO external_system(system_code,system_name,owner_group,integration_type
 ON DUPLICATE KEY UPDATE system_name=VALUES(system_name);
 
 INSERT INTO request_category(category_code,category_name,description,default_priority,responsible_role_code) VALUES
-('GENERAL','General Facility Request','General facility-related concern or service request.','NORMAL','FACILITY_MANAGER'),
-('HVAC','HVAC','Air-conditioning, ventilation, and cooling concerns.','HIGH','MAINTENANCE_SUPERVISOR'),
-('ELECTRICAL','Electrical','Electrical systems, outlets, lighting, and related risks.','HIGH','MAINTENANCE_SUPERVISOR'),
-('PLUMBING','Plumbing','Water supply, leaks, drainage, and plumbing concerns.','HIGH','MAINTENANCE_SUPERVISOR'),
-('CLEANING','Cleaning and Sanitation','Cleaning and housekeeping service requests.','NORMAL','FACILITY_MANAGER'),
-('TRANSPORT','Transportation Service','Official transportation coordination request.','NORMAL','FACILITY_MANAGER')
+('GENERAL','General Facility Request','General facility-related concern or service request.','NORMAL','FAM_STAFF'),
+('HVAC','HVAC','Air-conditioning, ventilation, and cooling concerns.','HIGH','FAM_STAFF'),
+('ELECTRICAL','Electrical','Electrical systems, outlets, lighting, and related risks.','HIGH','FAM_STAFF'),
+('PLUMBING','Plumbing','Water supply, leaks, drainage, and plumbing concerns.','HIGH','FAM_STAFF'),
+('CLEANING','Cleaning and Sanitation','Cleaning and housekeeping service requests.','NORMAL','FAM_STAFF'),
+('TRANSPORT','Transportation Service','Official transportation coordination request.','NORMAL','FAM_STAFF')
 ON DUPLICATE KEY UPDATE category_name=VALUES(category_name);
 
 INSERT INTO document_category(category_code,category_name,description,default_confidentiality_level) VALUES
@@ -948,7 +948,7 @@ INSERT INTO document_category(category_code,category_name,description,default_co
 ('VISITOR','Visitor Documents','Visitor-related documents and clearances.','CONFIDENTIAL'),
 ('PROCUREMENT','Procurement Documents','Procurement request and delivery documents.','INTERNAL'),
 ('CONTRACT','Contract Documents','Contracts and signed copies.','CONFIDENTIAL'),
-('LEGAL','Legal Documents','Legal case documents and evidence.','RESTRICTED'),
+('LEGAL','Legal Documents','Legal case documents and evidence.','CONFIDENTIAL'),
 ('RECORDS','Records Management','Archived and retained records.','INTERNAL')
 ON DUPLICATE KEY UPDATE category_name=VALUES(category_name);
 
@@ -960,18 +960,11 @@ INSERT INTO contract_type(type_code,type_name,description) VALUES
 ON DUPLICATE KEY UPDATE type_name=VALUES(type_name);
 
 INSERT INTO role(role_code,role_name,description) VALUES
-('SYSTEM_ADMIN','System Administrator','Full system administration access.'),
-('FAM_ADMIN','FAM Administrator','Manages FAM operations.'),
-('FACILITY_MANAGER','Facility Manager','Reviews and coordinates facility requests.'),
-('MAINTENANCE_SUPERVISOR','Maintenance Supervisor','Assigns and supervises maintenance work.'),
-('TECHNICIAN','Technician','Performs maintenance work.'),
-('ASSET_CUSTODIAN','Asset Custodian','Manages asset lifecycle records.'),
-('RESERVATION_OFFICER','Reservation Officer','Manages reservations.'),
-('PROCUREMENT_OFFICER','Procurement Officer','Coordinates procurement requests.'),
-('RECORDS_OFFICER','Records Officer','Manages records retention.'),
-('REQUESTOR','Department Requestor','Submits and tracks requests.'),
-('APPROVER','Approver','Reviews approval steps.'),
-('AUDITOR','Auditor','Read-only audit and report access.')
+('FAM_SUPER_ADMIN','FAM Super Administrator','Highest FAM application authority.'),
+('FAM_ADMIN','FAM Department Head','Department head of the FAM department with broad operational oversight.'),
+('FAM_STAFF','FAM Staff','Ordinary FAM operational employee.'),
+('DEPARTMENT_HEAD','Department Head','Head of a non-FAM department with department-scoped workflow access.'),
+('EMPLOYEE','Employee','Ordinary employee self-service access.')
 ON DUPLICATE KEY UPDATE role_name=VALUES(role_name);
 
 SET FOREIGN_KEY_CHECKS=1;

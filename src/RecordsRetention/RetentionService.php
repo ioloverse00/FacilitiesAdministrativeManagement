@@ -20,6 +20,7 @@ final class RetentionPolicy
 final class RetentionService
 {
     private const DUE_REVIEW_DAYS = 30;
+    private const UNESTABLISHED_CONTRACT_END_DATE = '9999-12-31';
     private const TRIGGER_BASIS_LABELS = [
         'RECORD_CLOSURE' => 'Record closure',
         'WORK_COMPLETION' => 'Work completion',
@@ -696,7 +697,10 @@ final class RetentionService
             $source = $date ? 'record.created_at' : 'created_at_missing';
         } elseif ($basis === 'CONTRACT_EXPIRATION') {
             $date = $this->sourceDateByReference($row, 'contract', 'contract_number', ['end_date']);
-            if ($date === null) {
+            if ($date === self::UNESTABLISHED_CONTRACT_END_DATE) {
+                $date = null;
+                $source = 'contract_expiration_unestablished';
+            } elseif ($date === null) {
                 $date = $this->linkedDocumentDate($recordId, 'expiration_date');
                 $source = $date ? 'document.expiration_date' : 'contract_expiration_unavailable';
             } else {

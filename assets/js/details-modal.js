@@ -23,7 +23,7 @@
     }
 
     function isDocumentManagementTarget(target) {
-        return !!target.closest('.records-workspace, #document-dialog, #document-details-modal, [data-document-action], [data-document-menu-toggle]');
+        return !!target.closest('.records-workspace, #document-dialog, #document-details-modal, [data-document-action], [data-document-menu-toggle], [data-template-action], [data-template-menu-toggle]');
     }
 
     function isRecordsRetentionTarget(target) {

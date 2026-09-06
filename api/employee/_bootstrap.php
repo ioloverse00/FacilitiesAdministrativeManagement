@@ -32,7 +32,7 @@ function currentEmployeeUser(): array
         ], 403);
     }
     if (($data['persona']['is_employee_portal_allowed'] ?? false) !== true) {
-        jsonResponse(false, 'Employee Portal access is restricted to authorized external department heads.', [
+        jsonResponse(false, 'Employee Portal access is restricted to authorized employee personas.', [
             'access_denied_reason' => 'persona_not_employee_portal',
             'persona' => $data['persona']['code'] ?? PersonaService::UNAUTHORIZED_OR_UNRESOLVED,
         ], 403);

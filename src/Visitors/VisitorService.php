@@ -33,6 +33,23 @@ final class VisitorService
         return ['items'=>array_map(fn($r)=>$this->shape($r), $stmt->fetchAll()), 'pagination'=>['page'=>$page,'per_page'=>$per,'total'=>$total,'total_pages'=>(int)ceil($total / max(1,$per))], 'summary'=>$this->summary()];
     }
 
+    public function streamCsv(array $q, mixed $handle): void
+    {
+        [$where, $params] = $this->filters($q);
+        $sorts = ['visitor_reference_number'=>'vi.visit_number','full_name'=>'v.last_name','visitor_type'=>'COALESCE(vi.visitor_type,v.visitor_type)','scheduled_start_at'=>'vi.scheduled_arrival','visit_status'=>'vi.visit_status','approval_status'=>'vi.approval_status','created_at'=>'vi.created_at'];
+        $sort = $sorts[(string)($q['sort'] ?? '')] ?? 'vi.scheduled_arrival';
+        $dir = strtolower((string)($q['direction'] ?? 'desc')) === 'asc' ? 'ASC' : 'DESC';
+        fputcsv($handle, ['Visit / Visitor Reference No.', 'Visitor Name', 'Visitor Type', 'Host', 'Host Department', 'Facility / Location', 'Visit Purpose', 'Scheduled / Expected Date-Time', 'Check-In Date-Time', 'Check-Out Date-Time', 'Visit Status', 'Registration Source', 'Created', 'Updated']);
+        $statement = $this->pdo->prepare($this->baseSql() . ' WHERE ' . implode(' AND ', $where) . " ORDER BY $sort $dir");
+        foreach ($params as $key => $value) $statement->bindValue($key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        $statement->execute();
+        while ($row = $statement->fetch()) {
+            $name = trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+            $location = trim(($row['building_name'] ?? '') . ' / ' . ($row['space_name'] ?? ''), ' /');
+            fputcsv($handle, array_map(fn($value) => $this->csvCell($value), [$row['visit_number'], $name, $row['export_visitor_type'], $row['host_full_name'], $row['host_department_name'], $location, $row['purpose'], $row['scheduled_arrival'], $row['actual_time_in'], $row['actual_time_out'], $row['visit_status'], $row['registration_source'], $row['created_at'], $row['updated_at']]));
+        }
+    }
+
     public function show(int $id): ?array
     {
         $stmt = $this->pdo->prepare($this->baseSql().' WHERE vi.visit_id=:id AND vi.deleted_at IS NULL LIMIT 1');
@@ -282,7 +299,7 @@ final class VisitorService
 
     private function baseSql(): string
     {
-        return "SELECT vi.*, v.first_name,v.middle_name,v.last_name,v.organization_name,v.email_address,v.contact_number,v.id_type,v.identification_last4,v.status visitor_profile_status, d.department_code,d.department_name, h.employee_number host_employee_number,h.full_name host_full_name, fs.space_name, b.building_name, bg.badge_number,bg.badge_status,u.username verified_by_username FROM visit vi INNER JOIN visitor v ON v.visitor_id=vi.visitor_id LEFT JOIN department_reference d ON d.department_reference_id=vi.destination_department_reference_id LEFT JOIN employee_reference h ON h.employee_reference_id=vi.host_employee_reference_id LEFT JOIN facility_space fs ON fs.facility_space_id=vi.destination_space_id LEFT JOIN building b ON b.building_id=fs.building_id LEFT JOIN visitor_badge bg ON bg.visitor_badge_id=vi.visitor_badge_id LEFT JOIN user_account u ON u.user_account_id=vi.identity_verified_by_user_id";
+        return "SELECT vi.*, v.first_name,v.middle_name,v.last_name,v.organization_name,v.email_address,v.contact_number,v.id_type,v.identification_last4,v.status visitor_profile_status, COALESCE(vi.visitor_type,v.visitor_type) export_visitor_type, d.department_code,d.department_name, h.employee_number host_employee_number,h.full_name host_full_name, hd.department_name host_department_name, fs.space_name, b.building_name, bg.badge_number,bg.badge_status,u.username verified_by_username FROM visit vi INNER JOIN visitor v ON v.visitor_id=vi.visitor_id LEFT JOIN department_reference d ON d.department_reference_id=vi.destination_department_reference_id LEFT JOIN employee_reference h ON h.employee_reference_id=vi.host_employee_reference_id LEFT JOIN department_reference hd ON hd.department_reference_id=h.department_reference_id LEFT JOIN facility_space fs ON fs.facility_space_id=vi.destination_space_id LEFT JOIN building b ON b.building_id=fs.building_id LEFT JOIN visitor_badge bg ON bg.visitor_badge_id=vi.visitor_badge_id LEFT JOIN user_account u ON u.user_account_id=vi.identity_verified_by_user_id";
     }
 
     private function findByQrToken(string $token): ?array
@@ -432,6 +449,7 @@ final class VisitorService
     }    private function exists(string $table,string $key,int $id): bool { $s=$this->pdo->prepare("SELECT COUNT(*) FROM `$table` WHERE `$key`=:id"); $s->execute(['id'=>$id]); return (int)$s->fetchColumn()>0; }
     private function rows(string $sql,array $params=[]): array { $s=$this->pdo->prepare($sql); $s->execute($params); return $s->fetchAll(); }
     private function scalar(string $sql,array $params=[]): mixed { $s=$this->pdo->prepare($sql); $s->execute($params); return $s->fetchColumn(); }
+    private function csvCell(mixed $value): string { $cell = trim((string)($value ?? '')); return $cell !== '' && preg_match('/^[=+\-@]/', $cell) === 1 ? "'" . $cell : $cell; }
     private function nullableInt(mixed $v): ?int { return ($v === null || $v === '' || $v === 'all') ? null : (int)$v; }
     private function blankNull(mixed $v): ?string { $v=trim((string)($v ?? '')); return $v===''?null:$v; }
     private function dateValue(mixed $v): ?string { if ($v === null || trim((string)$v)==='') return null; $t=strtotime((string)$v); return $t ? date('Y-m-d H:i:s',$t) : null; }

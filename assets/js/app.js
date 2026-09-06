@@ -522,8 +522,13 @@ function initAuthenticationPage() {
         e.preventDefault();
         const submitBtn = authForm.querySelector('button[type="submit"]');
         const errorBox = document.getElementById('auth-error');
+        const originalSubmitText = submitBtn?.innerHTML;
         if (errorBox) { errorBox.hidden = true; errorBox.textContent = ''; }
-        if (submitBtn) submitBtn.disabled = true;
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.setAttribute('aria-busy', 'true');
+            submitBtn.textContent = 'Sending verification code...';
+        }
         try {
             const formData = new FormData(authForm);
             const response = await fetch(`${apiPrefix}auth/login.php`, {
@@ -534,13 +539,168 @@ function initAuthenticationPage() {
             });
             const payload = await response.json().catch(() => null);
             if (!response.ok || payload?.success === false) throw new Error(payload?.message || 'Sign in failed.');
+            if (payload?.data?.mfa_required) {
+                renderMfaChallenge(payload.data);
+                return;
+            }
             window.location.href = redirectPathAfterLogin(payload?.data?.user);
         } catch (error) {
             if (errorBox) { errorBox.textContent = error.message || 'Sign in failed.'; errorBox.hidden = false; }
         } finally {
-            if (submitBtn) submitBtn.disabled = false;
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.removeAttribute('aria-busy');
+                if (originalSubmitText !== undefined) submitBtn.innerHTML = originalSubmitText;
+            }
         }
     });
+
+    function renderMfaChallenge(challenge) {
+        let challengeId = challenge.challenge_id || '';
+        let resend = Number(challenge.resend_cooldown_seconds || 30);
+        let remaining = Number(challenge.expires_in_seconds || 60);
+        const authCard = authForm.closest('.auth-card');
+        authCard?.classList.add('is-mfa');
+        authForm.innerHTML = `
+            <div class="login-mfa-panel">
+                <button class="login-mfa-back" type="button" data-login-mfa-back aria-label="Back to sign in">
+                    <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+                </button>
+                <div class="login-mfa-heading">
+                    <h2>Verify your sign-in</h2>
+                    <p>We sent a verification code to<br><strong>${escapeHtml(challenge.email_hint || 'your registered email')}</strong></p>
+                    <p>Code expires in <strong data-login-mfa-countdown>${remaining}s</strong>.</p>
+                </div>
+                <fieldset class="login-otp-group" aria-describedby="auth-error">
+                    <legend class="sr-only">Verification code</legend>
+                    ${Array.from({ length: 6 }, (_, index) => `<input class="login-otp-cell" data-login-otp-cell aria-label="Verification code digit ${index + 1} of 6" inputmode="numeric" autocomplete="${index === 0 ? 'one-time-code' : 'off'}" maxlength="1" pattern="[0-9]" type="text">`).join('')}
+                </fieldset>
+            </div>
+            <div id="auth-error" class="facility-form-error" role="alert" aria-live="polite" hidden></div>
+            <div class="login-mfa-actions">
+                <button class="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-on-primary bg-primary hover:bg-primary-container focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all active:scale-[0.98]" type="button" data-login-mfa-verify>Verify Sign-In</button>
+                <p class="login-mfa-resend-copy">Didn't receive a code?<br><button type="button" data-login-mfa-resend>Resend code</button></p>
+            </div>
+        `;
+        const otpCells = Array.from(authForm.querySelectorAll('[data-login-otp-cell]'));
+        const box = authForm.querySelector('#auth-error');
+        const resendButton = authForm.querySelector('[data-login-mfa-resend]');
+        const verifyButton = authForm.querySelector('[data-login-mfa-verify]');
+        const countdown = authForm.querySelector('[data-login-mfa-countdown]');
+        const otpValue = () => otpCells.map(input => input.value).join('');
+        const syncVerifyState = () => {
+            if (verifyButton) verifyButton.disabled = otpValue().length !== 6;
+        };
+        const clearOtp = () => {
+            otpCells.forEach(input => { input.value = ''; });
+            syncVerifyState();
+            otpCells[0]?.focus();
+        };
+        const fillFrom = (startIndex, digits) => {
+            let index = Math.max(0, startIndex);
+            digits.replace(/\D/g, '').split('').forEach(digit => {
+                if (index >= otpCells.length) return;
+                otpCells[index].value = digit;
+                index += 1;
+            });
+            syncVerifyState();
+            otpCells[Math.min(index, otpCells.length - 1)]?.focus();
+        };
+        const renderResend = () => {
+            if (countdown) countdown.textContent = `${Math.max(0, remaining)}s`;
+            if (!resendButton) return;
+            resendButton.disabled = resend > 0;
+            resendButton.textContent = resend > 0 ? `Resend code · ${resend}s` : 'Resend code';
+        };
+        renderResend();
+        syncVerifyState();
+        const timer = setInterval(() => {
+            resend -= 1;
+            remaining -= 1;
+            renderResend();
+            if (!document.body.contains(authForm)) clearInterval(timer);
+        }, 1000);
+        otpCells.forEach((input, index) => {
+            input.addEventListener('input', () => {
+                const digits = input.value.replace(/\D/g, '');
+                input.value = '';
+                if (digits) fillFrom(index, digits);
+                else syncVerifyState();
+            });
+            input.addEventListener('keydown', event => {
+                if (event.key === 'Backspace' && input.value === '' && index > 0) {
+                    event.preventDefault();
+                    otpCells[index - 1].value = '';
+                    syncVerifyState();
+                    otpCells[index - 1].focus();
+                } else if (event.key === 'ArrowLeft' && index > 0) {
+                    event.preventDefault();
+                    otpCells[index - 1].focus();
+                } else if (event.key === 'ArrowRight' && index < otpCells.length - 1) {
+                    event.preventDefault();
+                    otpCells[index + 1].focus();
+                } else if (event.key === 'Enter') {
+                    event.preventDefault();
+                    verify();
+                }
+            });
+            input.addEventListener('paste', event => {
+                event.preventDefault();
+                const text = (event.clipboardData || window.clipboardData)?.getData('text') || '';
+                fillFrom(index, text);
+            });
+        });
+        otpCells[0]?.focus();
+        authForm.querySelector('[data-login-mfa-back]')?.addEventListener('click', () => window.location.reload());
+        resendButton?.addEventListener('click', async () => {
+            if (box) { box.hidden = true; box.textContent = ''; }
+            try {
+                const response = await fetch(`${apiPrefix}auth/resend-mfa.php`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    body: '{}'
+                });
+                const payload = await response.json().catch(() => null);
+                if (!response.ok || payload?.success === false) throw new Error(payload?.message || 'Unable to resend code.');
+                challengeId = payload.data?.challenge_id || challengeId;
+                resend = Number(payload.data?.resend_cooldown_seconds || 30);
+                remaining = Number(payload.data?.expires_in_seconds || 60);
+                renderResend();
+                clearOtp();
+            } catch (error) {
+                if (box) { box.textContent = error.message || 'Unable to resend code.'; box.hidden = false; }
+            }
+        });
+        const verify = async () => {
+            const submit = authForm.querySelector('[data-login-mfa-verify]');
+            if (otpValue().length !== 6) return;
+            if (box) { box.hidden = true; box.textContent = ''; }
+            if (submit) submit.disabled = true;
+            try {
+                const response = await fetch(`${apiPrefix}auth/verify-mfa.php`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ challenge_id: challengeId, otp: otpValue() })
+                });
+                const payload = await response.json().catch(() => null);
+                if (!response.ok || payload?.success === false) throw new Error(payload?.message || 'Verification failed.');
+                window.location.href = redirectPathAfterLogin(payload?.data?.user);
+            } catch (error) {
+                if (box) { box.textContent = error.message || 'Verification failed.'; box.hidden = false; }
+                clearOtp();
+            } finally {
+                if (submit) submit.disabled = false;
+                syncVerifyState();
+            }
+        };
+        authForm.querySelector('[data-login-mfa-verify]')?.addEventListener('click', verify);
+    }
+
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
+    }
 }
 
 

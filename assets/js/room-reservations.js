@@ -57,6 +57,12 @@
         return p;
     }
 
+    function exportUrl() {
+        const r = range();
+        const p = query({ sort: state.sort, direction: state.direction, date_from: isoDate(r.start), date_to: isoDate(r.end) });
+        return `../api/reservations/export-csv.php?${p}`;
+    }
+
     function renderToolbar() {
         qs('reservation-calendar-title').textContent = range().label;
         document.querySelectorAll('[data-calendar-view]').forEach(button => {
@@ -366,7 +372,6 @@
 
     document.addEventListener('fam:layout-ready', init);
     qs('reservation-refresh')?.addEventListener('click', refreshAll);
-    qs('reservation-export')?.addEventListener('click', () => window.FAMModal?.showToast('Reservation export will use the current calendar/list filters when enabled.'));
     qs('reservation-today')?.addEventListener('click', () => { state.anchor = new Date(); state.page = 1; refreshAll(); });
     qs('reservation-prev-period')?.addEventListener('click', () => shift(-1));
     qs('reservation-next-period')?.addEventListener('click', () => shift(1));
@@ -384,6 +389,7 @@
         if (qs('reservation-search')) qs('reservation-search').value = '';
         refreshAll();
     });
+    qs('reservation-export')?.addEventListener('click', () => { window.location.href = exportUrl(); });
     qs('reservation-prev-page')?.addEventListener('click', () => { state.page = Math.max(1, state.page - 1); loadList(); });
     qs('reservation-next-page')?.addEventListener('click', () => { state.page += 1; loadList(); });
     document.querySelector('.reservation-table')?.addEventListener('click', event => {

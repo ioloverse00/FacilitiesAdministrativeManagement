@@ -13,7 +13,7 @@
         ['system', 'System Information', 'info']
     ];
 
-    const state = { active: 'general', dirty: false, ref: 'Facility Request Categories', userTab: 'users', selectedRole: 'System Administrator', auditSearch: '', auditResult: 'all', organizationTab: 'Departments' };
+    const state = { active: 'general', dirty: false, ref: 'Facility Request Categories', userTab: 'users', selectedRole: 'FAM Super Administrator', auditSearch: '', auditResult: 'all', organizationTab: 'Departments' };
     const editableSections = new Set(['general', 'users', 'workflow', 'sla', 'reference', 'notifications', 'ai', 'integrations']);
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 
@@ -40,13 +40,13 @@
     const orgModal = { open: false, mode: 'add', step: 'form', section: '', search: '', status: 'all', selected: '', dirty: false, values: {}, errors: {} };
 
     const users = [
-        ['Admin User', 'EMP-0001', 'Administration', 'System Administrator', 'Active', 'Jul 26, 2026 9:12 AM'],
-        ['Maria Santos', 'EMP-0142', 'Operations', 'Facility Manager', 'Active', 'Jul 25, 2026 4:40 PM'],
-        ['Ramon Villanueva', 'EMP-0188', 'Facilities', 'Maintenance Supervisor', 'Active', 'Jul 24, 2026 3:02 PM'],
-        ['Liza Mendoza', 'EMP-0205', 'Training', 'Asset Custodian', 'Suspended', 'Jul 19, 2026 1:15 PM']
+        ['Mara Ibarra', 'EMP-2026-0001', 'Information Technology', 'FAM Super Administrator', 'Active', 'Jul 26, 2026 9:12 AM'],
+        ['Maria Santos', 'EMP-0142', 'Operations', 'FAM Department Head', 'Active', 'Jul 25, 2026 4:40 PM'],
+        ['Ramon Villanueva', 'EMP-0188', 'Facilities', 'FAM Staff', 'Active', 'Jul 24, 2026 3:02 PM'],
+        ['Liza Mendoza', 'EMP-0205', 'Training', 'Employee', 'Suspended', 'Jul 19, 2026 1:15 PM']
     ];
-    const roles = ['System Administrator', 'FAM Administrator', 'Facility Manager', 'Maintenance Supervisor', 'Technician', 'Asset Custodian', 'Reservation Officer', 'Procurement Officer', 'Records Officer', 'Requestor', 'Approver', 'Auditor'];
-    // Reports & Analytics temporarily disabled pending post-core-UAT implementation.
+    const roles = ['FAM Super Administrator', 'FAM Department Head', 'FAM Staff', 'Department Head', 'Employee'];
+    // Centralized Reports & Analytics is temporarily deferred; keep underlying permissions/data intact.
     const modules = ['Dashboard', 'Facilities Reservation', 'Visitor Management', 'Document Management', 'Records Retention & Compliance', 'Administration'];
     const perms = ['View', 'Create', 'Edit', 'Assign', 'Approve', 'Complete', 'Verify', 'Export', 'Manage', 'Delete'];
 
@@ -204,7 +204,7 @@
                         <div class="admin-org-record-list" role="listbox" aria-label="${escapeHtml(singular)} records">${filtered.map(row => `<button type="button" class="${orgModal.selected === row[1] ? 'selected' : ''}" data-org-select-record="${escapeHtml(row[1])}" role="option" aria-selected="${orgModal.selected === row[1] ? 'true' : 'false'}"><span>${escapeHtml(row[0])}</span><small>${escapeHtml(row[1])} - ${escapeHtml(row[2])}</small></button>`).join('') || '<p>No matching records.</p>'}</div>
                     </section>` : ''}
                     <form class="admin-org-edit-form" data-org-form>
-                        ${formVisible ? `<div id="admin-org-unsaved" class="admin-unsaved ${orgModal.dirty ? '' : 'hidden'}"><span aria-hidden="true"></span>Unsaved changes</div>${orgFields(section, selectedValues)}${orgModal.mode === 'edit' ? '<div class="admin-org-metadata"><h3>Metadata</h3><dl><dt>Created By</dt><dd>Admin User</dd><dt>Created Date</dt><dd>Jul 24, 2026</dd><dt>Last Updated</dt><dd>Jul 26, 2026</dd></dl></div>' : ''}` : ''}
+                        ${formVisible ? `<div id="admin-org-unsaved" class="admin-unsaved ${orgModal.dirty ? '' : 'hidden'}"><span aria-hidden="true"></span>Unsaved changes</div>${orgFields(section, selectedValues)}${orgModal.mode === 'edit' ? '<div class="admin-org-metadata"><h3>Metadata</h3><dl><dt>Created By</dt><dd>Mara Ibarra</dd><dt>Created Date</dt><dd>Jul 24, 2026</dd><dt>Last Updated</dt><dd>Jul 26, 2026</dd></dl></div>' : ''}` : ''}
                         ${orgModal.mode === 'edit' && selectedRow && orgModal.step === 'form' ? '<div class="admin-org-danger"><div><h3>Danger Zone</h3><p>This record cannot be deleted because it is currently referenced by operational data.</p></div><button class="facility-text-button" type="button" data-org-deactivate>Deactivate</button><button class="facility-text-button" type="button" disabled>Delete Permanently</button></div>' : ''}
                     </form>
                 </div>
@@ -259,7 +259,7 @@
             return `${sectionHeader('Subsystem Integrations', 'Monitor local reference data synchronized from owning subsystems.')}<div class="admin-integration-grid">${systems.map(system => `<article class="fam-card admin-integration-card"><h3>${system[0]}</h3>${badge(system[1])}<p>${system[2]}</p><dl><dt>Last synchronization</dt><dd>Jul 26, 2026 8:30 AM</dd><dt>Records processed</dt><dd>248</dd><dt>Failed records</dt><dd>${system[1] === 'Degraded' ? 3 : 0}</dd></dl><footer><button class="facility-text-button" data-admin-hook>Sync Now</button><button class="facility-text-button" data-admin-hook>View Sync History</button></footer></article>`).join('')}</div>`;
         },
         audit() {
-            const rows = [['Admin User', 'Updated SLA policy', 'SLA Policies', 'SLA-CRIT-ELEC', '2026-07-26 09:20', 'Success'], ['Maria Santos', 'Viewed role matrix', 'Users & Roles', 'Facility Manager', '2026-07-26 08:45', 'Success'], ['Unknown User', 'Attempted admin access', 'Administration', 'Settings', '2026-07-25 18:02', 'Denied'], ['Admin User', 'Tested AI connection', 'AI Services', 'AI Provider', '2026-07-25 15:12', 'Failed']];
+            const rows = [['Mara Ibarra', 'Updated SLA policy', 'SLA Policies', 'SLA-CRIT-ELEC', '2026-07-26 09:20', 'Success'], ['Maria Santos', 'Viewed role matrix', 'Users & Roles', 'Facility Manager', '2026-07-26 08:45', 'Success'], ['Unknown User', 'Attempted admin access', 'Administration', 'Settings', '2026-07-25 18:02', 'Denied'], ['Mara Ibarra', 'Tested AI connection', 'AI Services', 'AI Provider', '2026-07-25 15:12', 'Failed']];
             const filtered = rows.filter(row => (!state.auditSearch || row.join(' ').toLowerCase().includes(state.auditSearch.toLowerCase())) && (state.auditResult === 'all' || row[5] === state.auditResult));
             return `${sectionHeader('Audit Logs', 'Review administrative activity and protected configuration events.')}<div class="facility-table-header admin-inner-header"><div><h3>Audit Logs</h3><p>${filtered.length} audit records</p></div><label class="facility-field facility-search-field"><span class="sr-only">Search audit logs</span><input id="audit-search" value="${escapeHtml(state.auditSearch)}" placeholder="Search audit logs..."></label><select id="audit-result-filter"><option value="all">All Results</option>${['Success', 'Failed', 'Denied'].map(result => `<option ${state.auditResult === result ? 'selected' : ''}>${result}</option>`).join('')}</select></div>${compactTable(['User', 'Action', 'Module', 'Record', 'Timestamp', 'Result'], filtered)}`;
         },
@@ -270,7 +270,7 @@
     };
 
     function renderRoles() {
-        return `<div class="admin-role-layout"><div class="admin-role-list">${roles.map(role => `<button class="${state.selectedRole === role ? 'active' : ''}" data-role-select="${escapeHtml(role)}">${escapeHtml(role)}</button>`).join('')}</div><div class="facility-table-scroll"><table class="admin-permission-table"><thead><tr><th>Module</th>${perms.map(permission => `<th>${permission}</th>`).join('')}</tr></thead><tbody>${modules.map((module, index) => `<tr><td>${module}</td>${perms.map((permission, pIndex) => `<td><input type="checkbox" ${state.selectedRole === 'System Administrator' || (index + pIndex) % 3 === 0 ? 'checked' : ''} data-admin-input aria-label="${permission} ${module}"></td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+        return `<div class="admin-role-layout"><div class="admin-role-list">${roles.map(role => `<button class="${state.selectedRole === role ? 'active' : ''}" data-role-select="${escapeHtml(role)}">${escapeHtml(role)}</button>`).join('')}</div><div class="facility-table-scroll"><table class="admin-permission-table"><thead><tr><th>Module</th>${perms.map(permission => `<th>${permission}</th>`).join('')}</tr></thead><tbody>${modules.map((module, index) => `<tr><td>${module}</td>${perms.map((permission, pIndex) => `<td><input type="checkbox" ${state.selectedRole === 'FAM Super Administrator' || (index + pIndex) % 3 === 0 ? 'checked' : ''} data-admin-input aria-label="${permission} ${module}"></td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
     }
 
     function panelActions(label = 'Save Changes') {
@@ -587,6 +587,10 @@
     }
 
     function initializeSettings() {
+        if (!(window.FAMApi?.currentUser?.permissions || []).includes('administration.view')) {
+            window.location.replace('../errors/403.html');
+            return;
+        }
         document.getElementById('admin-updated').textContent = formatUpdatedAt();
         renderNavigation();
         renderPanel();

@@ -102,6 +102,15 @@ final class LiveDataService
         return $this->paged($sql, $where, $params, $q, $sorts, 'mwo.created_at', fn($r) => $this->shapeMaintenance($r), $this->maintenanceSummary());
     }
 
+    public function streamMaintenanceCsv(array $q, mixed $handle): void
+    {
+        $sql = "SELECT mwo.*, fs.space_name, b.building_name, a.asset_code, a.asset_name, e.full_name assigned_to_name, fr.request_number facility_request_number FROM maintenance_work_order mwo LEFT JOIN facility_space fs ON fs.facility_space_id=mwo.facility_space_id LEFT JOIN building b ON b.building_id=fs.building_id LEFT JOIN asset a ON a.asset_id=mwo.asset_id LEFT JOIN employee_reference e ON e.employee_reference_id=mwo.assigned_to_employee_reference_id LEFT JOIN facility_request fr ON fr.facility_request_id=mwo.facility_request_id";
+        [$where, $params] = $this->filters('mwo', $q, ['status'=>'mwo.status','priority'=>'mwo.priority','maintenance_type'=>'mwo.maintenance_type','assigned_to'=>'mwo.assigned_to_employee_reference_id','facility_space_id'=>'mwo.facility_space_id','asset_id'=>'mwo.asset_id'], ['mwo.work_order_number','mwo.problem_description','a.asset_name','fs.space_name']);
+        $this->streamCsv($handle, ['Work Order No.', 'Title / Summary', 'Maintenance Type', 'Asset', 'Facility / Space', 'Priority', 'Assigned Employee', 'Scheduled Date', 'Completion Date', 'Status', 'Created', 'Updated'], $sql, $where, $params, $q, ['work_order_number'=>'mwo.work_order_number','priority'=>'mwo.priority','status'=>'mwo.status','maintenance_type'=>'mwo.maintenance_type','scheduled_start_at'=>'mwo.scheduled_start_at','created_at'=>'mwo.created_at'], 'mwo.created_at', function (array $r): array {
+            return [$r['work_order_number'], $r['problem_description'], $r['maintenance_type'], $r['asset_name'], trim(($r['building_name'] ?? '') . ' / ' . ($r['space_name'] ?? ''), ' /'), $r['priority'], $r['assigned_to_name'], $r['scheduled_start_at'], $r['actual_end_at'], $r['status'], $r['created_at'], $r['updated_at']];
+        });
+    }
+
     public function maintenanceShow(int $id): ?array
     {
         $item = $this->single($this->maintenanceList(['id'=>$id, 'per_page'=>1]), $id);
@@ -119,6 +128,16 @@ final class LiveDataService
         if (($q['maintenance_due'] ?? '') !== '') $this->maintenanceDueFilter($where, $params, (string)$q['maintenance_due']);
         $sorts = ['asset_code'=>'a.asset_code','asset_name'=>'a.asset_name','category'=>'ac.category_name','condition_status'=>'a.condition_status','lifecycle_status'=>'a.lifecycle_status','next_maintenance_date'=>'a.next_maintenance_date','created_at'=>'a.created_at'];
         return $this->paged($sql, $where, $params, $q, $sorts, 'a.created_at', fn($r) => $this->shapeAsset($r), $this->assetSummary());
+    }
+
+    public function streamAssetsCsv(array $q, mixed $handle): void
+    {
+        $sql = "SELECT a.*, ac.category_name, fs.space_name, b.building_name, e.full_name custodian_name, s.supplier_name FROM asset a INNER JOIN asset_category ac ON ac.asset_category_id=a.asset_category_id LEFT JOIN facility_space fs ON fs.facility_space_id=a.facility_space_id LEFT JOIN building b ON b.building_id=fs.building_id LEFT JOIN employee_reference e ON e.employee_reference_id=a.custodian_employee_reference_id LEFT JOIN supplier_reference s ON s.supplier_reference_id=a.supplier_reference_id";
+        [$where, $params] = $this->filters('a', $q, ['category_id'=>'a.asset_category_id','condition_status'=>'a.condition_status','lifecycle_status'=>'a.lifecycle_status','facility_space_id'=>'a.facility_space_id','custodian_id'=>'a.custodian_employee_reference_id'], ['a.asset_code','a.property_number','a.asset_name','a.serial_number','fs.space_name','e.full_name']);
+        if (($q['maintenance_due'] ?? '') !== '') $this->maintenanceDueFilter($where, $params, (string)$q['maintenance_due']);
+        $this->streamCsv($handle, ['Asset No./Tag', 'Property No.', 'Asset Name', 'Category', 'Location / Facility Space', 'Custodian', 'Condition', 'Lifecycle / Status', 'Acquisition Date', 'Maintenance Due Date', 'Created', 'Updated'], $sql, $where, $params, $q, ['asset_code'=>'a.asset_code','asset_name'=>'a.asset_name','category'=>'ac.category_name','condition_status'=>'a.condition_status','lifecycle_status'=>'a.lifecycle_status','next_maintenance_date'=>'a.next_maintenance_date','created_at'=>'a.created_at'], 'a.created_at', function (array $r): array {
+            return [$r['asset_code'], $r['property_number'], $r['asset_name'], $r['category_name'], trim(($r['building_name'] ?? '') . ' / ' . ($r['space_name'] ?? ''), ' /'), $r['custodian_name'], $r['condition_status'], $r['lifecycle_status'], $r['acquisition_date'], $r['next_maintenance_date'], $r['created_at'], $r['updated_at']];
+        });
     }
     public function assetShow(int $id): ?array { $item=$this->findAsset($id); if(!$item)return null; $item['history']=$this->rows('SELECT event_type,old_condition_status,new_condition_status,old_lifecycle_status,new_lifecycle_status,remarks,changed_at FROM asset_history WHERE asset_id=:id ORDER BY changed_at DESC',['id'=>$id]); $item['work_orders']=$this->rows('SELECT work_order_number,status,priority,created_at FROM maintenance_work_order WHERE asset_id=:id AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 10',['id'=>$id]); return $item; }
 
@@ -143,6 +162,15 @@ final class LiveDataService
         [$where,$params]=$this->filters('pr',$q,['status'=>'pr.status','approval_status'=>'pr.approval_status','priority'=>'pr.priority','department_id'=>'pr.department_reference_id','integration_status'=>'pr.integration_status'],['pr.request_number','pr.justification','e.full_name','d.department_name']);
         $sorts=['request_number'=>'pr.request_number','priority'=>'pr.priority','status'=>'pr.status','approval_status'=>'pr.approval_status','estimated_total'=>'pr.estimated_total','created_at'=>'pr.created_at'];
         return $this->paged($sql,$where,$params,$q,$sorts,'pr.created_at',fn($r)=>$this->shapeProcurement($r),$this->procurementSummary());
+    }
+
+    public function streamProcurementCsv(array $q, mixed $handle): void
+    {
+        $sql="SELECT pr.*, e.full_name requester_name, e.employee_number requester_number, d.department_name, br.budget_code, fr.request_number facility_request_number, mwo.work_order_number FROM procurement_request pr LEFT JOIN employee_reference e ON e.employee_reference_id=pr.requested_by_employee_reference_id LEFT JOIN department_reference d ON d.department_reference_id=pr.department_reference_id LEFT JOIN budget_reference br ON br.budget_reference_id=pr.budget_reference_id LEFT JOIN facility_request fr ON fr.facility_request_id=pr.facility_request_id LEFT JOIN maintenance_work_order mwo ON mwo.maintenance_work_order_id=pr.maintenance_work_order_id";
+        [$where,$params]=$this->filters('pr',$q,['status'=>'pr.status','approval_status'=>'pr.approval_status','priority'=>'pr.priority','department_id'=>'pr.department_reference_id','integration_status'=>'pr.integration_status'],['pr.request_number','pr.justification','e.full_name','d.department_name']);
+        $this->streamCsv($handle, ['Request No.', 'Request Title / Summary', 'Department', 'Requester', 'Priority', 'Budget Code', 'Estimated Amount', 'Currency', 'Status', 'Approval Status', 'Created', 'Updated'], $sql, $where, $params, $q, ['request_number'=>'pr.request_number','priority'=>'pr.priority','status'=>'pr.status','approval_status'=>'pr.approval_status','estimated_total'=>'pr.estimated_total','created_at'=>'pr.created_at'], 'pr.created_at', function (array $r): array {
+            return [$r['request_number'], $r['justification'], $r['department_name'], $r['requester_name'], $r['priority'], $r['budget_code'], $r['estimated_total'], $r['currency_code'], $r['status'], $r['approval_status'], $r['created_at'], $r['updated_at']];
+        });
     }
     public function procurementShow(int $id): ?array { $item=$this->single($this->procurementList(['id'=>$id,'per_page'=>1]),$id); if(!$item)return null; $item['items']=$this->rows('SELECT item_description,quantity,unit_of_measure,estimated_unit_cost,estimated_total_cost,specifications FROM procurement_request_item WHERE procurement_request_id=:id ORDER BY procurement_request_item_id',['id'=>$id]); $item['history']=$this->rows('SELECT old_status,new_status,change_reason,changed_at FROM procurement_history WHERE procurement_request_id=:id ORDER BY changed_at DESC',['id'=>$id]); $item['purchase_orders']=$this->rows('SELECT purchase_order_number,external_purchase_order_id,purchase_order_status,total_amount,currency_code,source_system,sync_status FROM purchase_order_reference WHERE procurement_request_id=:id ORDER BY purchase_order_reference_id DESC',['id'=>$id]); return $item; }
 
@@ -181,6 +209,28 @@ final class LiveDataService
         return ['items'=>array_map($shape,$stmt->fetchAll()),'pagination'=>['page'=>$page,'per_page'=>$per,'total'=>$total,'total_pages'=>(int)ceil($total/max(1,$per))],'summary'=>$summary];
     }
 
+    private function streamCsv(mixed $handle, array $columns, string $base, array $where, array $params, array $q, array $sorts, string $defaultSort, callable $shape): void
+    {
+        fputcsv($handle, $columns);
+        $whereSql = ' WHERE ' . implode(' AND ', $where);
+        $sort = $sorts[(string)($q['sort'] ?? '')] ?? $defaultSort;
+        $dir = strtolower((string)($q['direction'] ?? 'desc')) === 'asc' ? 'ASC' : 'DESC';
+        $statement = $this->pdo->prepare($base . $whereSql . " ORDER BY $sort $dir");
+        foreach ($params as $key => $value) {
+            $statement->bindValue($key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+        $statement->execute();
+        while ($row = $statement->fetch()) {
+            fputcsv($handle, array_map(fn($value) => $this->csvCell($value), $shape($row)));
+        }
+    }
+
+    private function csvCell(mixed $value): string
+    {
+        $cell = trim((string)($value ?? ''));
+        return $cell !== '' && preg_match('/^[=+\-@]/', $cell) === 1 ? "'" . $cell : $cell;
+    }
+
     private function primaryKey(string $alias): string { return ['mwo'=>'maintenance_work_order_id','a'=>'asset_id','r'=>'facility_reservation_id','pr'=>'procurement_request_id','rec'=>'record_id'][$alias] ?? 'record_id'; }
     private function single(array $list, int $id): ?array { return $list['items'][0] ?? null; }
     private function count(string $table): int { return (int)$this->scalar("SELECT COUNT(*) FROM `$table` WHERE deleted_at IS NULL"); }
@@ -206,7 +256,7 @@ final class LiveDataService
     private function assetSummary(): array { return ['total'=>$this->count('asset'),'available'=>(int)$this->scalar("SELECT COUNT(*) FROM asset WHERE deleted_at IS NULL AND lifecycle_status='AVAILABLE'"),'under_maintenance'=>(int)$this->scalar("SELECT COUNT(*) FROM asset WHERE deleted_at IS NULL AND lifecycle_status='UNDER_MAINTENANCE'"),'maintenance_due'=>(int)$this->scalar("SELECT COUNT(*) FROM asset WHERE deleted_at IS NULL AND next_maintenance_date IS NOT NULL AND next_maintenance_date<=DATE_ADD(CURRENT_DATE(), INTERVAL 30 DAY)"),'needs_attention'=>(int)$this->scalar("SELECT COUNT(*) FROM asset WHERE deleted_at IS NULL AND condition_status IN ('POOR','CRITICAL','FOR_INSPECTION')")]; }
     private function reservationSummary(): array { return ['active'=>(int)$this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND status IN ('SUBMITTED','PENDING_APPROVAL','APPROVED','CHECKED_IN')"),'today'=>(int)$this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND DATE(start_datetime)=CURRENT_DATE()"),'pending_approval'=>(int)$this->scalar("SELECT COUNT(*) FROM facility_reservation WHERE deleted_at IS NULL AND approval_status='PENDING'"),'conflicts'=>0]; }
     private function procurementSummary(): array { return ['open'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND status NOT IN ('COMPLETED','CANCELLED','REJECTED')"),'pending_approval'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND approval_status='PENDING'"),'integration_issues'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND integration_status IN ('FAILED','ERROR')"),'estimated_total'=>(float)$this->scalar("SELECT COALESCE(SUM(estimated_total),0) FROM procurement_request WHERE deleted_at IS NULL")]; }
-    private function recordSummary(): array { return ['total'=>$this->count('record'),'active'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND record_status='ACTIVE'"),'disposition_due'=>RetentionService::countRecordsDueForReview($this->pdo),'restricted'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND confidentiality_level IN ('CONFIDENTIAL','RESTRICTED')")]; }
+    private function recordSummary(): array { return ['total'=>$this->count('record'),'active'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND record_status='ACTIVE'"),'disposition_due'=>RetentionService::countRecordsDueForReview($this->pdo),'restricted'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND confidentiality_level = 'CONFIDENTIAL'")]; }
 
     private function recentActivities(): array { return $this->rows("SELECT event_title activity, module_code module, entity_reference reference, occurred_at time, event_type status FROM activity_event WHERE module_code IN ('RESERVATIONS','VISITORS','documents','retention','contract_management','LEGAL_MANAGEMENT') ORDER BY occurred_at DESC LIMIT 10"); }
 

@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 final class PersonaService
 {
-    public const SUPER_ADMIN = 'SUPER_ADMIN';
+    public const FAM_SUPER_ADMIN = 'FAM_SUPER_ADMIN';
     public const FAM_ADMIN = 'FAM_ADMIN';
-    public const FAM_OPERATIONAL = 'FAM_OPERATIONAL';
-    public const DEPARTMENT_HEAD_EMPLOYEE = 'DEPARTMENT_HEAD_EMPLOYEE';
+    public const FAM_STAFF = 'FAM_STAFF';
+    public const DEPARTMENT_HEAD = 'DEPARTMENT_HEAD';
+    public const EMPLOYEE = 'EMPLOYEE';
     public const UNAUTHORIZED_OR_UNRESOLVED = 'UNAUTHORIZED_OR_UNRESOLVED';
 
     private const FAM_DEPARTMENT_CODE = 'DEP-FAC';
-    private const FAM_OPERATIONAL_ROLES = ['FACILITY_MANAGER', 'ASSET_CUSTODIAN', 'RESERVATION_OFFICER', 'RECORDS_OFFICER', 'TECHNICIAN', 'MAINTENANCE_SUPERVISOR'];
-    private const EXTERNAL_HEAD_DEPARTMENT_CODES = ['DEP-FIN', 'DEP-HR', 'DEP-SCM'];
 
     public static function classify(PDO $pdo, array $profile, array $roles, array $permissions): array
     {
@@ -20,19 +19,22 @@ final class PersonaService
         $departmentCode = strtoupper((string) ($profile['department']['code'] ?? ''));
         $employeeId = (int) ($profile['employee_id'] ?? 0);
 
-        if (in_array('SYSTEM_ADMIN', $roleCodes, true)) {
-            return self::result(self::SUPER_ADMIN, 'fam', 'SYSTEM_ADMIN compatibility role.');
+        if (in_array(self::FAM_SUPER_ADMIN, $roleCodes, true)) {
+            return self::result(self::FAM_SUPER_ADMIN, 'fam', 'FAM super administrator role.');
         }
-        if (in_array('FAM_ADMIN', $roleCodes, true)) {
-            return self::result(self::FAM_ADMIN, 'fam', 'FAM_ADMIN role.');
+        if (in_array(self::FAM_ADMIN, $roleCodes, true)) {
+            return self::result(self::FAM_ADMIN, 'fam', 'FAM department head role.');
         }
-        if ($departmentCode === self::FAM_DEPARTMENT_CODE || count(array_intersect($roleCodes, self::FAM_OPERATIONAL_ROLES)) > 0) {
-            return self::result(self::FAM_OPERATIONAL, 'fam', 'FAM department or operational FAM role.');
+        if (in_array(self::FAM_STAFF, $roleCodes, true)) {
+            return self::result(self::FAM_STAFF, 'fam', 'FAM staff role.');
         }
-        if (self::isMappedDepartmentHead($pdo, $employeeId)
-            && in_array($departmentCode, self::EXTERNAL_HEAD_DEPARTMENT_CODES, true)
-            && (in_array('DEPARTMENT_HEAD_EMPLOYEE', $roleCodes, true) || count(array_intersect($permissions, ['facility_requests.create', 'reservations.create', 'budget.approve', 'procurement.approve'])) > 0)) {
-            return self::result(self::DEPARTMENT_HEAD_EMPLOYEE, 'employee', 'Authorized external FAM-facing department head.');
+        if (in_array(self::DEPARTMENT_HEAD, $roleCodes, true)
+            && $departmentCode !== self::FAM_DEPARTMENT_CODE
+            && self::isMappedDepartmentHead($pdo, $employeeId)) {
+            return self::result(self::DEPARTMENT_HEAD, 'employee', 'Authorized non-FAM department head.');
+        }
+        if (in_array(self::EMPLOYEE, $roleCodes, true)) {
+            return self::result(self::EMPLOYEE, 'employee', 'Employee self-service role.');
         }
 
         return ['code' => self::UNAUTHORIZED_OR_UNRESOLVED, 'portal' => 'none', 'is_employee_portal_allowed' => false, 'is_fam_portal_allowed' => false, 'reason' => 'No authorized FAM persona classification.'];

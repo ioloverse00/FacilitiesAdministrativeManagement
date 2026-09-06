@@ -37,27 +37,27 @@
 
         <div class="relative flex items-center">
             <button id="profile-dropdown-toggle" type="button" class="flex items-center gap-3 p-1.5 rounded-full hover:bg-surface-container-low transition-colors focus:outline-none border border-transparent hover:border-outline-variant/30 cursor-pointer" aria-expanded="false" aria-controls="profile-dropdown-menu" aria-haspopup="menu" aria-label="Open account menu" title="Account Menu">
-                <div class="w-9 h-9 rounded-full bg-primary-container/30 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm shadow-2xs shrink-0" aria-hidden="true">AU</div>
+                <div id="fam-header-avatar" class="w-9 h-9 rounded-full bg-primary-container/30 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm shadow-2xs shrink-0" aria-hidden="true">FM</div>
                 <div class="hidden md:flex flex-col text-left mr-1">
-                    <span class="font-label font-semibold text-sm text-on-surface leading-tight">Admin User</span>
-                    <span class="text-xs text-on-surface-variant font-light">Administrator</span>
+                    <span id="fam-header-name" class="font-label font-semibold text-sm text-on-surface leading-tight">Loading...</span>
+                    <span id="fam-header-position" class="text-xs text-on-surface-variant font-light">Loading...</span>
                 </div>
                 <span class="material-symbols-outlined text-on-surface-variant text-sm hidden sm:inline-block" aria-hidden="true">expand_more</span>
             </button>
 
             <div id="profile-dropdown-menu" class="absolute right-0 top-14 w-60 bg-surface rounded-2xl shadow-xl border border-outline-variant/30 py-2 z-50 transition-all duration-200 hidden opacity-0 scale-95 origin-top-right" role="menu">
                 <div class="px-4 py-3 border-b border-outline-variant/20 md:hidden">
-                    <p class="text-sm font-semibold text-on-surface">Admin User</p>
-                    <p class="text-xs text-on-surface-variant truncate">admin@example.com</p>
+                    <p id="fam-menu-name" class="text-sm font-semibold text-on-surface">Loading...</p>
+                    <p id="fam-menu-email" class="text-xs text-on-surface-variant truncate">Loading...</p>
                 </div>
                 <div class="px-4 py-2 hidden md:block">
                     <p class="text-xs font-medium text-on-surface-variant uppercase tracking-wider">Account</p>
                 </div>
-                <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
+                <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem" data-requires-permission="administration.view">
                     <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">person</span>
                     <span class="font-medium">My Profile</span>
                 </a>
-                <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
+                <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem" data-requires-permission="administration.view">
                     <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">manage_accounts</span>
                     <span class="font-medium">Account Settings</span>
                 </a>

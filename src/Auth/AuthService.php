@@ -18,7 +18,7 @@ final class AuthResult
 
 final class AuthService
 {
-    public function __construct(private readonly PDO $pdo)
+    public function __construct(private readonly PDO $pdo, private readonly ?MailService $mail = null)
     {
     }
 
@@ -61,13 +61,62 @@ final class AuthService
             return new AuthResult(false, 'Invalid username or password.', 401);
         }
 
-        $this->pdo->beginTransaction();
+        if (password_needs_rehash((string) $account['password_hash'], PASSWORD_DEFAULT)) {
+            $this->updatePasswordHash($userId, password_hash($password, PASSWORD_DEFAULT));
+        }
+
+        $email = $this->authoritativeEmail($account);
+        if ($email === null) {
+            $this->safeAudit('AUTH_MFA_DELIVERY_FAILED', $userId, ['result' => 'missing_email']);
+            return new AuthResult(false, 'No verification email is configured for this account. Contact an administrator.', 409);
+        }
+
+        unset($_SESSION['user_account_id'], $_SESSION['authenticated_at'], $_SESSION['last_activity_at'], $_SESSION['csrf_token'], $_SESSION['document_step_up']);
+        $_SESSION['pending_login_mfa'] = [
+            'user_account_id' => $userId,
+            'created_at' => time(),
+        ];
 
         try {
-            if (password_needs_rehash((string) $account['password_hash'], PASSWORD_DEFAULT)) {
-                $newHash = password_hash($password, PASSWORD_DEFAULT);
-                $this->updatePasswordHash($userId, $newHash);
-            }
+            $challenge = $this->loginMfa()->issueChallenge($userId, $email);
+        } catch (Throwable $exception) {
+            unset($_SESSION['pending_login_mfa']);
+            $this->safeAudit('AUTH_MFA_DELIVERY_FAILED', $userId, ['result' => 'mail_unavailable']);
+            return new AuthResult(false, 'Verification email is temporarily unavailable. Please try again later.', 503);
+        }
+
+        $this->safeAudit('AUTH_MFA_CHALLENGE_ISSUED', $userId, ['result' => 'issued']);
+
+        return new AuthResult(true, 'Verification code sent.', 202, [
+            'mfa_required' => true,
+            'challenge_id' => $challenge['challenge_id'] ?? null,
+            'email_hint' => $challenge['email_hint'] ?? '',
+            'expires_in_seconds' => $challenge['expires_in_seconds'] ?? null,
+            'resend_cooldown_seconds' => $challenge['resend_cooldown_seconds'] ?? null,
+        ]);
+    }
+
+    public function verifyLoginMfa(string $challengeId, string $otp): AuthResult
+    {
+        $pending = $this->pendingLoginMfa();
+        if ($pending === null) {
+            return new AuthResult(false, 'Verification failed. Please sign in again.', 401);
+        }
+        $userId = (int) $pending['user_account_id'];
+        $account = $this->findAccountById($userId);
+        if ($account === null || $this->isLocked($account) || !$this->hasAvailableAccountState($account)) {
+            unset($_SESSION['pending_login_mfa']);
+            $this->safeAudit('AUTH_MFA_FAILED', $userId, ['result' => 'account_unavailable']);
+            return new AuthResult(false, 'Verification failed. Please sign in again.', 403);
+        }
+
+        if (!$this->loginMfa()->verify($userId, $challengeId, $otp)) {
+            $this->safeAudit('AUTH_MFA_FAILED', $userId, ['result' => 'invalid']);
+            return new AuthResult(false, 'Verification failed. Check the code and try again.', 422);
+        }
+
+        $this->pdo->beginTransaction();
+        try {
             $this->registerSuccessfulLogin($userId);
             $this->pdo->commit();
         } catch (Throwable $exception) {
@@ -75,20 +124,54 @@ final class AuthService
             throw $exception;
         }
 
-        $this->safeAudit('AUTH_LOGIN_SUCCESS', $userId, ['result' => 'success']);
-        $this->safeActivity($userId, 'AUTH_LOGIN_SUCCESS', 'User signed in.');
-
+        unset($_SESSION['pending_login_mfa'], $_SESSION['document_step_up']);
         session_regenerate_id(true);
-
         $_SESSION['user_account_id'] = $userId;
         $_SESSION['authenticated_at'] = time();
         $_SESSION['last_activity_at'] = time();
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 
+        $this->safeAudit('AUTH_LOGIN_SUCCESS', $userId, ['result' => 'mfa_success']);
+        $this->safeActivity($userId, 'AUTH_LOGIN_SUCCESS', 'User signed in.');
+
         return new AuthResult(true, 'Login successful.', 200, [
             'user' => $this->buildAuthenticatedUser($userId)->toArray(),
             'csrf_token' => $_SESSION['csrf_token'],
         ]);
+    }
+
+    public function resendLoginMfa(): AuthResult
+    {
+        $pending = $this->pendingLoginMfa();
+        if ($pending === null) {
+            return new AuthResult(false, 'Verification failed. Please sign in again.', 401);
+        }
+        $userId = (int) $pending['user_account_id'];
+        $account = $this->findAccountById($userId);
+        if ($account === null || $this->isLocked($account) || !$this->hasAvailableAccountState($account)) {
+            unset($_SESSION['pending_login_mfa']);
+            return new AuthResult(false, 'Verification failed. Please sign in again.', 403);
+        }
+
+        $email = $this->authoritativeEmail($account);
+        if ($email === null) {
+            unset($_SESSION['pending_login_mfa']);
+            $this->safeAudit('AUTH_MFA_DELIVERY_FAILED', $userId, ['result' => 'missing_email']);
+            return new AuthResult(false, 'No verification email is configured for this account. Contact an administrator.', 409);
+        }
+
+        try {
+            $challenge = $this->loginMfa()->issueChallenge($userId, $email);
+        } catch (Throwable $exception) {
+            $this->safeAudit('AUTH_MFA_DELIVERY_FAILED', $userId, ['result' => 'mail_unavailable']);
+            return new AuthResult(false, 'Verification email is temporarily unavailable. Please try again later.', 503);
+        }
+        if (($challenge['sent'] ?? true) === false) {
+            return new AuthResult(false, 'Please wait before requesting another code.', 429, $challenge + ['mfa_required' => true]);
+        }
+
+        $this->safeAudit('AUTH_MFA_CHALLENGE_ISSUED', $userId, ['result' => 'resent']);
+        return new AuthResult(true, 'Verification code sent.', 200, $challenge + ['mfa_required' => true]);
     }
 
     public function currentUser(): ?AuthenticatedUser
@@ -141,6 +224,24 @@ final class AuthService
         clearAuthSession();
     }
 
+    private function pendingLoginMfa(): ?array
+    {
+        $pending = $_SESSION['pending_login_mfa'] ?? null;
+        if (!is_array($pending)) {
+            return null;
+        }
+        $userId = $pending['user_account_id'] ?? null;
+        if (!is_int($userId) && !(is_string($userId) && ctype_digit($userId))) {
+            return null;
+        }
+        $createdAt = (int) ($pending['created_at'] ?? 0);
+        if ($createdAt < 1 || time() - $createdAt > max(60, (int) env('LOGIN_MFA_PENDING_TTL_SECONDS', 600))) {
+            unset($_SESSION['pending_login_mfa']);
+            return null;
+        }
+        return ['user_account_id' => (int) $userId, 'created_at' => $createdAt];
+    }
+
     /**
      * @return array<string, mixed>|null
      */
@@ -172,6 +273,39 @@ final class AuthService
             LIMIT 1'
         );
         $statement->execute(['username' => $username]);
+        $row = $statement->fetch();
+
+        return is_array($row) ? $row : null;
+    }
+
+    private function findAccountById(int $userId): ?array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT
+                u.user_account_id,
+                u.employee_reference_id,
+                u.username,
+                u.password_hash,
+                u.account_status,
+                u.failed_login_count,
+                u.locked_until,
+                u.deleted_at AS user_deleted_at,
+                e.employee_number,
+                e.full_name,
+                e.position_title,
+                e.email_address,
+                e.employment_status,
+                e.deleted_at AS employee_deleted_at,
+                d.department_reference_id,
+                d.department_code,
+                d.department_name
+            FROM user_account u
+            INNER JOIN employee_reference e ON e.employee_reference_id = u.employee_reference_id
+            LEFT JOIN department_reference d ON d.department_reference_id = e.department_reference_id
+            WHERE u.user_account_id = :user_account_id
+            LIMIT 1'
+        );
+        $statement->execute(['user_account_id' => $userId]);
         $row = $statement->fetch();
 
         return is_array($row) ? $row : null;
@@ -280,6 +414,22 @@ final class AuthService
         ]);
     }
 
+    private function loginMfa(): LoginMfaService
+    {
+        return new LoginMfaService($this->pdo, $this->mail ?? new MailService());
+    }
+
+    private function authoritativeEmail(array $account): ?string
+    {
+        return $this->normalizeEmail($account['email_address'] ?? null);
+    }
+
+    private function normalizeEmail(mixed $email): ?string
+    {
+        $value = strtolower(trim((string) $email));
+        return filter_var($value, FILTER_VALIDATE_EMAIL) ? $value : null;
+    }
+
     private function buildAuthenticatedUser(int $userId): AuthenticatedUser
     {
         $statement = $this->pdo->prepare(<<<'SQL'
@@ -318,7 +468,7 @@ SQL);
             'employee_number' => (string) $row['employee_number'],
             'full_name' => (string) $row['full_name'],
             'position' => (string) ($row['position_title'] ?? ''),
-            'email' => (string) ($row['email_address'] ?? ''),
+            'email' => $this->normalizeEmail($row['email_address'] ?? null) ?? '',
             'department' => [
                 'id' => $row['department_reference_id'] === null ? null : (int) $row['department_reference_id'],
                 'code' => (string) ($row['department_code'] ?? ''),
@@ -469,7 +619,8 @@ SQL);
             'AUTH_LOGIN_SUCCESS', 'AUTH_LOGOUT' => 'SUCCESS',
             'AUTH_ACCOUNT_LOCKED' => 'LOCKED',
             'AUTH_SESSION_EXPIRED' => 'EXPIRED',
-            'AUTH_LOGIN_FAILED' => 'FAILED',
+            'AUTH_LOGIN_FAILED', 'AUTH_MFA_FAILED', 'AUTH_MFA_DELIVERY_FAILED' => 'FAILED',
+            'AUTH_MFA_CHALLENGE_ISSUED' => 'SUCCESS',
             default => 'DENIED',
         };
     }

@@ -170,7 +170,7 @@
         const dialog = ensureDialog();
         const contract = item.contract || {};
         const approval = item.approval || {};
-        const financial = contract.financial || {};
+        const financial = contract.financial || null;
         const dates = contract.dates || {};
         const availableActions = approval.available_actions || [];
         const task = item.task || {};
@@ -212,11 +212,11 @@
                         <dl class="facility-details-grid">
                             ${detailRow('Contract Number', contract.number)}
                             ${detailRow('Title', contract.title)}
-                            ${detailRow('Supplier / Counterparty', contract.supplier?.name)}
+                            ${detailRow('Counterparty', contract.counterparty?.name || contract.supplier?.name)}
                             ${detailRow('Type', contract.type?.name || contract.type?.code)}
                             ${detailRow('Owning Department', contract.owning_department?.name)}
                             ${detailRow('Contract Owner', contract.contract_owner?.name)}
-                            ${detailRow('Value', `${financial.currencyCode || 'PHP'} ${Number(financial.currentAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
+                            ${financial && Object.prototype.hasOwnProperty.call(financial, 'currentAmount') ? detailRow('Value', `${financial.currencyCode || 'PHP'} ${Number(financial.currentAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`) : ''}
                             ${detailRow('Effective Date', dates.effectiveDate || dates.startDate)}
                             ${detailRow('End Date', dates.endDate)}
                             ${detailRow('Risk', title(contract.risk_level))}
