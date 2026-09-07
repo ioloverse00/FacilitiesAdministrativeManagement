@@ -1,16 +1,27 @@
 RewriteEngine On
 
 # Legacy page URLs remain compatible while pointing users to canonical routes.
-RewriteRule ^pages/dashboard\.html$ dashboard [R=302,L]
-RewriteRule ^pages/room-reservations\.html$ facilities-reservation [R=302,L]
-RewriteRule ^pages/visitor-management\.html$ visitor-management [R=302,L]
-RewriteRule ^pages/contract-management\.html$ contract-management [R=302,L]
-RewriteRule ^pages/legal-management\.html$ legal-management [R=302,L]
-RewriteRule ^pages/records\.html$ document-management [R=302,L]
-RewriteRule ^pages/records-retention\.html$ records-retention [R=302,L]
-RewriteRule ^pages/fam-administration-maintenance\.html$ fam-administration [R=302,L]
-RewriteRule ^pages/under-maintenance\.html$ under-maintenance [R=302,L]
-RewriteRule ^pages/settings\.html$ fam-administration [R=302,L]
+# THE_REQUEST limits redirects to original client requests, not internal rewrites.
+RewriteCond %{THE_REQUEST} \s/+pages/dashboard\.html[\s?] [NC]
+RewriteRule ^pages/dashboard\.html$ /dashboard [R=302,L]
+RewriteCond %{THE_REQUEST} \s/+pages/room-reservations\.html[\s?] [NC]
+RewriteRule ^pages/room-reservations\.html$ /facilities-reservation [R=302,L]
+RewriteCond %{THE_REQUEST} \s/+pages/visitor-management\.html[\s?] [NC]
+RewriteRule ^pages/visitor-management\.html$ /visitor-management [R=302,L]
+RewriteCond %{THE_REQUEST} \s/+pages/contract-management\.html[\s?] [NC]
+RewriteRule ^pages/contract-management\.html$ /contract-management [R=302,L]
+RewriteCond %{THE_REQUEST} \s/+pages/legal-management\.html[\s?] [NC]
+RewriteRule ^pages/legal-management\.html$ /legal-management [R=302,L]
+RewriteCond %{THE_REQUEST} \s/+pages/records\.html[\s?] [NC]
+RewriteRule ^pages/records\.html$ /document-management [R=302,L]
+RewriteCond %{THE_REQUEST} \s/+pages/records-retention\.html[\s?] [NC]
+RewriteRule ^pages/records-retention\.html$ /records-retention [R=302,L]
+RewriteCond %{THE_REQUEST} \s/+pages/fam-administration-maintenance\.html[\s?] [NC]
+RewriteRule ^pages/fam-administration-maintenance\.html$ /fam-administration [R=302,L]
+RewriteCond %{THE_REQUEST} \s/+pages/under-maintenance\.html[\s?] [NC]
+RewriteRule ^pages/under-maintenance\.html$ /under-maintenance [R=302,L]
+RewriteCond %{THE_REQUEST} \s/+pages/settings\.html[\s?] [NC]
+RewriteRule ^pages/settings\.html$ /fam-administration [R=302,L]
 
 # Public FAM routes. These are internal rewrites, so the browser URL stays clean.
 RewriteRule ^$ pages/dashboard.html [L]

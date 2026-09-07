@@ -72,7 +72,7 @@
                 return;
             }
             const script = document.createElement('script');
-            script.src = '../assets/js/api-client.js';
+            script.src = `${window.FAMNavigation?.appBasePath?.() || '../'}assets/js/api-client.js`;
             script.defer = true;
             script.dataset.apiClient = 'true';
             script.addEventListener('load', resolve, { once: true });
@@ -92,7 +92,7 @@
                 return;
             }
             const script = document.createElement('script');
-            script.src = '../assets/js/details-modal.js';
+            script.src = `${window.FAMNavigation?.appBasePath?.() || '../'}assets/js/details-modal.js`;
             script.defer = true;
             script.dataset.detailsModal = 'true';
             script.addEventListener('load', resolve, { once: true });
@@ -111,7 +111,7 @@
                 return;
             }
             const script = document.createElement('script');
-            script.src = '../assets/js/live-module.js';
+            script.src = `${window.FAMNavigation?.appBasePath?.() || '../'}assets/js/live-module.js`;
             script.defer = true;
             script.dataset.liveModule = 'true';
             script.addEventListener('load', resolve, { once: true });

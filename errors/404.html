@@ -1,101 +1,58 @@
-﻿<!DOCTYPE html>
-<html lang="en" class="light">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>404 Page Not Found - Standard Breeze UI</title>
-    <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
-    <meta name="description" content="Production-ready 404 Page Not Found template styled with pure CSS using universal app.css design tokens.">
-    <!-- Reference to universal design system -->
-    <link rel="stylesheet" href="../assets/css/app.css">
-    <script src="../assets/js/app.js" defer></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Page Not Found</title>
+    <base href="/">
+    <link rel="icon" type="image/svg+xml" href="/assets/logo-icon.svg" />
+    <script src="/assets/js/theme.js"></script>
+    <link href="/assets/css/app.css" rel="stylesheet">
+    <script src="/assets/js/navigation.js" defer></script>
+    <script src="/assets/js/sidebar.js" defer></script>
+    <script src="/assets/js/profile-dropdown.js" defer></script>
+    <script src="/assets/js/modal.js" defer></script>
+    <script src="/assets/js/layout.js" defer></script>
 </head>
-<body class="bg-surface-container-low min-h-screen flex flex-col items-center justify-center p-4 selection:bg-primary/10 selection:text-primary font-body text-on-surface">
+<body class="app-body bg-background text-on-background font-body"
+    data-app-base-path="/"
+    data-page-title="Page Not Found"
+    data-breadcrumb-title="Page Not Found"
+    data-active-nav=""
+    data-page-heading="Page Not Found"
+    data-page-description="The requested page could not be found.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace admin-maintenance-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>Page Not Found</h1>
+                                <p>The requested page could not be found.</p>
+                            </div>
+                        </header>
 
-    <!-- Top Bar Navigation for Standalone Prototype -->
-    <div class="absolute top-6 left-6 z-10">
-        <a href="code.html" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-surface shadow-sm border border-outline-variant/30 text-sm font-medium text-on-surface-variant hover:text-primary hover:border-primary/40 transition-all">
-            <span class="material-symbols-outlined text-[18px]">arrow_back</span>
-            <span>All Error States</span>
-        </a>
+                        <section class="facility-section" aria-labelledby="not-found-title">
+                            <article class="fam-card admin-maintenance-card" role="status" aria-live="polite">
+                                <span class="admin-maintenance-icon material-symbols-outlined" aria-hidden="true">search_off</span>
+                                <div class="admin-maintenance-copy">
+                                    <h2 id="not-found-title">Page Not Found</h2>
+                                    <p>The page you're looking for could not be found or may have been moved.</p>
+                                </div>
+                                <a class="btn-primary dashboard-action-button" href="/dashboard" data-clean-route="dashboard">
+                                    <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
+                                    Back to Dashboard
+                                </a>
+                            </article>
+                        </section>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
     </div>
-
-    <!-- 404 Error Main Card Container -->
-    <main class="w-full max-w-xl bg-surface-container-lowest rounded-2xl shadow-xl border border-outline-variant/30 p-8 md:p-12 text-center relative overflow-hidden">
-        
-        <!-- Decorative Background Glow -->
-        <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
-
-        <!-- Status Badge -->
-        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-600 text-xs font-semibold uppercase tracking-wider mb-8">
-            <span class="w-2 h-2 rounded-full bg-primary"></span>
-            <span>HTTP 404 &bull; Missing Resource</span>
-        </div>
-
-        <!-- Hero Icon -->
-        <div class="mx-auto w-24 h-24 rounded-2xl bg-indigo-50 border-2 border-indigo-100 flex items-center justify-center mb-6 shadow-sm text-primary transform hover:-translate-y-1 transition-transform duration-300">
-            <span class="material-symbols-outlined text-[52px]" style="font-variation-settings: 'FILL' 1, 'wght' 500;">search_off</span>
-        </div>
-
-        <!-- Error Headline -->
-        <h1 class="text-3xl md:text-4xl font-headline font-black text-on-surface mb-3 tracking-tight">
-            Page Not Found
-        </h1>
-
-        <!-- Error Description -->
-        <p class="text-on-surface-variant text-base md:text-lg max-w-md mx-auto mb-8 leading-relaxed">
-            We couldn't locate the page you're looking for. The link might be broken, or the page may have been moved or archived.
-        </p>
-
-        <!-- Search Bar Widget -->
-        <div class="bg-surface-container-low border border-outline-variant/40 rounded-xl p-4 mb-8 max-w-md mx-auto">
-            <form onsubmit="event.preventDefault(); window.location.href='../index.html?search='+encodeURIComponent(document.getElementById('notfound-search').value);" class="relative flex items-center">
-                <span class="material-symbols-outlined absolute left-3.5 text-outline text-[20px] pointer-events-none">search</span>
-                <input type="text" id="notfound-search" placeholder="Search available prototypes &amp; modules..." class="w-full pl-10 pr-24 py-2.5 rounded-lg border border-outline-variant/60 bg-surface text-on-surface placeholder-on-surface-variant/60 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all">
-                <button type="submit" class="absolute right-1.5 px-3 py-1.5 bg-primary text-on-primary rounded-md text-xs font-medium hover:bg-primary-hover transition-colors">
-                    Search Hub
-                </button>
-            </form>
-            <div class="mt-2 flex items-center justify-center gap-2 text-xs text-on-surface-variant">
-                <span>Popular:</span>
-                <a href="../pages/login.html" class="text-primary hover:underline">Auth Card</a>
-                <span>&bull;</span>
-                <a href="../dashboard_app_layout/code.html" class="text-primary hover:underline">Dashboard</a>
-                <span>&bull;</span>
-                <a href="../module_selector/code.html" class="text-primary hover:underline">Module Selector</a>
-            </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button onclick="window.history.back();" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary text-on-primary font-medium shadow-md hover:bg-primary-hover active:scale-[0.98] transition-all duration-200">
-                <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-                <span>Go Back</span>
-            </button>
-            <a href="../index.html" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-surface border border-outline-variant text-on-surface font-medium hover:bg-surface-container-low active:scale-[0.98] transition-all duration-200">
-                <span class="material-symbols-outlined text-[20px]">home</span>
-                <span>Return to Hub</span>
-            </a>
-            <a href="../index.html#filter-comp" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-primary hover:bg-primary-container/10 font-medium transition-colors text-sm">
-                <span class="material-symbols-outlined text-[18px]">grid_view</span>
-                <span>Browse Components</span>
-            </a>
-        </div>
-
-        <!-- Footer Help Text -->
-        <div class="mt-8 pt-6 border-t border-outline-variant/20 text-xs text-on-surface-variant/80">
-            Think this is a mistake? <a href="#" onclick="alert('Broken link report submitted. Thank you for your feedback!');" class="text-primary hover:underline font-medium">Report a broken link</a> to our documentation team.
-        </div>
-
-    </main>
-
-    <!-- Page Footer -->
-    <footer class="mt-8 text-center text-xs text-on-surface-variant/70">
-        &copy; 2026 Breeze UI Architecture &bull; Universal app.css Styled Error Prototype
-    </footer>
 </body>
 </html>
-
-

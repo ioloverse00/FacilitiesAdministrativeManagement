@@ -24,6 +24,9 @@
     };
 
     function appBasePath() {
+        const configuredBase = document.body?.dataset?.appBasePath;
+        if (configuredBase) return configuredBase.endsWith('/') ? configuredBase : `${configuredBase}/`;
+
         const path = window.location.pathname;
         const pagesIndex = path.indexOf('/pages/');
         if (pagesIndex >= 0) return path.slice(0, pagesIndex + 1);
