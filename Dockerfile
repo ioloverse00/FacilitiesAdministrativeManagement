@@ -6,10 +6,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libcurl4-openssl-dev \
         libonig-dev \
+        libzip-dev \
+        unzip \
     && docker-php-ext-install \
         curl \
         mbstring \
         pdo_mysql \
+        zip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www/html
