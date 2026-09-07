@@ -133,7 +133,7 @@
         const dialog = ensureDialog();
         state.currentDetailsId = id;
         dialog.hidden = false;
-        dialog.innerHTML = '<div class="facility-dialog-panel"><div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">progress_activity</span><span>Loading request details...</span></div></div>';
+        dialog.innerHTML = '<div class="facility-dialog-panel"><div class="fam-state"><span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span><span>Loading request details...</span></div></div>';
         try {
             const payload = await window.FAMApi.request(api(`show.php?id=${encodeURIComponent(id)}`));
             dialog.innerHTML = detailsHtml(payload.data?.item || {});

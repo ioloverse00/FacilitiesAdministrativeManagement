@@ -99,14 +99,24 @@
     }
 
     async function load() {
+        qs('#records-table-count').textContent = 'Loading documents...';
+        qs('#records-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
+        qs('#records-refresh')?.setAttribute('aria-busy', 'true');
+        qs('#records-refresh')?.setAttribute('disabled', 'disabled');
         qs('#records-loading-state')?.classList.remove('hidden');
-        const payload = await window.FAMApi.request(api(`documents/index.php?${params()}`));
-        const data = payload.data || {};
-        renderSummary(data.summary || {});
-        renderRows(data.items || []);
-        renderPagination(data.pagination || {});
-        qs('#records-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
-        qs('#records-loading-state')?.classList.add('hidden');
+        try {
+            const payload = await window.FAMApi.request(api(`documents/index.php?${params()}`));
+            const data = payload.data || {};
+            renderSummary(data.summary || {});
+            renderRows(data.items || []);
+            renderPagination(data.pagination || {});
+            qs('#records-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+        } finally {
+            qs('#records-loading-state')?.classList.add('hidden');
+            qs('#records-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
+            qs('#records-refresh')?.removeAttribute('aria-busy');
+            qs('#records-refresh')?.removeAttribute('disabled');
+        }
     }
 
     function renderSummary(summary) {
@@ -373,14 +383,20 @@
 
     async function loadTemplates() {
         if (!can('document_templates.view')) return;
+        qs('#templates-table-count').textContent = 'Loading templates...';
+        qs('#templates-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
         qs('#templates-loading-state')?.classList.remove('hidden');
-        const payload = await window.FAMApi.request(api(`document-templates/index.php?${templateParams()}`));
-        state.templateOptions = payload.data?.options || state.templateOptions || {};
-        fillTemplateSelect(qs('#template-type-filter'), state.templateOptions.template_types || [], 'all', 'template_type', 'All Types');
-        fillTemplateSelect(qs('#template-status-filter'), state.templateOptions.statuses || [], 'all', 'template_status', 'All Statuses');
-        renderTemplateSummary(payload.data?.items || []);
-        renderTemplates(payload.data?.items || []);
-        qs('#templates-loading-state')?.classList.add('hidden');
+        try {
+            const payload = await window.FAMApi.request(api(`document-templates/index.php?${templateParams()}`));
+            state.templateOptions = payload.data?.options || state.templateOptions || {};
+            fillTemplateSelect(qs('#template-type-filter'), state.templateOptions.template_types || [], 'all', 'template_type', 'All Types');
+            fillTemplateSelect(qs('#template-status-filter'), state.templateOptions.statuses || [], 'all', 'template_status', 'All Statuses');
+            renderTemplateSummary(payload.data?.items || []);
+            renderTemplates(payload.data?.items || []);
+        } finally {
+            qs('#templates-loading-state')?.classList.add('hidden');
+            qs('#templates-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
+        }
     }
 
     async function ensureTemplateOptions() {
@@ -498,7 +514,7 @@
         modal.hidden = false;
         modal.innerHTML = `<div class="facility-details-modal-panel visitor-details-panel document-details-panel">
             <div class="facility-details-modal-header visitor-details-header document-details-header"><div><p>Template Library</p><h2>Loading template details</h2></div><button class="facility-details-modal-close" type="button" data-document-details-close aria-label="Close details">&times;</button></div>
-            <div class="facility-details-modal-body visitor-details-body document-details-body"><div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">progress_activity</span><span>Loading template details...</span></div></div>
+            <div class="facility-details-modal-body visitor-details-body document-details-body"><div class="fam-state"><span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span><span>Loading template details...</span></div></div>
         </div>`;
         document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
         try {

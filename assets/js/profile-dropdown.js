@@ -77,6 +77,7 @@
         if (index >= 0) return path.slice(0, index + 1);
         return path.endsWith('/') ? path : path.replace(/[^/]*$/, '');
     };
+    const notFoundHref = () => `${appBasePath()}errors/404.html`;
     const notificationApi = path => `${appBasePath()}api/notifications/${path}`;
     const isEmployeePortal = () => window.location.pathname.includes('/pages/employee/');
     const fmtTime = value => {
@@ -127,9 +128,16 @@
             document.addEventListener('click', handleLogoutClick);
         }
         renderAuthenticatedIdentity();
+        routeAccountPlaceholders();
         initializeAccountMenu();
         initializeNotificationCenter();
         initializeThemeControl();
+    }
+
+    function routeAccountPlaceholders() {
+        document.querySelectorAll('[data-account-placeholder]').forEach(link => {
+            link.setAttribute('href', notFoundHref());
+        });
     }
 
     function renderAuthenticatedIdentity() {

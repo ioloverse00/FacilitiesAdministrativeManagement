@@ -6,7 +6,7 @@
     const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const toDate = value => value ? new Date(String(value).replace(' ', 'T')) : null;
     const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-    const state = { view: window.matchMedia('(max-width: 520px)').matches ? 'day' : 'month', anchor: new Date(), room: 'all', status: 'all', search: '', page: 1, perPage: 10, sort: 'start_datetime', direction: 'asc', events: [], rows: [], pagination: { total: 0, total_pages: 1 }, options: {}, details: new Map() };
+    const state = { view: window.matchMedia('(max-width: 520px)').matches ? 'day' : 'month', anchor: new Date(), room: 'all', status: 'all', search: '', page: 1, perPage: 10, sort: 'start_datetime', direction: 'asc', events: [], rows: [], pagination: { total: 0, total_pages: 1 }, options: {}, details: new Map(), calendarLoading: false, calendarLoaded: false, listLoading: false };
     const fmtTime = value => { const d = value instanceof Date ? value : toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'Time unavailable'; };
     const fmtDateTime = value => { const d = toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not applicable'; };
     const fileSize = bytes => {
@@ -71,6 +71,25 @@
             button.setAttribute('aria-pressed', String(active));
         });
         qs('reservation-reset-filters')?.classList.toggle('hidden', state.room === 'all' && state.status === 'all' && !state.search.trim());
+    }
+    function setCalendarBusy(isBusy, initial = false) {
+        const card = qs('reservation-calendar-panel')?.closest('.reservation-calendar-card');
+        const overlay = qs('reservation-calendar-loading');
+        const refresh = qs('reservation-refresh');
+        const controls = ['reservation-today', 'reservation-prev-period', 'reservation-next-period', 'reservation-room-filter', 'reservation-status-filter', 'reservation-search', 'reservation-reset-filters'];
+        card?.classList.toggle('fam-loading-region', isBusy);
+        card?.setAttribute('aria-busy', String(isBusy));
+        refresh?.toggleAttribute('aria-busy', isBusy);
+        if (refresh) refresh.disabled = isBusy;
+        controls.forEach(id => {
+            const control = qs(id);
+            if (control) control.disabled = Boolean(isBusy && initial);
+        });
+        document.querySelectorAll('[data-calendar-view]').forEach(button => { button.disabled = Boolean(isBusy && initial); });
+        if (overlay) {
+            overlay.innerHTML = '<span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span><span>Loading reservation calendar...</span>';
+            overlay.classList.toggle('hidden', !(isBusy && initial));
+        }
     }
 
     function populateFilters() {
@@ -290,8 +309,10 @@
         if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     }
     async function loadCalendar() {
+        if (state.calendarLoading) return;
         const r = range();
-        qs('reservation-calendar-loading')?.classList.remove('hidden');
+        state.calendarLoading = true;
+        setCalendarBusy(true, !state.calendarLoaded);
         try {
             const payload = await window.FAMApi.request(`../api/reservations/calendar.php?${query({ date_from: isoDate(r.start), date_to: isoDate(r.end) })}`);
             state.events = payload.data?.items || [];
@@ -304,12 +325,16 @@
             renderFocusPanels();
             qs('reservation-calendar-message').innerHTML = `<span role="alert">${esc(error.message || 'Unable to load reservation calendar.')}</span> <button class="facility-text-button" type="button" data-calendar-retry>Retry</button>`;
         } finally {
-            qs('reservation-calendar-loading')?.classList.add('hidden');
+            state.calendarLoading = false;
+            state.calendarLoaded = true;
+            setCalendarBusy(false);
         }
     }
     async function loadList() {
+        if (state.listLoading) return;
         if (!qs('reservation-table')) return;
         const r = range();
+        state.listLoading = true;
         qs('reservation-loading-state')?.classList.remove('hidden');
         try {
             const payload = await window.FAMApi.request(`../api/reservations/index.php?${query({ page: state.page, per_page: state.perPage, sort: state.sort, direction: state.direction, date_from: isoDate(r.start), date_to: isoDate(r.end) })}`);
@@ -320,6 +345,7 @@
             state.pagination = { total: 0, total_pages: 1 };
             window.FAMModal?.showToast(error.message || 'Unable to load reservation list.');
         } finally {
+            state.listLoading = false;
             renderList();
         }
     }

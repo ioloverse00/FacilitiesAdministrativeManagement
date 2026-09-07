@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const title = value => String(value || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     const fmt = value => value ? new Date(String(value).replace(' ', 'T')).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not applicable';
@@ -27,6 +27,33 @@
         const table = qs(config.tableBodyId)?.closest('table');
         if (!table || !window.FAMTableAudit) return;
         window.FAMTableAudit.check(table, config.tableBodyId);
+    }
+    function spinnerIcon() {
+        return '<span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>';
+    }
+    function tableLoadingRows(config, count = 5) {
+        const columns = (Array.isArray(config.columns) ? config.columns.length : 0) + 1;
+        return Array.from({ length: count }, () => `<tr class="fam-loading-table-row" aria-hidden="true">${Array.from({ length: columns }, (_, index) => `<td><span class="fam-skeleton fam-skeleton-line ${index % 3 === 0 ? 'fam-skeleton-line-lg' : index % 3 === 1 ? 'fam-skeleton-line-md' : 'fam-skeleton-line-sm'}"></span></td>`).join('')}</tr>`).join('');
+    }
+    function setLoading(config, state, isLoading, initial = false) {
+        const loading = qs(config.loadingId), body = qs(config.tableBodyId), empty = qs(config.emptyId), count = qs(config.countId), pager = document.querySelector(config.paginationSelector), card = body?.closest('.facility-table-card'), refresh = qs(config.refreshId);
+        card?.classList.toggle('fam-loading-region', isLoading);
+        card?.setAttribute('aria-busy', String(isLoading));
+        refresh?.toggleAttribute('aria-busy', isLoading);
+        if (refresh) refresh.disabled = isLoading;
+        if (!isLoading) {
+            loading?.classList.add('hidden');
+            return;
+        }
+        empty?.classList.add('hidden');
+        pager?.classList.add('hidden');
+        if (count) count.textContent = initial ? `Loading ${config.recordLabel}...` : `Refreshing ${config.recordLabel}...`;
+        if (initial && body) body.innerHTML = tableLoadingRows(config);
+        if (loading) {
+            loading.innerHTML = `${spinnerIcon()}<span>${initial ? `Loading ${config.recordLabel}...` : `Refreshing ${config.recordLabel}...`}</span>`;
+            loading.classList.toggle('hidden', !initial);
+            loading.setAttribute('role', 'status');
+        }
     }
     function renderRows(config, rows, state) {
         const loading = qs(config.loadingId), body = qs(config.tableBodyId), empty = qs(config.emptyId), count = qs(config.countId), pager = document.querySelector(config.paginationSelector);
@@ -59,9 +86,12 @@
         return pairs;
     }
     function init(config) {
-        const state = { page: 1, perPage: config.perPage || 10, sort: config.defaultSort || 'created_at', direction: config.defaultDirection || 'desc', filters: {}, pagination: { total: 0, total_pages: 1 }, rows: [] };
+        const state = { page: 1, perPage: config.perPage || 10, sort: config.defaultSort || 'created_at', direction: config.defaultDirection || 'desc', filters: {}, pagination: { total: 0, total_pages: 1 }, rows: [], loading: false, hasLoaded: false };
         async function load() {
-            qs(config.loadingId)?.classList.remove('hidden');
+            if (state.loading) return;
+            state.loading = true;
+            const initial = !state.hasLoaded;
+            setLoading(config, state, true, initial);
             try {
                 const payload = await window.FAMApi.request(`${config.apiBase}/index.php?${params(state)}`);
                 state.rows = payload.data?.items || []; state.pagination = payload.data?.pagination || state.pagination;
@@ -69,6 +99,10 @@
                 const updated = qs(config.updatedId); if (updated) updated.textContent = `Last updated: ${new Date().toLocaleString()}`;
             } catch (error) {
                 state.rows = []; renderRows(config, [], state); window.FAMModal?.showToast(error.message || 'Unable to load live data.');
+            } finally {
+                state.hasLoaded = true;
+                state.loading = false;
+                setLoading(config, state, false);
             }
         }
         async function show(id) {

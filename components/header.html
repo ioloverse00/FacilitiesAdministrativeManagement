@@ -1,7 +1,6 @@
 <header class="bg-surface/80 backdrop-blur-md shadow-sm border-b border-outline-variant/30 flex justify-between items-center h-16 px-6 w-full z-30 shrink-0">
-    <div class="flex items-center gap-3">
-        <img src="../assets/logo-icon.svg" alt="Facilities and Administrative Management logo" class="w-8 h-8 rounded-lg object-cover border border-outline-variant/30 shadow-2xs shrink-0">
-        <span class="text-outline-variant font-light select-none" aria-hidden="true">|</span>
+    <div class="flex items-center gap-2">
+        <img id="header-compact-logo" src="../assets/logo-icon.svg" alt="Facilities and Administrative Management logo" class="w-8 h-8 rounded-lg object-cover border border-outline-variant/30 shadow-2xs shrink-0 hidden" data-sidebar-compact-logo>
         <button id="desktop-sidebar-toggle" type="button" class="flex items-center justify-center p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low focus:outline-none transition border border-outline-variant/30 shrink-0 min-w-[2.5rem] min-h-[2.5rem]" title="Close Sidebar" aria-label="Toggle sidebar" aria-controls="app-sidebar" aria-expanded="true">
             <span class="material-symbols-outlined text-xl" id="sidebar-toggle-icon" aria-hidden="true">menu_open</span>
         </button>
@@ -53,11 +52,11 @@
                 <div class="px-4 py-2 hidden md:block">
                     <p class="text-xs font-medium text-on-surface-variant uppercase tracking-wider">Account</p>
                 </div>
-                <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem" data-requires-permission="administration.view">
+                <a href="../errors/404.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem" data-account-placeholder="profile">
                     <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">person</span>
                     <span class="font-medium">My Profile</span>
                 </a>
-                <a href="../pages/settings.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem" data-requires-permission="administration.view">
+                <a href="../errors/404.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem" data-account-placeholder="settings">
                     <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">manage_accounts</span>
                     <span class="font-medium">Account Settings</span>
                 </a>

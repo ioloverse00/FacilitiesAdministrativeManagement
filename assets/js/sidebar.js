@@ -10,9 +10,43 @@
         if (!sidebar) return;
 
         const expandedWidth = sidebar.dataset.expandedWidth || '18rem';
+        const storageKey = 'fam.sidebar.desktopOpen';
         const collapsedClasses = ['w-0', 'border-r-0', 'opacity-0', 'pointer-events-none', 'md:opacity-0', 'md:border-r-0', 'md:w-0'];
-        let isDesktopOpen = true;
+        const readPersistedDesktopState = () => {
+            try {
+                const value = localStorage.getItem(storageKey);
+                return value === null ? true : value === 'true';
+            } catch {
+                return true;
+            }
+        };
+        const persistDesktopState = value => {
+            try {
+                localStorage.setItem(storageKey, String(value));
+            } catch {
+                // Sidebar still works when storage is unavailable.
+            }
+        };
+        let isDesktopOpen = readPersistedDesktopState();
         let isMobileOpen = false;
+
+        const syncHeaderLogo = () => {
+            const showCompactLogo = window.innerWidth < 768 || !isDesktopOpen;
+            document.querySelectorAll('[data-sidebar-compact-logo]').forEach(logo => {
+                logo.classList.toggle('hidden', !showCompactLogo);
+                logo.setAttribute('aria-hidden', String(!showCompactLogo));
+            });
+            document.documentElement.dataset.sidebarState = window.innerWidth < 768
+                ? (isMobileOpen ? 'mobile-open' : 'mobile-closed')
+                : (isDesktopOpen ? 'expanded' : 'collapsed');
+            document.dispatchEvent(new CustomEvent('fam:sidebar-state-change', {
+                detail: {
+                    desktopOpen: isDesktopOpen,
+                    mobileOpen: isMobileOpen,
+                    compactLogoVisible: showCompactLogo
+                }
+            }));
+        };
 
         const setToggleState = isOpen => {
             if (desktopToggle) {
@@ -25,6 +59,7 @@
             if (toggleIcon) {
                 toggleIcon.textContent = isOpen ? 'menu_open' : 'menu';
             }
+            syncHeaderLogo();
         };
 
         const setSidebarLayoutWidth = value => {
@@ -64,6 +99,7 @@
 
         const toggleDesktop = () => {
             isDesktopOpen = !isDesktopOpen;
+            persistDesktopState(isDesktopOpen);
             if (isDesktopOpen) {
                 sidebar.classList.remove(...collapsedClasses);
                 sidebar.classList.add('border-r', 'opacity-100');
@@ -85,7 +121,15 @@
         };
 
         if (window.innerWidth >= 768) {
-            setSidebarLayoutWidth(expandedWidth);
+            if (isDesktopOpen) {
+                sidebar.classList.remove(...collapsedClasses);
+                sidebar.classList.add('border-r', 'opacity-100');
+                setSidebarLayoutWidth(expandedWidth);
+            } else {
+                sidebar.classList.remove('border-r', 'opacity-100');
+                sidebar.classList.add(...collapsedClasses);
+                setSidebarLayoutWidth('0px');
+            }
         }
         setToggleState(window.innerWidth >= 768 ? isDesktopOpen : isMobileOpen);
 
@@ -105,6 +149,13 @@
                 isMobileOpen = false;
                 setSidebarLayoutWidth(isDesktopOpen ? expandedWidth : '0px');
                 sidebar.classList.remove('-translate-x-full', 'translate-x-0');
+                if (isDesktopOpen) {
+                    sidebar.classList.remove(...collapsedClasses);
+                    sidebar.classList.add('border-r', 'opacity-100');
+                } else {
+                    sidebar.classList.remove('border-r', 'opacity-100');
+                    sidebar.classList.add(...collapsedClasses);
+                }
                 if (backdrop) {
                     backdrop.classList.remove('block', 'opacity-100', 'pointer-events-auto');
                     backdrop.classList.add('hidden', 'opacity-0');

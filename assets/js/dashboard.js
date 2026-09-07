@@ -1,4 +1,4 @@
-ï»¿(function () {
+(function () {
     const statusClassMap = {
         critical: 'fam-status-critical',
         warning: 'fam-status-warning',
@@ -46,12 +46,42 @@
     }
 
     function stateMessage(message, icon = 'info') {
-        return `<div class="fam-state" role="status"><span class="material-symbols-outlined" aria-hidden="true">${icon}</span><span>${escapeHtml(message)}</span></div>`;
+        const spinner = icon === 'progress_activity' ? ' fam-spinner' : '';
+        return `<div class="fam-state" role="status"><span class="material-symbols-outlined${spinner}" aria-hidden="true">${icon}</span><span>${escapeHtml(message)}</span></div>`;
     }
 
     function setLoading() {
-        document.querySelectorAll('[data-state-container]').forEach(container => {
-            container.innerHTML = stateMessage('Loading dashboard summary...', 'progress_activity');
+        const kpis = document.getElementById('dashboard-kpis');
+        if (kpis) {
+            kpis.setAttribute('aria-busy', 'true');
+            kpis.innerHTML = Array.from({ length: 6 }, () => `
+                <article class="fam-card fam-kpi-card fam-dashboard-skeleton-card" aria-hidden="true">
+                    <div class="fam-kpi-top">
+                        <div>
+                            <span class="fam-skeleton fam-skeleton-line fam-skeleton-line-md"></span>
+                            <span class="fam-skeleton fam-skeleton-line fam-skeleton-line-sm"></span>
+                        </div>
+                        <span class="fam-skeleton fam-dashboard-skeleton-icon"></span>
+                    </div>
+                    <span class="fam-skeleton fam-skeleton-line fam-skeleton-line-lg"></span>
+                    <div class="fam-kpi-footer">
+                        <span class="fam-skeleton fam-skeleton-line fam-skeleton-line-sm"></span>
+                        <span class="fam-skeleton fam-skeleton-line fam-skeleton-line-md"></span>
+                    </div>
+                </article>
+            `).join('');
+        }
+        ['reservation-activity-state', 'operational-overview-state'].forEach(id => {
+            const target = document.getElementById(id);
+            if (target) target.innerHTML = `<div class="fam-dashboard-skeleton-chart" aria-hidden="true"><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-lg"></span><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-md"></span><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-sm"></span></div>`;
+        });
+        setChartVisibility('reservation-activity-chart', false);
+        setChartVisibility('operational-overview-chart', false);
+        ['today-schedule', 'retention-attention', 'recent-activity'].forEach(id => {
+            const target = document.getElementById(id);
+            if (!target) return;
+            target.setAttribute('aria-busy', 'true');
+            target.innerHTML = `<div class="fam-dashboard-skeleton-list" aria-hidden="true">${Array.from({ length: id === 'recent-activity' ? 4 : 3 }, () => `<div class="fam-dashboard-skeleton-row"><div><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-lg"></span><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-md"></span></div><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-sm"></span></div>`).join('')}</div><span class="sr-only">Loading dashboard content...</span>`;
         });
     }
 
@@ -63,6 +93,7 @@
     function renderKpis(kpis) {
         const target = document.getElementById('dashboard-kpis');
         if (!target) return;
+        target.removeAttribute('aria-busy');
         if (!kpis?.length) {
             target.innerHTML = stateMessage('No KPI data available.', 'query_stats');
             return;
@@ -127,6 +158,7 @@
     function renderTodaySchedule(items) {
         const target = document.getElementById('today-schedule');
         if (!target) return;
+        target.removeAttribute('aria-busy');
         if (!items?.length) {
             target.innerHTML = stateMessage('No scheduled facility activities today.', 'event_available');
             return;
@@ -136,7 +168,7 @@
                 <time>${escapeHtml(item.time)}</time>
                 <div>
                     <strong>${escapeHtml(item.activity)}</strong>
-                    <span>${escapeHtml(item.location)} Â· ${escapeHtml(item.module)}</span>
+                    <span>${escapeHtml(item.location)} · ${escapeHtml(item.module)}</span>
                 </div>
                 ${statusBadge(item.status)}
             </div>
@@ -146,6 +178,7 @@
     function renderRetentionAttention(items) {
         const target = document.getElementById('retention-attention');
         if (!target) return;
+        target.removeAttribute('aria-busy');
         if (!items?.length) {
             target.innerHTML = stateMessage('No retention records are due for review.', 'fact_check');
             return;
@@ -155,7 +188,7 @@
                 <span class="fam-activity-icon material-symbols-outlined" aria-hidden="true">fact_check</span>
                 <div>
                     <strong>${escapeHtml(item.title || item.reference)}</strong>
-                    <span>${escapeHtml(item.reference)} Â· ${escapeHtml(item.schedule)} Â· ${escapeHtml(item.reviewDate || 'No review date')}</span>
+                    <span>${escapeHtml(item.reference)} · ${escapeHtml(item.schedule)} · ${escapeHtml(item.reviewDate || 'No review date')}</span>
                 </div>
                 ${statusBadge(item.status)}
             </div>
@@ -165,6 +198,7 @@
     function renderRecentActivity(items) {
         const target = document.getElementById('recent-activity');
         if (!target) return;
+        target.removeAttribute('aria-busy');
         if (!items?.length) {
             target.innerHTML = stateMessage('No recent activity.', 'history');
             return;
@@ -174,7 +208,7 @@
                 <span class="fam-activity-icon material-symbols-outlined" aria-hidden="true">${iconMap[item.module] || 'notifications'}</span>
                 <div>
                     <strong>${escapeHtml(item.activity)}</strong>
-                    <span>${escapeHtml(item.module)} Â· ${escapeHtml(item.by)} Â· ${escapeHtml(item.time)}</span>
+                    <span>${escapeHtml(item.module)} · ${escapeHtml(item.by)} · ${escapeHtml(item.time)}</span>
                 </div>
             </div>
         `).join('');
@@ -183,7 +217,11 @@
     async function initializeDashboard() {
         const service = window.FAMDashboardService;
         if (!service) return;
-        setLoading();
+        const refresh = document.getElementById('dashboard-refresh');
+        const initial = !document.getElementById('dashboard-kpis')?.children.length;
+        refresh?.setAttribute('aria-busy', 'true');
+        refresh?.setAttribute('disabled', 'disabled');
+        if (initial) setLoading();
         try {
             const data = await service.getDashboardPayload();
             document.getElementById('dashboard-last-updated').textContent = formatUpdatedAt(data.generatedAt);
@@ -200,8 +238,12 @@
             renderChartState('reservation-activity-state', 'Unable to load dashboard activity.', 'error');
             renderChartState('operational-overview-state', 'Unable to load dashboard activity.', 'error');
             document.querySelectorAll('[data-state-container]').forEach(container => {
+                container.removeAttribute('aria-busy');
                 container.innerHTML = stateMessage('Unable to load dashboard activity.', 'error');
             });
+        } finally {
+            refresh?.removeAttribute('aria-busy');
+            refresh?.removeAttribute('disabled');
         }
     }
 

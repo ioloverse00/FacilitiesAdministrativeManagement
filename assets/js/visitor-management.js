@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   const qs = s => document.querySelector(s);
   const qsa = s => Array.from(document.querySelectorAll(s));
   const state = {
@@ -14,7 +14,10 @@
     direction: 'desc',
     timer: null,
     lastFocus: null,
-    openColumnMenu: null
+    openColumnMenu: null,
+    loading: false,
+    hasLoaded: false,
+    error: ''
   };
   const can = p => (state.user?.permissions || []).includes(p) || (state.user?.permissions || []).includes('visitors.manage');
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -25,6 +28,8 @@
   const badge = (v, type = 'status') => `<span class="facility-badge facility-${type}-${String(v || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${esc(type === 'status' ? statusLabel(v || 'Not applicable') : title(v || 'Not applicable'))}</span>`;
   const trunc = (v, className = 'table-cell-truncate') => `<span class="${className}" title="${esc(v || 'Not applicable')}">${esc(v || 'Not applicable')}</span>`;
   function toast(m) { window.FAMModal?.showToast?.(m); }
+  function spinnerIcon() { return '<span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>'; }
+  function loadingRows(count = 5) { return Array.from({ length: count }, () => `<tr class="fam-loading-table-row" aria-hidden="true">${Array.from({ length: 8 }, (_, index) => `<td><span class="fam-skeleton fam-skeleton-line ${index % 3 === 0 ? 'fam-skeleton-line-lg' : index % 3 === 1 ? 'fam-skeleton-line-md' : 'fam-skeleton-line-sm'}"></span></td>`).join('')}</tr>`).join(''); }
   function params() { const p = new URLSearchParams({ page: state.page, per_page: state.perPage, sort: state.sort, direction: state.direction }); Object.entries(state.filters).forEach(([k, v]) => { if (v && v !== 'all') p.set(k, v); }); return p; }
   function exportUrl() { const p = params(); p.delete('page'); p.delete('per_page'); return `../api/visitors/export-csv.php?${p}`; }
   function activeFilters() { return Object.values(state.filters).some(v => v && v !== 'all'); }
@@ -37,11 +42,44 @@
     if (status) status.value = state.filters.visit_status || 'all';
   }
   function renderSummary(summary = {}) { qs('#visitor-summary').innerHTML = [["Today's Visitors", summary.today], ['Currently Checked In', summary.checked_in], ['Checked Out Today', summary.checked_out_today], ['Available Badges', summary.available_badges], ['Legacy Pending Review', summary.pending_review]].map(([k, v]) => `<span><strong>${Number(v || 0)}</strong>${esc(k)}</span>`).join(''); }
+  function renderLoading(initial) {
+    const body = qs('#visitor-table'), empty = qs('#visitor-empty-state'), loading = qs('#visitor-loading-state'), pager = qs('.visitor-management-workspace .facility-pagination'), card = qs('#visitor-table')?.closest('.facility-table-card'), refresh = qs('#visitor-refresh');
+    card?.classList.add('fam-loading-region');
+    card?.setAttribute('aria-busy', 'true');
+    refresh?.setAttribute('aria-busy', 'true');
+    refresh?.setAttribute('disabled', 'disabled');
+    empty?.classList.add('hidden');
+    pager?.classList.add('hidden');
+    qs('#visitor-table-count').textContent = initial ? 'Loading visitor records...' : 'Refreshing visitor records...';
+    if (initial && body) body.innerHTML = loadingRows();
+    if (loading) {
+      loading.innerHTML = `${spinnerIcon()}<span>${initial ? 'Loading visitor records...' : 'Refreshing visitor records...'}</span>`;
+      loading.classList.toggle('hidden', !initial);
+      loading.setAttribute('role', 'status');
+    }
+  }
+  function clearLoading() {
+    const card = qs('#visitor-table')?.closest('.facility-table-card'), refresh = qs('#visitor-refresh');
+    card?.classList.remove('fam-loading-region');
+    card?.removeAttribute('aria-busy');
+    refresh?.removeAttribute('aria-busy');
+    refresh?.removeAttribute('disabled');
+    qs('#visitor-loading-state')?.classList.add('hidden');
+  }
   function renderTable() {
     window.FAMTableMenus?.close();
     const body = qs('#visitor-table'), empty = qs('#visitor-empty-state'), loading = qs('#visitor-loading-state'), pager = qs('.visitor-management-workspace .facility-pagination');
     window.FAMTableAudit?.check(body?.closest('table'), 'visitor-management-table');
     loading?.classList.add('hidden');
+    clearLoading();
+    if (state.error) {
+      qs('#visitor-table-count').textContent = 'Visitor records unavailable';
+      body.innerHTML = '';
+      empty.classList.remove('hidden');
+      pager.classList.add('hidden');
+      empty.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">error</span><strong>Unable to load visitor records.</strong><span>${esc(state.error)}</span>`;
+      return;
+    }
     qs('#visitor-table-count').textContent = state.total ? `Showing ${state.rows.length} of ${state.total} visitor records` : 'No visitor records';
     if (!state.rows.length) {
       body.innerHTML = '';
@@ -60,7 +98,32 @@
   }
   function rowHtml(row) { const visitor = row.visitor || {}, dest = row.destination_department?.name || row.facility_space?.name || 'Not assigned', actions = rowActions(row), name = clean(visitor.full_name) || 'Unnamed visitor', secondary = visitor.organization_name || visitor.email_address || visitor.mobile_number || 'External visitor'; return `<tr><td class="facility-request-number"><button class="facility-link-button" type="button" data-open-visitor="${row.id}">${trunc(row.visitor_reference_number, 'table-cell-primary')}</button></td><td><div class="facility-subject-cell visitor-name-cell table-cell-stack">${trunc(name, 'table-cell-primary')}${trunc(secondary, 'table-cell-secondary')}</div></td><td>${badge(visitor.visitor_type || row.visitor_type, 'status')}</td><td>${trunc(dest)}</td><td class="facility-date-cell">${trunc(fmt(row.actual_check_in_at))}</td><td class="facility-date-cell">${trunc(fmt(row.actual_check_out_at))}</td><td>${badge(row.visit_status, 'status')}</td><td class="facility-actions-cell"><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-open-visitor-menu="${row.id}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${esc(row.visitor_reference_number)}">&#8942;</button><div class="facility-action-dropdown hidden" data-visitor-menu="${row.id}" role="menu">${actions.map(a => `<button type="button" role="menuitem" data-visitor-action="${a.key}" data-visitor-id="${row.id}">${esc(a.label)}</button>`).join('')}</div></div></td></tr>`; }
   function rowActions(row) { const a = [{ key:'view', label:'View Details' }]; if (can('visitors.approve') && ['PENDING_REVIEW', 'PRE_REGISTERED'].includes(row.visit_status)) { a.push({ key:'approve', label:'Approve' }); a.push({ key:'reject', label:'Reject' }); } if (can('visitors.checkin') && ['APPROVED', 'ARRIVED'].includes(row.visit_status)) a.push({ key:'checkin', label:'Check In' }); if (can('visitors.checkout') && row.visit_status === 'CHECKED_IN') a.push({ key:'checkout', label:'Check Out' }); if (can('visitors.review') && !['CHECKED_IN', 'CHECKED_OUT', 'CANCELLED', 'REJECTED'].includes(row.visit_status)) a.push({ key:'cancel', label:'Cancel' }); return a; }
-  async function load() { qs('#visitor-loading-state')?.classList.remove('hidden'); try { const r = await window.FAMApi.request(`../api/visitors/index.php?${params()}`); state.rows = r.data?.items || []; state.total = Number(r.data?.pagination?.total || 0); state.totalPages = Number(r.data?.pagination?.total_pages || 1); renderSummary(r.data?.summary || {}); qs('#visitor-updated').textContent = `Last updated: ${new Date().toLocaleString()}`; } catch (e) { if (e.status === 401) return window.location.href = window.FAMApi.pageLoginUrl(); toast(e.message || 'Unable to load visitors.'); state.rows = []; } finally { renderTable(); syncToolbar(); } }
+  async function load() {
+    if (state.loading) return;
+    state.loading = true;
+    state.error = '';
+    renderLoading(!state.hasLoaded);
+    try {
+      const r = await window.FAMApi.request(`../api/visitors/index.php?${params()}`);
+      state.rows = r.data?.items || [];
+      state.total = Number(r.data?.pagination?.total || 0);
+      state.totalPages = Number(r.data?.pagination?.total_pages || 1);
+      renderSummary(r.data?.summary || {});
+      qs('#visitor-updated').textContent = `Last updated: ${new Date().toLocaleString()}`;
+    } catch (e) {
+      if (e.status === 401) return window.location.href = window.FAMApi.pageLoginUrl();
+      state.error = e.message || 'Unable to load visitors.';
+      state.rows = [];
+      state.total = 0;
+      state.totalPages = 1;
+      toast(state.error);
+    } finally {
+      state.loading = false;
+      state.hasLoaded = true;
+      renderTable();
+      syncToolbar();
+    }
+  }
   async function loadOptions() { const me = await window.FAMApi.me(); const opt = await window.FAMApi.request('../api/visitors/options.php'); state.user = me.user; state.options = opt.data || {}; fillSimple(qs('#visitor-type-filter'), state.options.visitor_types || [], 'All Types', title); fillSimple(qs('#visitor-status-filter'), state.options.visit_statuses || [], 'All Statuses', statusLabel); }
   function fillSimple(select, items, first, labeler = title) { if (!select) return; select.innerHTML = `<option value="all">${esc(first)}</option>` + (items || []).map(item => `<option value="${esc(item)}">${esc(labeler(item))}</option>`).join(''); }
   function field(name, label, type = 'text') { return `<label class="facility-field"><span>${label}</span><input name="${name}" type="${type}"></label>`; }

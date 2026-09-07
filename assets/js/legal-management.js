@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     const state = { page: 1, totalPages: 1, sort: 'updated_at', direction: 'desc', options: {}, activeItem: null, lastFocus: null, bound: false, aiInitialJobs: new Set() };
     const qs = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -51,6 +51,10 @@
     }
 
     async function load() {
+        qs('#legal-table-count').textContent = 'Loading legal matters...';
+        qs('#legal-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
+        qs('#legal-refresh')?.setAttribute('aria-busy', 'true');
+        qs('#legal-refresh')?.setAttribute('disabled', 'disabled');
         qs('#legal-loading-state')?.classList.remove('hidden');
         try {
             const payload = await window.FAMApi.request(api(`legal/index.php?${params()}`));
@@ -61,6 +65,9 @@
             qs('#legal-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
         } finally {
             qs('#legal-loading-state')?.classList.add('hidden');
+            qs('#legal-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
+            qs('#legal-refresh')?.removeAttribute('aria-busy');
+            qs('#legal-refresh')?.removeAttribute('disabled');
         }
     }
 
@@ -200,7 +207,7 @@
         state.lastFocus = document.activeElement;
         modal.hidden = false;
         document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
-        modal.innerHTML = detailsShell('LEGAL MATTER', 'Loading...', 'Loading legal matter details...', '<div class="fam-state"><span class="material-symbols-outlined id-processing-icon" aria-hidden="true">progress_activity</span><span>Loading legal matter details...</span></div>');
+        modal.innerHTML = detailsShell('LEGAL MATTER', 'Loading...', 'Loading legal matter details...', '<div class="fam-state"><span class="material-symbols-outlined id-processing-icon fam-spinner" aria-hidden="true">progress_activity</span><span>Loading legal matter details...</span></div>');
         modal.querySelector('[data-legal-details-close]')?.focus();
         try {
             const item = await fetchItem(id);
@@ -293,11 +300,11 @@
             <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Re-analyze AI</button>
         </div>` : '';
         const confirmed = parties.length ? `<div class="legal-party-list">${parties.map(party => `<article class="legal-party-card">
-            <div><strong>${esc(party.name)}</strong><span>${esc(title(party.role))}</span><small>${esc([title(party.type), party.subtitle || party.organization].filter(Boolean).join(' â€¢ ') || 'No additional profile context')}</small>${party.notes ? `<p>${esc(party.notes)}</p>` : ''}</div>
+            <div><strong>${esc(party.name)}</strong><span>${esc(title(party.role))}</span><small>${esc([title(party.type), party.subtitle || party.organization].filter(Boolean).join(' Ã¢â‚¬Â¢ ') || 'No additional profile context')}</small>${party.notes ? `<p>${esc(party.notes)}</p>` : ''}</div>
             ${party.aiSuggested ? '<em>AI suggested, human confirmed</em>' : ''}
         </article>`).join('')}</div>` : '<p class="legal-empty-note">No confirmed parties yet.</p>';
         const suggested = suggestions.length ? `<div class="legal-party-suggestions">${suggestions.map(suggestion => `<article class="legal-party-suggestion">
-            <div><strong>${esc(suggestion.name)}</strong><span>${esc(title(suggestion.role))} â€¢ ${esc(title(suggestion.type))}</span>${suggestion.organization ? `<small>${esc(suggestion.organization)}</small>` : ''}${suggestion.context ? `<p>${esc(suggestion.context)}</p>` : ''}</div>
+            <div><strong>${esc(suggestion.name)}</strong><span>${esc(title(suggestion.role))} Ã¢â‚¬Â¢ ${esc(title(suggestion.type))}</span>${suggestion.organization ? `<small>${esc(suggestion.organization)}</small>` : ''}${suggestion.context ? `<p>${esc(suggestion.context)}</p>` : ''}</div>
             <div class="legal-party-actions">
                 <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="accept-party-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Accept</button>
                 <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="edit-party-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Edit & Accept</button>

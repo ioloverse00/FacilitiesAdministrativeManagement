@@ -156,6 +156,10 @@
     async function load() {
         if (state.loading) return;
         state.loading = true;
+        qs('#contract-table-count').textContent = state.activeItem ? 'Refreshing contracts...' : 'Loading contracts...';
+        qs('#contract-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
+        qs('#contract-refresh')?.setAttribute('aria-busy', 'true');
+        qs('#contract-refresh')?.setAttribute('disabled', 'disabled');
         qs('#contract-loading-state')?.classList.remove('hidden');
         try {
             const payload = await window.FAMApi.request(api(`contracts/index.php?${params()}`));
@@ -168,6 +172,9 @@
             renderError(error.message || 'Unable to load contracts.');
         } finally {
             qs('#contract-loading-state')?.classList.add('hidden');
+            qs('#contract-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
+            qs('#contract-refresh')?.removeAttribute('aria-busy');
+            qs('#contract-refresh')?.removeAttribute('disabled');
             state.loading = false;
         }
     }
@@ -216,6 +223,7 @@
 
     function renderError(message) {
         qs('#contract-table').innerHTML = '';
+        qs('#contract-table-count').textContent = 'Contracts unavailable';
         const empty = qs('#contract-empty-state');
         empty.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">error</span><strong>Unable to load contracts.</strong><p>${esc(message)}</p>`;
         empty.classList.remove('hidden');
@@ -409,7 +417,7 @@
         const modal = moveToTopLayer(qs('#contract-details-modal'));
         modal.hidden = false;
         document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
-        modal.innerHTML = detailsShell('Loading...', '<div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">progress_activity</span><span>Loading contract details...</span></div>');
+        modal.innerHTML = detailsShell('Loading...', '<div class="fam-state"><span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span><span>Loading contract details...</span></div>');
         try {
             const item = known || (await window.FAMApi.request(api(`contracts/show.php?id=${id}`))).data?.item;
             state.activeItem = item;
@@ -866,7 +874,7 @@
         const modal = moveToTopLayer(qs('#contract-dialog'));
         modal.hidden = false;
         document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
-        modal.innerHTML = `<div class="facility-dialog-panel document-form contract-template-authoring"><div class="facility-details-modal-header"><div><p>Contract Document</p><h2>Loading template...</h2></div><button class="facility-details-modal-close" type="button" data-contract-dialog-close aria-label="Close dialog">&times;</button></div><div class="facility-dialog-body document-form-body"><div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">progress_activity</span><span>Loading contract template authoring workspace...</span></div></div></div>`;
+        modal.innerHTML = `<div class="facility-dialog-panel document-form contract-template-authoring"><div class="facility-details-modal-header"><div><p>Contract Document</p><h2>Loading template...</h2></div><button class="facility-details-modal-close" type="button" data-contract-dialog-close aria-label="Close dialog">&times;</button></div><div class="facility-dialog-body document-form-body"><div class="fam-state"><span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span><span>Loading contract template authoring workspace...</span></div></div></div>`;
         try {
             const payload = await window.FAMApi.request(api(`contracts/template-authoring.php?id=${encodeURIComponent(contractId)}`));
             renderTemplateAuthoring(modal, payload.data?.item);

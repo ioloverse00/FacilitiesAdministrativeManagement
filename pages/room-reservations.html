@@ -49,7 +49,7 @@
                         <section class="facility-section reservation-calendar-section" aria-labelledby="reservation-calendar-title">
                             <div class="reservation-calendar-toolbar" aria-label="Reservation calendar controls">
                                 <div class="reservation-calendar-navigation">
-                                    <h2 id="reservation-calendar-title">Loading schedule...</h2>
+                                    <h2 id="reservation-calendar-title">Reservation Calendar</h2>
                                     <button id="reservation-today" class="facility-page-button" type="button">Today</button>
                                     <button id="reservation-prev-period" class="fam-icon-button" type="button" aria-label="Previous calendar period">
                                         <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
@@ -84,8 +84,8 @@
                                 </div>
                             </div>
                             <div class="reservation-calendar-card">
-                                <div id="reservation-calendar-loading" class="fam-state reservation-calendar-overlay" aria-live="polite">
-                                    <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+                                <div id="reservation-calendar-loading" class="fam-state reservation-calendar-overlay" aria-live="polite" role="status">
+                                    <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
                                     <span>Loading reservation calendar...</span>
                                 </div>
                                 <div id="reservation-calendar-panel" class="reservation-calendar" aria-live="polite"></div>

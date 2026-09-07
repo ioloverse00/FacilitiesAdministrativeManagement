@@ -85,14 +85,24 @@
     }
 
     async function load() {
+        qs('#retention-table-count').textContent = 'Loading retention records...';
+        qs('#retention-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
+        qs('#retention-refresh')?.setAttribute('aria-busy', 'true');
+        qs('#retention-refresh')?.setAttribute('disabled', 'disabled');
         qs('#retention-loading-state')?.classList.remove('hidden');
-        const payload = await window.FAMApi.request(api(`retention/index.php?${params()}`));
-        const data = payload.data || {};
-        renderSummary(data.summary || {});
-        renderRows(data.items || []);
-        renderPagination(data.pagination || {});
-        qs('#retention-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
-        qs('#retention-loading-state')?.classList.add('hidden');
+        try {
+            const payload = await window.FAMApi.request(api(`retention/index.php?${params()}`));
+            const data = payload.data || {};
+            renderSummary(data.summary || {});
+            renderRows(data.items || []);
+            renderPagination(data.pagination || {});
+            qs('#retention-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+        } finally {
+            qs('#retention-loading-state')?.classList.add('hidden');
+            qs('#retention-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
+            qs('#retention-refresh')?.removeAttribute('aria-busy');
+            qs('#retention-refresh')?.removeAttribute('disabled');
+        }
     }
 
     function renderSummary(summary) {
