@@ -443,6 +443,14 @@ function initAuthenticationPage() {
     const params = new URLSearchParams(window.location.search);
     const subsystem = params.get('subsystem');
     const isPagesRoute = window.location.pathname.includes('/pages/');
+    const basePath = () => {
+        const path = window.location.pathname;
+        const pagesIndex = path.indexOf('/pages/');
+        if (pagesIndex >= 0) return path.slice(0, pagesIndex + 1);
+        const cleanRoutePattern = /\/(?:dashboard|facilities-reservation|visitor-management|contract-management|legal-management|document-management|records-retention|fam-administration|under-maintenance)\/?$/;
+        if (cleanRoutePattern.test(path)) return path.replace(cleanRoutePattern, '/');
+        return path.endsWith('/') ? path : path.replace(/[^/]*$/, '');
+    };
     const apiPrefix = isPagesRoute ? '../api/' : 'api/';
     const pagesPrefix = isPagesRoute ? '' : 'pages/';
 
@@ -460,7 +468,7 @@ function initAuthenticationPage() {
     const defaultPortalPath = user => {
         const classification = userPortalClassification(user);
         if (classification.portal === 'employee') return `${pagesPrefix}employee/dashboard.html`;
-        if (classification.portal === 'fam') return `${pagesPrefix}dashboard.html`;
+        if (classification.portal === 'fam') return `${basePath()}dashboard`;
         return `${pagesPrefix}login.html`;
     };
 
@@ -480,7 +488,9 @@ function initAuthenticationPage() {
 
     const isFamPortalPath = path => {
         if (isEmployeePortalPath(path)) return false;
-        return /(^|\/)pages\/[^/]+\.html/.test(path) || /^[^/]+\.html/.test(path);
+        return /(^|\/)pages\/[^/]+\.html/.test(path)
+            || /^[^/]+\.html/.test(path)
+            || /^\/?(dashboard|facilities-reservation|visitor-management|contract-management|legal-management|document-management|records-retention|fam-administration|under-maintenance)(\/)?$/.test(path);
     };
 
     const localRedirectPath = path => {

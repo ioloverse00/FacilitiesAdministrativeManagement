@@ -11,6 +11,7 @@
     let currentUser = null;
 
     function appBasePath() {
+        if (window.FAMNavigation?.appBasePath) return window.FAMNavigation.appBasePath();
         const marker = '/pages/';
         const path = window.location.pathname;
         const index = path.indexOf(marker);
@@ -29,7 +30,7 @@
 
     function apiUrl(path) {
         if (/^https?:\/\//i.test(path)) return path;
-        if (path.startsWith('../api/')) return path;
+        if (path.startsWith('../api/')) return `${appBasePath()}api/${path.replace(/^\.\.\/api\//, '')}`;
         if (path.startsWith('/')) return path;
         return `${appBasePath()}api/${path.replace(/^api\//, '')}`;
     }

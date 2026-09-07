@@ -15,6 +15,10 @@ RUN apt-get update \
         zip \
     && rm -rf /var/lib/apt/lists/*
 
+RUN a2enmod rewrite \
+    && printf '<Directory /var/www/html>\n    AllowOverride All\n</Directory>\n' > /etc/apache2/conf-available/fam-allowoverride.conf \
+    && a2enconf fam-allowoverride
+
 WORKDIR /var/www/html
 
 COPY . /var/www/html/

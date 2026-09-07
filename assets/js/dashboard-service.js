@@ -1,5 +1,13 @@
 ﻿(function () {
-    const moduleRoutes = { reservations: '../pages/room-reservations.html', visitors: '../pages/visitor-management.html', documents: '../pages/records.html', retention: '../pages/records-retention.html', contracts: '../pages/contract-management.html', legal: '../pages/legal-management.html' };
+    const route = (key, fallback) => window.FAMNavigation?.cleanHref?.(key) || fallback;
+    const moduleRoutes = {
+        reservations: route('room-reservations', '../pages/room-reservations.html'),
+        visitors: route('visitor-management', '../pages/visitor-management.html'),
+        documents: route('records', '../pages/records.html'),
+        retention: route('records-retention', '../pages/records-retention.html'),
+        contracts: route('contract-management', '../pages/contract-management.html'),
+        legal: route('legal-management', '../pages/legal-management.html')
+    };
     const modulePermissions = { reservations: 'reservations.view', visitors: 'visitors.view', documents: 'records.view', retention: 'records.view', contracts: 'contract.view', legal: 'legal.view' };
     const moduleLabels = { RESERVATIONS: 'Room Reservations', VISITORS: 'Visitor Management', documents: 'Document Management', retention: 'Records Retention', contract_management: 'Contract Management', LEGAL_MANAGEMENT: 'Legal Management' };
     function plural(value, singular, pluralText = `${singular}s`) { return `${Number(value || 0)} ${Number(value || 0) === 1 ? singular : pluralText}`; }

@@ -2,7 +2,7 @@
     const state = { page: 1, totalPages: 1, sort: 'disposition_date', direction: 'asc', options: {}, activeItem: null, activeRecommendation: null, analysisByRecord: {} };
     const qs = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const api = path => `${window.location.origin}${window.location.pathname.replace(/\/pages\/.*$/, '/') }api/${path}`;
+    const api = path => `${window.location.origin}${window.FAMNavigation?.appBasePath?.() || '/'}api/${path}`;
     const can = permission => (window.FAMApi?.currentUser?.permissions || []).includes(permission);
 
     function moveToTopLayer(element) {

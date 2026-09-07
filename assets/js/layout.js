@@ -1,8 +1,8 @@
 ﻿(function () {
     const componentPaths = {
-        sidebar: '../components/sidebar.html',
-        header: '../components/header.html',
-        footer: '../components/footer.html'
+        sidebar: `${window.FAMNavigation?.appBasePath?.() || '../'}components/sidebar.html`,
+        header: `${window.FAMNavigation?.appBasePath?.() || '../'}components/header.html`,
+        footer: `${window.FAMNavigation?.appBasePath?.() || '../'}components/footer.html`
     };
 
     async function loadComponent(selector, path) {
@@ -41,7 +41,7 @@
             return true;
         }
 
-        window.location.replace('../errors/403.html');
+        window.location.replace(`${window.FAMNavigation?.appBasePath?.() || '../'}errors/403.html`);
         return false;
     }
     function applyPageMetadata() {
@@ -126,9 +126,9 @@
             const persona = auth.user?.persona || {};
             if (persona.is_fam_portal_allowed !== true) {
                 if (persona.is_employee_portal_allowed === true) {
-                    window.location.replace('../pages/employee/dashboard.html');
+                    window.location.replace(`${window.FAMNavigation?.appBasePath?.() || '../'}pages/employee/dashboard.html`);
                 } else {
-                    window.location.replace('../errors/403.html');
+                    window.location.replace(`${window.FAMNavigation?.appBasePath?.() || '../'}errors/403.html`);
                 }
                 return false;
             }

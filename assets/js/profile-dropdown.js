@@ -71,13 +71,15 @@
         return ((parts[0]?.[0] || 'F') + (parts[1]?.[0] || 'M')).toUpperCase();
     };
     const appBasePath = () => {
+        if (window.FAMNavigation?.appBasePath) return window.FAMNavigation.appBasePath();
         const marker = '/pages/';
         const path = window.location.pathname;
         const index = path.indexOf(marker);
         if (index >= 0) return path.slice(0, index + 1);
         return path.endsWith('/') ? path : path.replace(/[^/]*$/, '');
     };
-    const notFoundHref = () => `${appBasePath()}errors/404.html`;
+    const cleanHref = route => window.FAMNavigation?.cleanHref?.(route) || `${appBasePath()}${route}`;
+    const underMaintenanceHref = () => cleanHref('under-maintenance');
     const notificationApi = path => `${appBasePath()}api/notifications/${path}`;
     const isEmployeePortal = () => window.location.pathname.includes('/pages/employee/');
     const fmtTime = value => {
@@ -136,7 +138,7 @@
 
     function routeAccountPlaceholders() {
         document.querySelectorAll('[data-account-placeholder]').forEach(link => {
-            link.setAttribute('href', notFoundHref());
+            link.setAttribute('href', underMaintenanceHref());
         });
     }
 

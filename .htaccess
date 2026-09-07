@@ -1,0 +1,27 @@
+RewriteEngine On
+
+# Legacy page URLs remain compatible while pointing users to canonical routes.
+RewriteRule ^pages/dashboard\.html$ dashboard [R=302,L]
+RewriteRule ^pages/room-reservations\.html$ facilities-reservation [R=302,L]
+RewriteRule ^pages/visitor-management\.html$ visitor-management [R=302,L]
+RewriteRule ^pages/contract-management\.html$ contract-management [R=302,L]
+RewriteRule ^pages/legal-management\.html$ legal-management [R=302,L]
+RewriteRule ^pages/records\.html$ document-management [R=302,L]
+RewriteRule ^pages/records-retention\.html$ records-retention [R=302,L]
+RewriteRule ^pages/fam-administration-maintenance\.html$ fam-administration [R=302,L]
+RewriteRule ^pages/under-maintenance\.html$ under-maintenance [R=302,L]
+RewriteRule ^pages/settings\.html$ fam-administration [R=302,L]
+
+# Public FAM routes. These are internal rewrites, so the browser URL stays clean.
+RewriteRule ^$ pages/dashboard.html [L]
+RewriteRule ^dashboard/?$ pages/dashboard.html [L]
+RewriteRule ^facilities-reservation/?$ pages/room-reservations.html [L]
+RewriteRule ^visitor-management/?$ pages/visitor-management.html [L]
+RewriteRule ^contract-management/?$ pages/contract-management.html [L]
+RewriteRule ^legal-management/?$ pages/legal-management.html [L]
+RewriteRule ^document-management/?$ pages/records.html [L]
+RewriteRule ^records-retention/?$ pages/records-retention.html [L]
+RewriteRule ^fam-administration/?$ pages/fam-administration-maintenance.html [L]
+RewriteRule ^under-maintenance/?$ pages/under-maintenance.html [L]
+
+ErrorDocument 404 /errors/404.html
