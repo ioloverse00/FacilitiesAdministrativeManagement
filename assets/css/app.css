@@ -10280,7 +10280,7 @@ col.table-col-actions { width: 4.75rem; }
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
 }
 .employee-home-flow {
-  grid-template-columns: minmax(0, min(100%, 46rem));
+  grid-template-columns: minmax(0, min(100%, 46rem)) minmax(18rem, 24rem);
   justify-content: start;
 }
 .employee-home-panel {
@@ -11373,6 +11373,7 @@ col.table-col-actions { width: 4.75rem; }
 @media (max-width: 900px) {
   .employee-page-header { flex-direction: column; }
   .employee-home-grid,
+  .employee-home-flow,
   .employee-reservation-workspace,
   .employee-quick-actions,
   .employee-profile-sections { grid-template-columns: 1fr; }
