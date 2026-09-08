@@ -72,7 +72,7 @@
                 return;
             }
             const script = document.createElement('script');
-            script.src = `${window.FAMNavigation?.appBasePath?.() || '../'}assets/js/api-client.js`;
+            script.src = `${window.FAMNavigation?.appBasePath?.() || '../'}assets/js/api-client.js?v=visitor-scanner-route-20260909`;
             script.defer = true;
             script.dataset.apiClient = 'true';
             script.addEventListener('load', resolve, { once: true });

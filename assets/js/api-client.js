@@ -88,7 +88,7 @@
     }
 
     async function me() {
-        const payload = await request(apiUrl('auth/me.php'), { skipAuthRedirect: true });
+        const payload = await request('auth/me.php', { skipAuthRedirect: true });
         currentUser = payload.data?.user || null;
         updateCsrf(payload.data || payload);
         return { user: currentUser, csrfToken };
@@ -97,7 +97,7 @@
     async function logout(options = {}) {
         if (!csrfToken && !options.skipRefresh) await me();
         try {
-            const payload = await request(apiUrl('auth/logout.php'), { method: 'POST', skipAuthRedirect: true });
+            const payload = await request('auth/logout.php', { method: 'POST', skipAuthRedirect: true });
             clearAuthState();
             return payload;
         } catch (error) {

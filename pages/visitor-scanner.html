@@ -7,7 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
     <script src="../assets/js/theme.js"></script>
     <link href="../assets/css/app.css" rel="stylesheet">
-    <script src="../assets/js/navigation.js" defer></script>
+    <script src="../assets/js/navigation.js?v=visitor-scanner-route-20260908" defer></script>
     <script src="../assets/js/sidebar.js" defer></script>
     <script src="../assets/js/profile-dropdown.js" defer></script>
     <script src="../assets/js/modal.js" defer></script>
@@ -19,6 +19,7 @@
     data-page-title="Visitor Reception Console"
     data-breadcrumb-title="Visitor Reception Console"
     data-active-nav="visitor-management"
+    data-requires-permission="visitors.checkin"
     data-page-heading="Visitor Reception Console"
     data-page-description="Verify visitor identification, assign an available badge, check visitors in, and process badge returns.">
     <div id="app-shell" class="app-shell">
@@ -34,7 +35,7 @@
                                 <p>Verify visitor identification, assign an available badge, check visitors in, and process badge returns.</p>
                             </div>
                             <div class="facility-header-actions">
-                                <a class="btn-secondary dashboard-action-button" href="visitor-management.html"><span class="material-symbols-outlined" aria-hidden="true">list_alt</span>Back to Visitor Management</a>
+                                <a class="btn-secondary dashboard-action-button" href="visitor-management.html" data-clean-route="visitor-management"><span class="material-symbols-outlined" aria-hidden="true">list_alt</span>Back to Visitor Management</a>
                             </div>
                         </header>
 

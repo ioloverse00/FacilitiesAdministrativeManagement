@@ -488,7 +488,7 @@ function initAuthenticationPage() {
         if (isEmployeePortalPath(path)) return false;
         return /(^|\/)pages\/[^/]+\.html/.test(path)
             || /^[^/]+\.html/.test(path)
-            || /^\/?(dashboard|facilities-reservation|visitor-management|contract-management|legal-management|document-management|records-retention|fam-administration|under-maintenance)(\/)?$/.test(path);
+            || /^\/?(dashboard|facilities-reservation|visitor-management|visitor-scanner|contract-management|legal-management|document-management|records-retention|fam-administration|under-maintenance)(\/)?$/.test(path);
     };
 
     const localRedirectPath = path => {

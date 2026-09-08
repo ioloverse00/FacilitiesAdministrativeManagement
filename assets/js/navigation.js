@@ -3,6 +3,7 @@
         dashboard: 'dashboard',
         'room-reservations': 'facilities-reservation',
         'visitor-management': 'visitor-management',
+        'visitor-scanner': 'visitor-scanner/',
         'contract-management': 'contract-management',
         'legal-management': 'legal-management',
         records: 'document-management',
@@ -15,6 +16,7 @@
         'dashboard.html': 'dashboard',
         'room-reservations.html': 'room-reservations',
         'visitor-management.html': 'visitor-management',
+        'visitor-scanner.html': 'visitor-scanner',
         'contract-management.html': 'contract-management',
         'legal-management.html': 'legal-management',
         'records.html': 'records',
@@ -26,6 +28,18 @@
     function appBasePath() {
         const configuredBase = document.body?.dataset?.appBasePath;
         if (configuredBase) return configuredBase.endsWith('/') ? configuredBase : `${configuredBase}/`;
+
+        const script = document.currentScript || document.querySelector('script[src*="assets/js/navigation.js"]');
+        if (script?.src) {
+            try {
+                const url = new URL(script.src, window.location.href);
+                if (url.origin === window.location.origin) {
+                    const marker = '/assets/js/navigation.js';
+                    const index = url.pathname.indexOf(marker);
+                    if (index >= 0) return `${url.pathname.slice(0, index) || ''}/`.replace(/\/{2,}/g, '/');
+                }
+            } catch (_) {}
+        }
 
         return '/';
     }
