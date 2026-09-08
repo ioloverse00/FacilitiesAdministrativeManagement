@@ -4101,6 +4101,15 @@ div[role="group"] button:active {
   background: transparent;
 }
 
+.fam-table-state-row > .fam-table-state-cell {
+  display: table-cell !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  overflow: visible !important;
+  white-space: normal !important;
+}
+
 .fam-section-loading {
   min-height: 10rem;
   padding: 1rem;

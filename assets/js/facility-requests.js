@@ -32,7 +32,7 @@
   function params() { const p = new URLSearchParams({ page: String(state.page), per_page: String(pageSize), sort: state.sortKey, direction: state.sortDirection }); if (state.search.trim()) p.set('search', state.search.trim()); ['status','priority','category_id','department_id'].forEach(k => { if (state[k] !== 'all') p.set(k, state[k]); }); const d = dateParams(); if (d.date_from) p.set('date_from', d.date_from); if (d.date_to) p.set('date_to', d.date_to); return p; }
   async function loadOptions() { const r = await window.FAMApi.request('../api/facility-requests/options.php'); state.options = r.data || {}; }
   async function loadList(quiet = false) { if (state.tableLoading) return; state.tableLoading = true; state.error = false; if (!quiet) state.loading = true; renderTable(); try { const r = await window.FAMApi.request(`../api/facility-requests/index.php?${params()}`); state.rows = r.data?.items || []; state.pagination = r.data?.pagination || state.pagination; qs('#facility-requests-updated').textContent = updated(); } catch (e) { toast(errMsg(e)); state.error = true; if (!state.loaded) state.rows = []; } finally { state.loading = false; state.tableLoading = false; renderTable(); state.loaded = true; resetVisible(); } }
-  function tableStateRow(message, icon, spinning = false) { return `<tr class="fam-table-state-row"><td colspan="7"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`; }
+  function tableStateRow(message, icon, spinning = false) { return `<tr class="fam-table-state-row"><td class="fam-table-state-cell" colspan="7"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`; }
   function renderTable() {
     window.FAMTableMenus?.close();
     if (state.accessDenied) return accessDenied();
@@ -40,7 +40,7 @@
     renderHeaders();
     window.FAMTableAudit?.check(body?.closest('table'), 'facility-requests-table');
     if ((state.loading || state.tableLoading) && !state.loaded) { body.innerHTML = tableStateRow('Loading facility requests...', 'progress_activity', true); pager.classList.add('hidden'); return; }
-    if (state.error && !state.loaded) { body.innerHTML = tableStateRow('Unable to load facility requests.', 'error'); pager.classList.add('hidden'); return; }
+    if (state.error && !state.loaded) { body.innerHTML = tableStateRow('Unable to load facility requests. Try again.', 'error'); pager.classList.add('hidden'); return; }
     const total = Number(state.pagination.total || 0); const pages = Math.max(1, Number(state.pagination.total_pages || 1));
     count.textContent = total ? `${total} request record${total === 1 ? '' : 's'}` : 'No matching request records';
     if (!state.rows.length) { const filtered = activeFilters(); body.innerHTML = tableStateRow(filtered ? 'No requests match the current search or filters.' : 'No facility requests have been submitted.', filtered ? 'search_off' : 'inbox'); pager.classList.add('hidden'); return; }
@@ -184,7 +184,7 @@
     const id = new URLSearchParams(window.location.search).get('request');
     if (id && /^\d+$/.test(id)) openDetails(Number(id));
   }
-  async function init() { closeDrawer(); bindEvents(); renderTable(); try { await auth(); if (state.accessDenied) return renderTable(); await loadOptions(); await loadList(); openDeepLinkedRequest(); } catch (e) { state.loading = false; renderTable(); toast(errMsg(e)); } }
+  async function init() { closeDrawer(); bindEvents(); renderTable(); try { await auth(); if (state.accessDenied) return renderTable(); await loadOptions(); await loadList(); openDeepLinkedRequest(); } catch (e) { state.loading = false; state.error = true; renderTable(); toast('Unable to initialize Facility Requests. Try again.'); } }
   document.addEventListener('fam:layout-ready', init);
 })();
 

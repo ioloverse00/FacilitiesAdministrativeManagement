@@ -75,7 +75,8 @@
             renderPagination(data.pagination || {});
             qs('#legal-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
         } catch (error) {
-            if (initial) qs('#legal-table').innerHTML = tableStateRow('Unable to load legal matters.', 'error');
+            const body = qs('#legal-table');
+            if (body && !body.querySelector('tr:not(.fam-table-state-row)')) body.innerHTML = tableStateRow('Unable to load legal matters. Try again.', 'error');
             qs('#legal-table-count').textContent = 'Legal matters unavailable';
             window.FAMModal?.showToast(error.message || 'Unable to load legal matters.');
         } finally {
@@ -88,7 +89,7 @@
     }
 
     function tableStateRow(message, icon, spinning = false) {
-        return `<tr class="fam-table-state-row"><td colspan="7"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
+        return `<tr class="fam-table-state-row"><td class="fam-table-state-cell" colspan="7"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
 
     async function loadOptions() {
@@ -1181,6 +1182,6 @@
 
     document.addEventListener('fam:layout-ready', () => init().catch(error => {
         console.error(error);
-        qs('#legal-table').innerHTML = tableStateRow('Unable to load legal matters.', 'error');
+        qs('#legal-table').innerHTML = tableStateRow('Unable to load legal matters. Try again.', 'error');
     }));
 })();

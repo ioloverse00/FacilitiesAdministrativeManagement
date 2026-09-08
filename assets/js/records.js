@@ -114,7 +114,7 @@
             renderPagination(data.pagination || {});
             qs('#records-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
         } catch (error) {
-            if (initial) qs('#records-table').innerHTML = tableStateRow(7, 'Unable to load documents.', 'error');
+            if (initial) qs('#records-table').innerHTML = tableStateRow(7, 'Unable to load documents. Try again.', 'error');
             qs('#records-table-count').textContent = 'Documents unavailable';
             window.FAMModal?.showToast(error.message || 'Unable to load documents.');
         } finally {
@@ -127,7 +127,7 @@
     }
 
     function tableStateRow(colspan, message, icon, spinning = false) {
-        return `<tr class="fam-table-state-row"><td colspan="${colspan}"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
+        return `<tr class="fam-table-state-row"><td class="fam-table-state-cell" colspan="${colspan}"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
 
     function renderSummary(summary) {
@@ -401,7 +401,8 @@
             renderTemplateSummary(payload.data?.items || []);
             renderTemplates(payload.data?.items || []);
         } catch (error) {
-            if (initial) qs('#templates-table').innerHTML = tableStateRow(8, 'Unable to load templates.', 'error');
+            const body = qs('#templates-table');
+            if (body && !body.querySelector('tr:not(.fam-table-state-row)')) body.innerHTML = tableStateRow(8, 'Unable to load templates. Try again.', 'error');
             qs('#templates-table-count').textContent = 'Templates unavailable';
             window.FAMModal?.showToast(error.message || 'Unable to load templates.');
         } finally {
@@ -434,7 +435,12 @@
         const body = qs('#templates-table');
         qs('#templates-table-count').textContent = `Showing ${items.length} template ${items.length === 1 ? 'record' : 'records'}`;
         if (!items.length) {
-            body.innerHTML = tableStateRow(8, 'No templates yet.', 'contract_edit');
+            const filtered = Boolean(qs('#templates-search')?.value.trim())
+                || ['#template-type-filter', '#template-status-filter'].some(selector => {
+                    const value = qs(selector)?.value;
+                    return value && value !== 'all';
+                });
+            body.innerHTML = tableStateRow(8, filtered ? 'No templates match the current filters.' : 'No templates found.', filtered ? 'search_off' : 'contract_edit');
             return;
         }
         body.innerHTML = items.map(item => `<tr>
@@ -739,6 +745,6 @@
 
     document.addEventListener('fam:layout-ready', () => init().catch(error => {
         console.error(error);
-        qs('#records-table').innerHTML = tableStateRow(7, 'Unable to load documents.', 'error');
+        qs('#records-table').innerHTML = tableStateRow(7, 'Unable to load documents. Try again.', 'error');
     }));
 })();

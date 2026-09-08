@@ -14,7 +14,7 @@
     const state = { rows: [], options: {}, search: '', status: '', loading: true, loaded: false, error: false, currentDetailsId: null, timer: null };
 
     function tableStateRow(message, icon, spinning = false) {
-        return `<tr class="fam-table-state-row"><td colspan="8"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
+        return `<tr class="fam-table-state-row"><td class="fam-table-state-cell" colspan="8"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
 
     function optionList(items, selected = '') {
@@ -56,8 +56,8 @@
             return;
         }
         if (state.error && !state.loaded) {
-            body.innerHTML = tableStateRow('Unable to load facility requests.', 'error');
-            cards.innerHTML = '<div class="fam-state" role="status">Unable to load facility requests.</div>';
+            body.innerHTML = tableStateRow('Unable to load facility requests. Try again.', 'error');
+            cards.innerHTML = '<div class="fam-state" role="status">Unable to load facility requests. Try again.</div>';
             return;
         }
         if (!rows.length && !state.loading) {
@@ -249,7 +249,8 @@
     });
     document.addEventListener('fam:employee-layout-ready', () => init().catch(error => {
         state.loading = false;
+        state.error = true;
         render();
-        window.FAMModal?.showToast?.(error.message || 'Unable to initialize facility requests.');
+        window.FAMModal?.showToast?.('Unable to initialize facility requests. Try again.');
     }));
 })();

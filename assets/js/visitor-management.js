@@ -28,7 +28,7 @@
   const badge = (v, type = 'status') => `<span class="facility-badge facility-${type}-${String(v || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${esc(type === 'status' ? statusLabel(v || 'Not applicable') : title(v || 'Not applicable'))}</span>`;
   const trunc = (v, className = 'table-cell-truncate') => `<span class="${className}" title="${esc(v || 'Not applicable')}">${esc(v || 'Not applicable')}</span>`;
   function toast(m) { window.FAMModal?.showToast?.(m); }
-  function tableStateRow(message, icon, spinning = false) { return `<tr class="fam-table-state-row"><td colspan="8"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`; }
+  function tableStateRow(message, icon, spinning = false) { return `<tr class="fam-table-state-row"><td class="fam-table-state-cell" colspan="8"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`; }
   function params() { const p = new URLSearchParams({ page: state.page, per_page: state.perPage, sort: state.sort, direction: state.direction }); Object.entries(state.filters).forEach(([k, v]) => { if (v && v !== 'all') p.set(k, v); }); return p; }
   function exportUrl() { const p = params(); p.delete('page'); p.delete('per_page'); return `../api/visitors/export-csv.php?${p}`; }
   function activeFilters() { return Object.values(state.filters).some(v => v && v !== 'all'); }
@@ -65,18 +65,18 @@
     if (state.error) {
       qs('#visitor-table-count').textContent = 'Visitor records unavailable';
       if (!state.hasLoaded) {
-        pager.classList.add('hidden');
-        body.innerHTML = tableStateRow('Unable to load visitor records.', 'error');
+        pager?.classList.add('hidden');
+        if (body) body.innerHTML = tableStateRow('Unable to load visitor records. Try again.', 'error');
       }
       return;
     }
     qs('#visitor-table-count').textContent = state.total ? `Showing ${state.rows.length} of ${state.total} visitor records` : 'No visitor records';
     if (!state.rows.length) {
-      pager.classList.add('hidden');
-      body.innerHTML = tableStateRow(activeFilters() ? 'No visitors match the current search or filters.' : 'No visitor records found.', 'badge');
+      pager?.classList.add('hidden');
+      if (body) body.innerHTML = tableStateRow(activeFilters() ? 'No visitor records match the current filters.' : 'No visitor records found.', 'badge');
       return;
     }
-    pager.classList.remove('hidden');
+    pager?.classList.remove('hidden');
     qs('#visitor-page-status').textContent = `Page ${state.page} of ${Math.max(1, state.totalPages)}`;
     qs('#visitor-prev-page').disabled = state.page <= 1;
     qs('#visitor-next-page').disabled = state.page >= state.totalPages;
@@ -100,10 +100,13 @@
     } catch (e) {
       if (e.status === 401) return window.location.href = window.FAMApi.pageLoginUrl();
       state.error = e.message || 'Unable to load visitors.';
-      state.rows = [];
-      state.total = 0;
-      state.totalPages = 1;
-      toast(state.error);
+      const hasRenderedRows = Boolean(qs('#visitor-table')?.querySelector('tr:not(.fam-table-state-row)'));
+      if (!hasRenderedRows) {
+        state.rows = [];
+        state.total = 0;
+        state.totalPages = 1;
+      }
+      toast('Unable to load visitor records. Try again.');
     } finally {
       state.loading = false;
       renderTable();
@@ -176,7 +179,7 @@
     document.addEventListener('submit', e => { if (e.target.matches('[data-checkin-form]')) { e.preventDefault(); submitCheckin(e.target).catch(err => toast(err.message || 'Check-in failed.')); } });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!qs('#visitor-dialog')?.hidden) closeDialog(); else if (!qs('#visitor-details-drawer')?.hidden) closeDrawer(); } });
   }
-  document.addEventListener('fam:layout-ready', async () => { bind(); try { await loadOptions(); await load(); } catch (e) { if (e.status === 401) window.location.href = window.FAMApi.pageLoginUrl(); else toast(e.message || 'Unable to initialize Visitor Management.'); } });
+  document.addEventListener('fam:layout-ready', async () => { bind(); try { await loadOptions(); await load(); } catch (e) { if (e.status === 401) window.location.href = window.FAMApi.pageLoginUrl(); else { state.error = 'Unable to load visitor records.'; renderTable(); toast('Unable to initialize Visitor Management. Try again.'); } } });
 })();
 
 

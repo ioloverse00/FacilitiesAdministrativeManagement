@@ -30,7 +30,7 @@
     }
     function tableStateRow(config, message, icon = 'progress_activity', spinning = false) {
         const columns = (Array.isArray(config.columns) ? config.columns.length : 0) + 1;
-        return `<tr class="fam-table-state-row"><td colspan="${columns}"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
+        return `<tr class="fam-table-state-row"><td class="fam-table-state-cell" colspan="${columns}"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
     function setLoading(config, state, isLoading, initial = false) {
         const body = qs(config.tableBodyId), pager = document.querySelector(config.paginationSelector), card = body?.closest('.facility-table-card'), refresh = qs(config.refreshId);
@@ -86,7 +86,7 @@
                 const updated = qs(config.updatedId); if (updated) updated.textContent = `Last updated: ${new Date().toLocaleString()}`;
             } catch (error) {
                 const body = qs(config.tableBodyId);
-                if (!state.hasLoaded && body) body.innerHTML = tableStateRow(config, `Unable to load ${config.recordLabel}.`, 'error');
+                if (!state.hasLoaded && body) body.innerHTML = tableStateRow(config, `Unable to load ${config.recordLabel}. Try again.`, 'error');
                 window.FAMModal?.showToast(error.message || 'Unable to load live data.');
             } finally {
                 state.hasLoaded = true;

@@ -171,6 +171,7 @@
             qs('#contract-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
         } catch (error) {
             renderError();
+            window.FAMModal?.showToast('Unable to load contracts. Try again.');
         } finally {
             qs('#contract-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
             qs('#contract-refresh')?.removeAttribute('aria-busy');
@@ -181,7 +182,7 @@
     }
 
     function tableStateRow(message, icon, spinning = false) {
-        return `<tr class="fam-table-state-row"><td colspan="6"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
+        return `<tr class="fam-table-state-row"><td class="fam-table-state-cell" colspan="6"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
 
     async function loadOptions() {
@@ -223,17 +224,19 @@
     }
 
     function renderError() {
-        if (!state.hasLoaded) qs('#contract-table').innerHTML = tableStateRow('Unable to load contracts.', 'error');
+        const body = qs('#contract-table');
+        if (body && !body.querySelector('tr:not(.fam-table-state-row)')) body.innerHTML = tableStateRow('Unable to load contracts. Try again.', 'error');
         qs('#contract-table-count').textContent = 'Contracts unavailable';
     }
 
     function actionMenu(row) {
         const labels = { view: 'View Details', edit: 'Edit Contract', submit_review: 'Submit for Review', cancel: 'Cancel Contract', return_draft: 'Return to Draft', submit_approval: 'Submit for Approval', approve: 'Approve', reject: 'Reject', activate: 'Activate', terminate: 'Terminate', archive: 'Archive' };
+        const allowedActions = Array.isArray(row.allowedActions) ? row.allowedActions : [];
         const items = [`<button type="button" data-contract-action="view" data-report-action="contract-details" data-contract-id="${esc(row.id)}">View Details</button>`];
-        (row.allowedActions || []).filter(action => action !== 'edit').forEach(action => {
+        allowedActions.filter(action => action !== 'edit' && action !== 'view').forEach(action => {
             items.push(`<button type="button" data-contract-action="${esc(action)}" data-contract-id="${esc(row.id)}">${esc(labels[action] || title(action))}</button>`);
         });
-        if ((row.allowedActions || []).includes('edit')) items.splice(1, 0, `<button type="button" data-contract-action="edit" data-contract-id="${esc(row.id)}">Edit Contract</button>`);
+        if (allowedActions.includes('edit')) items.splice(1, 0, `<button type="button" data-contract-action="edit" data-contract-id="${esc(row.id)}">Edit Contract</button>`);
         const menuId = `contract-menu-${row.id}`;
         return `<div class="facility-action-menu"><button class="facility-action-toggle" type="button" aria-label="Open contract actions" aria-haspopup="menu" aria-expanded="false" data-contract-menu-toggle="${menuId}"><span class="material-symbols-outlined" aria-hidden="true">more_vert</span></button><div id="${menuId}" class="facility-action-dropdown contract-action-dropdown hidden" role="menu">${items.join('')}</div></div>`;
     }

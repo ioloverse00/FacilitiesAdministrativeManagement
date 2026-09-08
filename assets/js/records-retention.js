@@ -109,7 +109,7 @@
             renderPagination(data.pagination || {});
             qs('#retention-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
         } catch (error) {
-            if (initial) qs('#retention-table').innerHTML = tableStateRow('Unable to load retention records.', 'error');
+            if (initial) qs('#retention-table').innerHTML = tableStateRow('Unable to load retention records. Try again.', 'error');
             qs('#retention-table-count').textContent = 'Retention records unavailable';
             window.FAMModal?.showToast(error.message || 'Unable to load retention records.');
         } finally {
@@ -122,7 +122,7 @@
     }
 
     function tableStateRow(message, icon, spinning = false) {
-        return `<tr class="fam-table-state-row"><td colspan="7"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
+        return `<tr class="fam-table-state-row"><td class="fam-table-state-cell" colspan="7"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
 
     function renderSummary(summary) {
@@ -629,6 +629,6 @@
 
     document.addEventListener('fam:layout-ready', () => init().catch(error => {
         console.error(error);
-        qs('#retention-table').innerHTML = tableStateRow('Unable to load retention records.', 'error');
+        qs('#retention-table').innerHTML = tableStateRow('Unable to load retention records. Try again.', 'error');
     }));
 })();
