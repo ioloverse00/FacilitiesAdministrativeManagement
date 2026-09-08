@@ -168,7 +168,7 @@
                 <time>${escapeHtml(item.time)}</time>
                 <div>
                     <strong>${escapeHtml(item.activity)}</strong>
-                    <span>${escapeHtml(item.location)} · ${escapeHtml(item.module)}</span>
+                    <span>${escapeHtml(item.location)} Â· ${escapeHtml(item.module)}</span>
                 </div>
                 ${statusBadge(item.status)}
             </div>
@@ -188,7 +188,7 @@
                 <span class="fam-activity-icon material-symbols-outlined" aria-hidden="true">fact_check</span>
                 <div>
                     <strong>${escapeHtml(item.title || item.reference)}</strong>
-                    <span>${escapeHtml(item.reference)} · ${escapeHtml(item.schedule)} · ${escapeHtml(item.reviewDate || 'No review date')}</span>
+                    <span>${escapeHtml(item.reference)} Â· ${escapeHtml(item.schedule)} Â· ${escapeHtml(item.reviewDate || 'No review date')}</span>
                 </div>
                 ${statusBadge(item.status)}
             </div>
@@ -203,15 +203,18 @@
             target.innerHTML = stateMessage('No recent activity.', 'history');
             return;
         }
-        target.innerHTML = items.map(item => `
+        target.innerHTML = items.map(item => {
+            const metadata = [item.module, item.reference, item.by, item.time].filter(Boolean).join(' Â· ');
+            return `
             <div class="fam-activity-item">
                 <span class="fam-activity-icon material-symbols-outlined" aria-hidden="true">${iconMap[item.module] || 'notifications'}</span>
                 <div>
                     <strong>${escapeHtml(item.activity)}</strong>
-                    <span>${escapeHtml(item.module)} · ${escapeHtml(item.by)} · ${escapeHtml(item.time)}</span>
+                    ${metadata ? `<span>${escapeHtml(metadata)}</span>` : ''}
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
     async function initializeDashboard() {

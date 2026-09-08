@@ -32,7 +32,7 @@
                             <div class="facility-title-block">
                                 <h1>Asset Management</h1>
                                 <p>Track facility assets, locations, custodians, condition, maintenance, and lifecycle.</p>
-                                <span id="asset-updated" class="fam-last-updated">Last updated: Loading...</span>
+                                <span id="asset-updated" class="fam-last-updated">Last updated: Not yet loaded</span>
                             </div>
                             <div class="facility-header-actions">
                                 <button id="asset-refresh" class="fam-icon-button" type="button" aria-label="Refresh" title="Refresh">
@@ -50,7 +50,7 @@
                                 <div class="facility-table-header">
                                     <div>
                                         <h2 id="asset-table-title">Asset Inventory</h2>
-                                        <p id="asset-table-count">Loading asset records...</p>
+                                        <p id="asset-table-count">0 asset records</p>
                                     </div>
                                     <div class="facility-header-controls">
                                         <label class="facility-field facility-search-field">
@@ -59,10 +59,6 @@
                                         </label>
                                         <button id="asset-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
                                     </div>
-                                </div>
-                                <div id="asset-loading-state" class="fam-state">
-                                    <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
-                                    <span>Loading asset records...</span>
                                 </div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table asset-management-table">
@@ -89,7 +85,6 @@
                                         <tbody id="asset-table"></tbody>
                                     </table>
                                 </div>
-                                <div id="asset-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
                                 <div class="facility-pagination" aria-label="Asset inventory pagination">
                                     <button id="asset-prev-page" class="facility-page-button" type="button">Previous</button>
                                     <span id="asset-page-status">Page 1 of 1</span>

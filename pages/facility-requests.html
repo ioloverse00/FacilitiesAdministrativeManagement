@@ -33,7 +33,7 @@
                             <div class="facility-title-block">
                                 <h1>Facility Requests</h1>
                                 <p>Manage facility service requests, assignments, approvals, and request lifecycle.</p>
-                                <span id="facility-requests-updated" class="fam-last-updated">Last updated: Loading...</span>
+                                <span id="facility-requests-updated" class="fam-last-updated">Last updated: Not yet loaded</span>
                             </div>
                             <div class="facility-header-actions">
                                 <button id="facility-refresh" class="fam-icon-button" type="button" aria-label="Refresh" title="Refresh">
@@ -55,7 +55,7 @@
                                 <div class="facility-table-header">
                                     <div>
                                         <h2 id="open-requests-title">Open Requests</h2>
-                                        <p id="facility-table-count">Loading requests...</p>
+                                        <p id="facility-table-count">0 request records</p>
                                     </div>
                                     <div class="facility-header-controls">
                                         <label class="facility-field facility-search-field">
@@ -64,10 +64,6 @@
                                         </label>
                                         <button id="facility-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
                                     </div>
-                                </div>
-                                <div id="facility-loading-state" class="fam-state">
-                                    <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
-                                    <span>Loading facility requests...</span>
                                 </div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table">
@@ -94,7 +90,6 @@
                                         <tbody id="facility-requests-table"></tbody>
                                     </table>
                                 </div>
-                                <div id="facility-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
                                 <div class="facility-pagination" aria-label="Facility request pagination">
                                     <button id="facility-prev-page" class="facility-page-button" type="button">Previous</button>
                                     <span id="facility-page-status">Page 1 of 1</span>

@@ -11,7 +11,11 @@
     };
     const trunc = (value, className = 'table-cell-truncate') => `<span class="${className}" title="${esc(value || 'Not applicable')}">${esc(value || 'Not applicable')}</span>`;
     const badge = value => `<span class="facility-badge facility-status-${String(value || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${esc(title(value || 'Not applicable'))}</span>`;
-    const state = { rows: [], options: {}, search: '', status: '', loading: true, currentDetailsId: null, timer: null };
+    const state = { rows: [], options: {}, search: '', status: '', loading: true, loaded: false, error: false, currentDetailsId: null, timer: null };
+
+    function tableStateRow(message, icon, spinning = false) {
+        return `<tr class="fam-table-state-row"><td colspan="8"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
+    }
 
     function optionList(items, selected = '') {
         return (items || []).map(item => {
@@ -42,14 +46,25 @@
         const body = qs('#employee-facility-requests-body');
         const cards = qs('#employee-facility-requests-cards');
         const rows = filteredRows();
-        qs('#employee-facility-request-loading')?.classList.toggle('hidden', !state.loading);
         qs('#employee-request-total-count').textContent = String(state.rows.length);
         qs('#employee-request-open-count').textContent = String(state.rows.filter(row => !['CLOSED','CANCELLED','REJECTED'].includes(String(row.status || '').toUpperCase())).length);
         qs('#employee-request-count').textContent = rows.length ? `${rows.length} facility request${rows.length === 1 ? '' : 's'} found` : 'No matching facility requests';
         if (!body || !cards) return;
+        if (state.loading && !state.loaded) {
+            body.innerHTML = tableStateRow('Loading facility requests...', 'progress_activity', true);
+            cards.innerHTML = '<div class="fam-state" role="status">Loading facility requests...</div>';
+            return;
+        }
+        if (state.error && !state.loaded) {
+            body.innerHTML = tableStateRow('Unable to load facility requests.', 'error');
+            cards.innerHTML = '<div class="fam-state" role="status">Unable to load facility requests.</div>';
+            return;
+        }
         if (!rows.length && !state.loading) {
-            const empty = window.FAMEmployeePortal?.emptyState?.('domain_disabled', 'No facility requests found.', 'Submit a new request when you need facilities support.') || '<tr><td colspan="8">No facility requests found.</td></tr>';
-            body.innerHTML = `<tr><td colspan="8">${empty}</td></tr>`;
+            const filtered = Boolean(state.search || state.status);
+            const message = filtered ? 'No facility requests match the current search or filters.' : 'No facility requests found.';
+            const empty = window.FAMEmployeePortal?.emptyState?.('domain_disabled', message, filtered ? 'Try changing the search or status filter.' : 'Submit a new request when you need facilities support.') || message;
+            body.innerHTML = tableStateRow(message, filtered ? 'search_off' : 'domain_disabled');
             cards.innerHTML = empty;
             return;
         }
@@ -175,12 +190,22 @@
     }
 
     async function load() {
+        if (state.loading && state.loaded) return;
         state.loading = true;
+        state.error = false;
         render();
-        const payload = await window.FAMApi.request(api('list.php?per_page=50'));
-        state.rows = payload.data?.items || [];
-        state.loading = false;
-        render();
+        try {
+            const payload = await window.FAMApi.request(api('list.php?per_page=50'));
+            state.rows = payload.data?.items || [];
+        } catch (error) {
+            state.error = true;
+            if (!state.loaded) state.rows = [];
+            window.FAMModal?.showToast?.(error.message || 'Unable to load facility requests.');
+        } finally {
+            state.loading = false;
+            render();
+            state.loaded = true;
+        }
     }
 
     async function init() {

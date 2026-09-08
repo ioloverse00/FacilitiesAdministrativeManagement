@@ -33,7 +33,7 @@
                             <div class="facility-title-block">
                                 <h1>Document Management</h1>
                                 <p>Manage, organize, version, and retrieve official FAM documents.</p>
-                                <span id="records-updated" class="fam-last-updated">Last updated: Loading...</span>
+                                <span id="records-updated" class="fam-last-updated">Last updated: Not yet loaded</span>
                             </div>
                             <div class="facility-header-actions">
                                 <button id="records-refresh" class="fam-icon-button" type="button" aria-label="Refresh" title="Refresh">
@@ -80,7 +80,7 @@
                                 <div class="facility-table-header">
                                     <div>
                                         <h2 id="records-table-title">Document Repository</h2>
-                                        <p id="records-table-count">Loading documents...</p>
+                                        <p id="records-table-count">0 document records</p>
                                     </div>
                                     <div class="facility-header-controls">
                                         <label class="facility-field facility-search-field">
@@ -101,10 +101,6 @@
                                         </label>
                                         <button id="records-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
                                     </div>
-                                </div>
-                                <div id="records-loading-state" class="fam-state">
-                                    <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
-                                    <span>Loading administrative records...</span>
                                 </div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table records-table">
@@ -131,7 +127,6 @@
                                         <tbody id="records-table"></tbody>
                                     </table>
                                 </div>
-                                <div id="records-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
                                 <div class="facility-pagination" aria-label="Administrative records pagination">
                                     <button id="records-prev-page" class="facility-page-button" type="button">Previous</button>
                                     <span id="records-page-status">Page 1 of 1</span>
@@ -160,7 +155,7 @@
                                 <div class="facility-table-header">
                                     <div>
                                         <h2 id="templates-table-title">Template Library</h2>
-                                        <p id="templates-table-count">Loading templates...</p>
+                                        <p id="templates-table-count">0 template records</p>
                                     </div>
                                     <div class="facility-header-controls template-header-controls">
                                         <label class="facility-field facility-search-field">
@@ -176,10 +171,6 @@
                                             <select id="template-status-filter"><option value="all">All Statuses</option></select>
                                         </label>
                                     </div>
-                                </div>
-                                <div id="templates-loading-state" class="fam-state hidden">
-                                    <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
-                                    <span>Loading templates...</span>
                                 </div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table records-table template-records-table">
@@ -208,7 +199,6 @@
                                         <tbody id="templates-table"></tbody>
                                     </table>
                                 </div>
-                                <div id="templates-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
                             </div>
                         </section>
 

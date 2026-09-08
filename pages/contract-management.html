@@ -33,7 +33,7 @@
                             <div class="facility-title-block">
                                 <h1>Contract Management</h1>
                                 <p>Manage contract records, lifecycle actions, documents, and history.</p>
-                                <span id="contract-updated" class="fam-last-updated">Last updated: Loading...</span>
+                                <span id="contract-updated" class="fam-last-updated">Last updated: Not yet loaded</span>
                             </div>
                             <div class="facility-header-actions">
                                 <button id="contract-refresh" class="fam-icon-button" type="button" aria-label="Refresh" title="Refresh">
@@ -62,7 +62,7 @@
                                 <div class="facility-table-header">
                                     <div>
                                         <h2 id="contract-table-title">Contract Register</h2>
-                                        <p id="contract-table-count">Loading contracts...</p>
+                                        <p id="contract-table-count">0 contracts</p>
                                     </div>
                                     <div class="facility-header-controls contract-controls">
                                         <label class="facility-field facility-search-field"><span class="sr-only">Search</span><input id="contract-search" type="search" placeholder="Search contracts..."></label>
@@ -70,10 +70,6 @@
                                         <label class="facility-field document-filter-field"><span class="sr-only">Type</span><select id="contract-type-filter"><option value="all">All Types</option></select></label>
                                         <label class="facility-field document-filter-field"><span class="sr-only">Expiry</span><select id="contract-expiry-filter"><option value="all">All Expiry States</option><option value="expiring_soon">Expiring Soon</option></select></label>
                                     </div>
-                                </div>
-                                <div id="contract-loading-state" class="fam-state">
-                                    <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
-                                    <span>Loading contracts...</span>
                                 </div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table contract-table">
@@ -90,7 +86,6 @@
                                         <tbody id="contract-table"></tbody>
                                     </table>
                                 </div>
-                                <div id="contract-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
                                 <div class="facility-pagination" aria-label="Contract pagination">
                                     <button id="contract-prev-page" class="facility-page-button" type="button">Previous</button>
                                     <span id="contract-page-status">Page 1 of 1</span>

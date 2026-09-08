@@ -6,7 +6,7 @@
 --   Return the Facilities Administrative Management UAT database to a fresh
 --   operational baseline by removing user-generated/runtime transactional data
 --   while preserving users, RBAC, system configuration, reusable reference data,
---   external/shared master data, and integration configuration.
+--   external/shared master data, and non-account integration configuration.
 --
 -- Safety policy:
 --   - DO NOT run this in production.
@@ -24,8 +24,8 @@
 --     document_category, contract_type, retention_schedule,
 --     document_template_merge_field, supplier_reference, budget_reference,
 --     inventory_item_reference, vehicle_reference.
---   INTEGRATION CONFIG/MASTER: external_system, google_account_connection,
---     system_setting.
+--   INTEGRATION CONFIG/MASTER: external_system, system_setting.
+--   Google OAuth account connections are runtime credentials and are cleared.
 --
 -- Supersedes for clean-slate UAT reset:
 --   - database/migrations/2026_contract_management_uat_reset.sql
@@ -52,6 +52,7 @@ UNION ALL SELECT 'contract_party', COUNT(*), 0 FROM contract_party
 UNION ALL SELECT 'contract_renewal_event', COUNT(*), 0 FROM contract_renewal_event
 UNION ALL SELECT 'contract_template_value', COUNT(*), 0 FROM contract_template_value
 UNION ALL SELECT 'document', COUNT(*), 0 FROM document
+UNION ALL SELECT 'document_otp_challenge', COUNT(*), 0 FROM document_otp_challenge
 UNION ALL SELECT 'document_template', COUNT(*), 0 FROM document_template
 UNION ALL SELECT 'document_template_version', COUNT(*), 0 FROM document_template_version
 UNION ALL SELECT 'document_template_version_field', COUNT(*), 0 FROM document_template_version_field
@@ -62,6 +63,7 @@ UNION ALL SELECT 'facility_request_history', COUNT(*), 0 FROM facility_request_h
 UNION ALL SELECT 'facility_reservation', COUNT(*), 0 FROM facility_reservation
 UNION ALL SELECT 'integration_outbox', COUNT(*), 0 FROM integration_outbox
 UNION ALL SELECT 'integration_sync_log', COUNT(*), 0 FROM integration_sync_log
+UNION ALL SELECT 'login_mfa_challenge', COUNT(*), 0 FROM login_mfa_challenge
 UNION ALL SELECT 'legal_case_retired', COUNT(*), 0 FROM legal_case_retired
 UNION ALL SELECT 'legal_matter', COUNT(*), 0 FROM legal_matter
 UNION ALL SELECT 'legal_matter_action', COUNT(*), 0 FROM legal_matter_action
@@ -92,6 +94,7 @@ UNION ALL SELECT 'visitor_registration_challenge', COUNT(*), 0 FROM visitor_regi
 UNION ALL SELECT 'visitor_sequence', COUNT(*), 0 FROM visitor_sequence
 UNION ALL SELECT 'visitor_visit_history', COUNT(*), 0 FROM visitor_visit_history
 UNION ALL SELECT 'workflow_task', COUNT(*), 0 FROM workflow_task
+UNION ALL SELECT 'google_account_connection', COUNT(*), 0 FROM google_account_connection
 ORDER BY table_name;
 
 -- Preserved baseline checks.
@@ -106,7 +109,6 @@ UNION ALL SELECT 'role', COUNT(*) FROM role
 UNION ALL SELECT 'permission', COUNT(*) FROM permission
 UNION ALL SELECT 'role_permission', COUNT(*) FROM role_permission
 UNION ALL SELECT 'user_role', COUNT(*) FROM user_role
-UNION ALL SELECT 'google_account_connection', COUNT(*) FROM google_account_connection
 ORDER BY table_name;
 
 -- ==================================================
@@ -158,9 +160,8 @@ START TRANSACTION;
 
 -- Generic runtime/application instance tables.
 DELETE FROM notification;
+DELETE FROM login_mfa_challenge;
 DELETE FROM workflow_task;
-DELETE FROM approval_step;
-DELETE FROM approval_request;
 DELETE FROM ai_recommendation;
 DELETE FROM integration_outbox;
 DELETE FROM integration_sync_log;
@@ -184,11 +185,17 @@ DELETE FROM contract_party;
 DELETE FROM contract_template_value;
 DELETE FROM contract_client_requirement;
 DELETE FROM contract_google_document;
+DELETE FROM google_account_connection;
 DELETE FROM contract_history;
 UPDATE contract
 SET renewed_from_contract_id = NULL
 WHERE renewed_from_contract_id IS NOT NULL;
 DELETE FROM contract;
+
+-- Approval steps depend on approval requests; contract amendment references
+-- have already been removed above. Approval requests may reference documents.
+DELETE FROM approval_step;
+DELETE FROM approval_request;
 
 -- Records/Retention transactional data and user document links.
 DELETE FROM record_disposition_recommendation;
@@ -204,6 +211,8 @@ DELETE FROM document_template_version;
 DELETE FROM document_template;
 
 -- Document Management user content and physical-file DB metadata.
+-- OTP challenges reference documents with a restrictive foreign key.
+DELETE FROM document_otp_challenge;
 DELETE FROM document_version;
 DELETE FROM document;
 
@@ -297,6 +306,8 @@ SET @sql := IF((SELECT COUNT(*) FROM contract_template_value) = 0, 'ALTER TABLE 
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql := IF((SELECT COUNT(*) FROM document) = 0, 'ALTER TABLE document AUTO_INCREMENT = 1', 'SELECT ''document not empty; AUTO_INCREMENT not reset'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF((SELECT COUNT(*) FROM document_otp_challenge) = 0, 'ALTER TABLE document_otp_challenge AUTO_INCREMENT = 1', 'SELECT ''document_otp_challenge not empty; AUTO_INCREMENT not reset'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql := IF((SELECT COUNT(*) FROM document_template) = 0, 'ALTER TABLE document_template AUTO_INCREMENT = 1', 'SELECT ''document_template not empty; AUTO_INCREMENT not reset'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql := IF((SELECT COUNT(*) FROM document_template_version) = 0, 'ALTER TABLE document_template_version AUTO_INCREMENT = 1', 'SELECT ''document_template_version not empty; AUTO_INCREMENT not reset'' AS info');
@@ -315,6 +326,8 @@ SET @sql := IF((SELECT COUNT(*) FROM integration_outbox) = 0, 'ALTER TABLE integ
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql := IF((SELECT COUNT(*) FROM integration_sync_log) = 0, 'ALTER TABLE integration_sync_log AUTO_INCREMENT = 1', 'SELECT ''integration_sync_log not empty; AUTO_INCREMENT not reset'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF((SELECT COUNT(*) FROM google_account_connection) = 0, 'ALTER TABLE google_account_connection AUTO_INCREMENT = 1', 'SELECT ''google_account_connection not empty; AUTO_INCREMENT not reset'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql := IF((SELECT COUNT(*) FROM legal_case_retired) = 0, 'ALTER TABLE legal_case_retired AUTO_INCREMENT = 1', 'SELECT ''legal_case_retired not empty; AUTO_INCREMENT not reset'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql := IF((SELECT COUNT(*) FROM legal_matter) = 0, 'ALTER TABLE legal_matter AUTO_INCREMENT = 1', 'SELECT ''legal_matter not empty; AUTO_INCREMENT not reset'' AS info');
@@ -328,6 +341,8 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql := IF((SELECT COUNT(*) FROM legal_matter_party) = 0, 'ALTER TABLE legal_matter_party AUTO_INCREMENT = 1', 'SELECT ''legal_matter_party not empty; AUTO_INCREMENT not reset'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql := IF((SELECT COUNT(*) FROM legal_matter_party_suggestion) = 0, 'ALTER TABLE legal_matter_party_suggestion AUTO_INCREMENT = 1', 'SELECT ''legal_matter_party_suggestion not empty; AUTO_INCREMENT not reset'' AS info');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF((SELECT COUNT(*) FROM login_mfa_challenge) = 0, 'ALTER TABLE login_mfa_challenge AUTO_INCREMENT = 1', 'SELECT ''login_mfa_challenge not empty; AUTO_INCREMENT not reset'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql := IF((SELECT COUNT(*) FROM maintenance_history) = 0, 'ALTER TABLE maintenance_history AUTO_INCREMENT = 1', 'SELECT ''maintenance_history not empty; AUTO_INCREMENT not reset'' AS info');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
@@ -383,6 +398,7 @@ UNION ALL SELECT 'contract_history', COUNT(*) FROM contract_history
 UNION ALL SELECT 'contract_client_requirement', COUNT(*) FROM contract_client_requirement
 UNION ALL SELECT 'contract_google_document', COUNT(*) FROM contract_google_document
 UNION ALL SELECT 'document', COUNT(*) FROM document
+UNION ALL SELECT 'document_otp_challenge', COUNT(*) FROM document_otp_challenge
 UNION ALL SELECT 'document_version', COUNT(*) FROM document_version
 UNION ALL SELECT 'document_template', COUNT(*) FROM document_template
 UNION ALL SELECT 'document_template_version', COUNT(*) FROM document_template_version
@@ -407,7 +423,9 @@ UNION ALL SELECT 'workflow_task', COUNT(*) FROM workflow_task
 UNION ALL SELECT 'approval_request', COUNT(*) FROM approval_request
 UNION ALL SELECT 'approval_step', COUNT(*) FROM approval_step
 UNION ALL SELECT 'ai_recommendation', COUNT(*) FROM ai_recommendation
-UNION ALL SELECT 'integration_outbox', COUNT(*) FROM integration_outbox;
+UNION ALL SELECT 'integration_outbox', COUNT(*) FROM integration_outbox
+UNION ALL SELECT 'login_mfa_challenge', COUNT(*) FROM login_mfa_challenge
+UNION ALL SELECT 'google_account_connection', COUNT(*) FROM google_account_connection;
 
 -- Orphan checks.
 SELECT 'document_version_missing_document' AS check_name, COUNT(*) AS orphan_count
@@ -445,6 +463,5 @@ UNION ALL SELECT 'retention_schedule', COUNT(*) FROM retention_schedule
 UNION ALL SELECT 'supplier_reference', COUNT(*) FROM supplier_reference
 UNION ALL SELECT 'budget_reference', COUNT(*) FROM budget_reference
 UNION ALL SELECT 'external_system', COUNT(*) FROM external_system
-UNION ALL SELECT 'google_account_connection', COUNT(*) FROM google_account_connection
 UNION ALL SELECT 'system_setting', COUNT(*) FROM system_setting
 ORDER BY table_name;

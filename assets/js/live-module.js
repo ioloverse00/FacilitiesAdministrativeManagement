@@ -28,46 +28,33 @@
         if (!table || !window.FAMTableAudit) return;
         window.FAMTableAudit.check(table, config.tableBodyId);
     }
-    function spinnerIcon() {
-        return '<span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>';
-    }
-    function tableLoadingRows(config, count = 5) {
+    function tableStateRow(config, message, icon = 'progress_activity', spinning = false) {
         const columns = (Array.isArray(config.columns) ? config.columns.length : 0) + 1;
-        return Array.from({ length: count }, () => `<tr class="fam-loading-table-row" aria-hidden="true">${Array.from({ length: columns }, (_, index) => `<td><span class="fam-skeleton fam-skeleton-line ${index % 3 === 0 ? 'fam-skeleton-line-lg' : index % 3 === 1 ? 'fam-skeleton-line-md' : 'fam-skeleton-line-sm'}"></span></td>`).join('')}</tr>`).join('');
+        return `<tr class="fam-table-state-row"><td colspan="${columns}"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
     function setLoading(config, state, isLoading, initial = false) {
-        const loading = qs(config.loadingId), body = qs(config.tableBodyId), empty = qs(config.emptyId), count = qs(config.countId), pager = document.querySelector(config.paginationSelector), card = body?.closest('.facility-table-card'), refresh = qs(config.refreshId);
-        card?.classList.toggle('fam-loading-region', isLoading);
+        const body = qs(config.tableBodyId), pager = document.querySelector(config.paginationSelector), card = body?.closest('.facility-table-card'), refresh = qs(config.refreshId);
+        card?.classList.toggle('fam-loading-region', isLoading && initial);
         card?.setAttribute('aria-busy', String(isLoading));
         refresh?.toggleAttribute('aria-busy', isLoading);
         if (refresh) refresh.disabled = isLoading;
-        if (!isLoading) {
-            loading?.classList.add('hidden');
-            return;
-        }
-        empty?.classList.add('hidden');
-        pager?.classList.add('hidden');
-        if (count) count.textContent = initial ? `Loading ${config.recordLabel}...` : `Refreshing ${config.recordLabel}...`;
-        if (initial && body) body.innerHTML = tableLoadingRows(config);
-        if (loading) {
-            loading.innerHTML = `${spinnerIcon()}<span>${initial ? `Loading ${config.recordLabel}...` : `Refreshing ${config.recordLabel}...`}</span>`;
-            loading.classList.toggle('hidden', !initial);
-            loading.setAttribute('role', 'status');
-        }
+        if (!isLoading) card?.classList.remove('fam-loading-region');
+        if (initial && body) body.innerHTML = tableStateRow(config, `Loading ${config.recordLabel}...`, 'progress_activity', true);
+        if (initial) pager?.classList.add('hidden');
     }
     function renderRows(config, rows, state) {
-        const loading = qs(config.loadingId), body = qs(config.tableBodyId), empty = qs(config.emptyId), count = qs(config.countId), pager = document.querySelector(config.paginationSelector);
+        const body = qs(config.tableBodyId), count = qs(config.countId), pager = document.querySelector(config.paginationSelector);
         renderHeaders(config);
-        loading?.classList.add('hidden');
         if (count) count.textContent = rows.length ? `${state.pagination.total} ${config.recordLabel}` : `No matching ${config.recordLabel}`;
         if (!body) return;
         auditTable(config);
         if (!rows.length) {
-            body.innerHTML = ''; empty?.classList.remove('hidden'); pager?.classList.add('hidden');
-            if (empty) empty.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">inbox</span><strong>${esc(config.emptyTitle)}</strong><span>${esc(config.emptyText || 'Records will appear here after they are created in the database.')}</span>`;
+            const hasFilters = Object.values(state.filters).some(value => value && value !== 'all');
+            body.innerHTML = tableStateRow(config, hasFilters ? `No ${config.recordLabel} match the current filters.` : config.emptyTitle, 'inbox');
+            pager?.classList.add('hidden');
             return;
         }
-        empty?.classList.add('hidden'); pager?.classList.remove('hidden');
+        pager?.classList.remove('hidden');
         body.innerHTML = rows.map(row => `<tr data-live-id="${row.id}">${config.columns.map(col => `<td class="${esc(col.className || '')}">${col.render ? col.render(row, { esc, title, fmt, currency, badge, truncate }) : truncate(row[col.key])}</td>`).join('')}<td class="facility-actions-cell"><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-live-view="${row.id}" aria-label="View details">&#8942;</button></div></td></tr>`).join('');
         auditTable(config);
     }
@@ -98,7 +85,9 @@
                 renderRows(config, state.rows, state); renderPagination(config, state);
                 const updated = qs(config.updatedId); if (updated) updated.textContent = `Last updated: ${new Date().toLocaleString()}`;
             } catch (error) {
-                state.rows = []; renderRows(config, [], state); window.FAMModal?.showToast(error.message || 'Unable to load live data.');
+                const body = qs(config.tableBodyId);
+                if (!state.hasLoaded && body) body.innerHTML = tableStateRow(config, `Unable to load ${config.recordLabel}.`, 'error');
+                window.FAMModal?.showToast(error.message || 'Unable to load live data.');
             } finally {
                 state.hasLoaded = true;
                 state.loading = false;

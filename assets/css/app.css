@@ -4041,13 +4041,11 @@ div[role="group"] button:active {
   100% { transform: translateX(100%); }
 }
 
-.fam-spinner,
-[aria-busy="true"] .material-symbols-outlined {
+.fam-spinner {
   flex: 0 0 auto;
 }
 
-.fam-spinner,
-[aria-busy="true"] .material-symbols-outlined {
+.fam-spinner {
   animation: fam-spin 0.9s linear infinite;
 }
 
@@ -4089,6 +4087,18 @@ div[role="group"] button:active {
 .fam-loading-table-row td:last-child .fam-skeleton-line {
   width: 2rem;
   margin-inline: auto;
+}
+
+.fam-table-state-row td {
+  height: 6rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.fam-table-state-row .fam-state {
+  min-height: 4rem;
+  border: 0;
+  background: transparent;
 }
 
 .fam-section-loading {
@@ -4193,7 +4203,6 @@ div[role="group"] button:active {
 
 @media (prefers-reduced-motion: reduce) {
   .fam-spinner,
-  [aria-busy="true"] .material-symbols-outlined,
   .fam-loading-region[aria-busy="true"] .fam-busy-indicator,
   .fam-icon-button[aria-busy="true"]::after,
   .dashboard-action-button[aria-busy="true"]::after,

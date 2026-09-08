@@ -1,5 +1,5 @@
 (function () {
-    const state = { page: 1, totalPages: 1, sort: 'disposition_date', direction: 'asc', options: {}, activeItem: null, activeRecommendation: null, analysisByRecord: {} };
+    const state = { page: 1, totalPages: 1, sort: 'disposition_date', direction: 'asc', options: {}, activeItem: null, activeRecommendation: null, analysisByRecord: {}, loading: false, hasLoaded: false };
     const qs = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const api = path => window.FAMApi?.apiUrl?.(path) || window.FAMNavigation?.apiUrl?.(path) || `/api/${String(path || '').replace(/^api\//, '')}`;
@@ -71,6 +71,15 @@
         return p;
     }
 
+    function hasActiveFilters() {
+        if (qs('#retention-search')?.value.trim()) return true;
+        return ['#retention-schedule-filter', '#retention-status-filter', '#retention-due-filter', '#retention-hold-filter']
+            .some(selector => {
+                const value = qs(selector)?.value;
+                return value && value !== 'all';
+            });
+    }
+
     function exportUrl() {
         const p = new URLSearchParams({ report: 'documents_records', source: 'records' });
         const search = qs('#retention-search')?.value.trim();
@@ -85,11 +94,13 @@
     }
 
     async function load() {
-        qs('#retention-table-count').textContent = 'Loading retention records...';
+        if (state.loading) return;
+        state.loading = true;
+        const initial = !state.hasLoaded;
         qs('#retention-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
         qs('#retention-refresh')?.setAttribute('aria-busy', 'true');
         qs('#retention-refresh')?.setAttribute('disabled', 'disabled');
-        qs('#retention-loading-state')?.classList.remove('hidden');
+        if (initial) qs('#retention-table').innerHTML = tableStateRow('Loading retention records...', 'progress_activity', true);
         try {
             const payload = await window.FAMApi.request(api(`retention/index.php?${params()}`));
             const data = payload.data || {};
@@ -97,12 +108,21 @@
             renderRows(data.items || []);
             renderPagination(data.pagination || {});
             qs('#retention-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+        } catch (error) {
+            if (initial) qs('#retention-table').innerHTML = tableStateRow('Unable to load retention records.', 'error');
+            qs('#retention-table-count').textContent = 'Retention records unavailable';
+            window.FAMModal?.showToast(error.message || 'Unable to load retention records.');
         } finally {
-            qs('#retention-loading-state')?.classList.add('hidden');
             qs('#retention-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
             qs('#retention-refresh')?.removeAttribute('aria-busy');
             qs('#retention-refresh')?.removeAttribute('disabled');
+            state.loading = false;
+            state.hasLoaded = true;
         }
+    }
+
+    function tableStateRow(message, icon, spinning = false) {
+        return `<tr class="fam-table-state-row"><td colspan="7"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
 
     function renderSummary(summary) {
@@ -116,15 +136,11 @@
 
     function renderRows(items) {
         const body = qs('#retention-table');
-        const empty = qs('#retention-empty-state');
         qs('#retention-table-count').textContent = `Showing ${items.length} retention ${items.length === 1 ? 'record' : 'records'}`;
         if (!items.length) {
-            body.innerHTML = '';
-            empty.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">fact_check</span><strong>No retention records found.</strong><p>Records linked from Document Management will appear here for lifecycle review.</p>';
-            empty.classList.remove('hidden');
+            body.innerHTML = tableStateRow(hasActiveFilters() ? 'No retention records match the current search or filters.' : 'No retention records found.', 'fact_check');
             return;
         }
-        empty.classList.add('hidden');
         body.innerHTML = items.map(row => `<tr>
             <td><button class="document-primary-cell" type="button" data-retention-action="view" data-retention-id="${row.id}"><span class="material-symbols-outlined document-file-icon" aria-hidden="true">inventory</span><span><strong title="${esc(row.title)}">${esc(row.title)}</strong><small title="${esc(row.recordNo)}">${esc(row.recordNo)}</small></span></button></td>
             <td>${esc(row.category)}</td>
@@ -613,8 +629,6 @@
 
     document.addEventListener('fam:layout-ready', () => init().catch(error => {
         console.error(error);
-        qs('#retention-loading-state')?.classList.add('hidden');
-        qs('#retention-empty-state').innerHTML = "<strong>We couldn't load retention records.</strong><p>Please refresh the page and try again.</p>";
-        qs('#retention-empty-state')?.classList.remove('hidden');
+        qs('#retention-table').innerHTML = tableStateRow('Unable to load retention records.', 'error');
     }));
 })();

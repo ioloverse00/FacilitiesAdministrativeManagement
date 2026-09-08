@@ -29,7 +29,20 @@
     function formatDateTime(value) { return value ? new Date(value.replace(' ', 'T')).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''; }
     function schedule(items = []) { return items.slice(0, 5).map(item => ({ time: formatTime(item.startsAt), activity: item.room || item.title || item.reference || '', location: [item.reference, item.title].filter(Boolean).join(' · '), module: 'Facilities Reservation', status: item.status || '' })); }
     function retentionAttention(items = []) { return items.slice(0, 5).map(item => ({ reference: item.recordNo || '', title: item.title || '', schedule: item.schedule?.name || '', reviewDate: item.scheduledDispositionDate || '', status: item.dueState || item.retentionStatus || '' })); }
-    function activity(items = []) { return items.slice(0, 5).map(item => ({ activity: item.activity || '', module: moduleLabels[item.module] || item.module || '', by: item.reference || 'System', time: formatDateTime(item.time), status: item.status || '' })); }
+    function activity(items = []) {
+        const value = input => {
+            const normalized = String(input ?? '').trim();
+            return normalized && normalized !== '?' ? normalized : '';
+        };
+        return items.slice(0, 5).map(item => ({
+            activity: value(item.activity),
+            module: moduleLabels[item.module] || value(item.module),
+            reference: value(item.reference),
+            by: value(item.actor) || (Number(item.system_generated) === 1 ? 'System' : ''),
+            time: formatDateTime(item.time),
+            status: value(item.status)
+        }));
+    }
     function chartSeries(series = {}) { return { labels: Array.isArray(series.labels) ? series.labels : [], values: Array.isArray(series.values) ? series.values.map(value => Number(value || 0)) : [] }; }
     function charts(data = {}) { return { reservationActivity: chartSeries(data.reservation_activity), operationalOverview: chartSeries(data.operational_overview) }; }
     function normalizeDashboardPayload(data) { return { generatedAt: data.generatedAt || new Date().toISOString(), kpis: kpiArray(data.kpis || {}), charts: charts(data.charts || {}), todaySchedule: schedule(data.todaySchedule || []), retentionAttention: retentionAttention(data.retentionAttention || []), recentActivities: activity(data.recentActivities || []) }; }

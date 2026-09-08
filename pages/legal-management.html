@@ -33,7 +33,7 @@
                             <div class="facility-title-block">
                                 <h1>Legal Management</h1>
                                 <p>Track and manage legal matters, assignments, status, and resolutions.</p>
-                                <span id="legal-updated" class="fam-last-updated">Last updated: Loading...</span>
+                                <span id="legal-updated" class="fam-last-updated">Last updated: Not yet loaded</span>
                             </div>
                             <div class="facility-header-actions">
                                 <button id="legal-refresh" class="fam-icon-button" type="button" aria-label="Refresh" title="Refresh">
@@ -58,7 +58,7 @@
                                 <div class="facility-table-header">
                                     <div>
                                         <h2 id="legal-table-title">Matter Queue</h2>
-                                        <p id="legal-table-count">Loading legal matters...</p>
+                                        <p id="legal-table-count">0 legal matters</p>
                                     </div>
                                     <div class="facility-header-controls legal-controls">
                                         <label class="facility-field facility-search-field"><span class="sr-only">Search</span><input id="legal-search" type="search" placeholder="Search matters..."></label>
@@ -68,10 +68,6 @@
                                         <label class="facility-field document-filter-field"><span class="sr-only">Department</span><select id="legal-department-filter"><option value="all">All Departments</option></select></label>
                                         <label class="facility-field document-filter-field"><span class="sr-only">Assigned to</span><select id="legal-assignee-filter"><option value="all">All Assignees</option></select></label>
                                     </div>
-                                </div>
-                                <div id="legal-loading-state" class="fam-state">
-                                    <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
-                                    <span>Loading legal matters...</span>
                                 </div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table legal-table">
@@ -98,7 +94,6 @@
                                         <tbody id="legal-table"></tbody>
                                     </table>
                                 </div>
-                                <div id="legal-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
                                 <div class="facility-pagination" aria-label="Legal matters pagination">
                                     <button id="legal-prev-page" class="facility-page-button" type="button">Previous</button>
                                     <span id="legal-page-status">Page 1 of 1</span>

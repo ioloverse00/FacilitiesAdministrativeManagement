@@ -1,5 +1,5 @@
 (function () {
-    const state = { page: 1, totalPages: 1, sort: 'updated_at', direction: 'desc', options: {}, activeItem: null, loading: false };
+    const state = { page: 1, totalPages: 1, sort: 'updated_at', direction: 'desc', options: {}, activeItem: null, loading: false, hasLoaded: false };
     let authoringState = null;
     let activePlaceholder = null;
     let returnToDetailsAfterAuthoring = null;
@@ -156,11 +156,12 @@
     async function load() {
         if (state.loading) return;
         state.loading = true;
-        qs('#contract-table-count').textContent = state.activeItem ? 'Refreshing contracts...' : 'Loading contracts...';
-        qs('#contract-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
+        const initial = !state.hasLoaded;
+        const body = qs('#contract-table');
+        body?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
         qs('#contract-refresh')?.setAttribute('aria-busy', 'true');
         qs('#contract-refresh')?.setAttribute('disabled', 'disabled');
-        qs('#contract-loading-state')?.classList.remove('hidden');
+        if (initial && body) body.innerHTML = tableStateRow('Loading contracts...', 'progress_activity', true);
         try {
             const payload = await window.FAMApi.request(api(`contracts/index.php?${params()}`));
             const data = payload.data || {};
@@ -169,14 +170,18 @@
             renderPagination(data.pagination || {});
             qs('#contract-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
         } catch (error) {
-            renderError(error.message || 'Unable to load contracts.');
+            renderError();
         } finally {
-            qs('#contract-loading-state')?.classList.add('hidden');
             qs('#contract-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
             qs('#contract-refresh')?.removeAttribute('aria-busy');
             qs('#contract-refresh')?.removeAttribute('disabled');
             state.loading = false;
+            state.hasLoaded = true;
         }
+    }
+
+    function tableStateRow(message, icon, spinning = false) {
+        return `<tr class="fam-table-state-row"><td colspan="6"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
 
     async function loadOptions() {
@@ -195,15 +200,11 @@
 
     function renderRows(items) {
         const body = qs('#contract-table');
-        const empty = qs('#contract-empty-state');
         qs('#contract-table-count').textContent = `Showing ${items.length} ${items.length === 1 ? 'contract' : 'contracts'}`;
         if (!items.length) {
-            body.innerHTML = '';
-            empty.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">contract</span><strong>No contracts found.</strong><p>${hasFilters() ? 'Try changing your search or filters.' : 'Contract records will appear here once created.'}</p>`;
-            empty.classList.remove('hidden');
+            body.innerHTML = tableStateRow(hasFilters() ? 'No contracts match the current search or filters.' : 'No contracts found.', 'contract');
             return;
         }
-        empty.classList.add('hidden');
         body.innerHTML = items.map(row => `<tr>
             <td><button class="document-primary-cell contract-primary-cell" type="button" data-contract-action="view" data-report-action="contract-details" data-contract-id="${esc(row.id)}"><span class="material-symbols-outlined document-file-icon" aria-hidden="true">contract</span><span><strong>${esc(row.contractNo)}</strong><small>${esc(contractTypeLabel(row.type?.code || row.type?.name || ''))}</small></span></button></td>
             <td><div class="contract-title-cell"><strong title="${esc(row.title)}">${esc(row.title)}</strong><small>${esc(contractTypeLabel(row.type?.code || row.type?.name || 'Contract'))}</small></div></td>
@@ -221,12 +222,9 @@
         });
     }
 
-    function renderError(message) {
-        qs('#contract-table').innerHTML = '';
+    function renderError() {
+        if (!state.hasLoaded) qs('#contract-table').innerHTML = tableStateRow('Unable to load contracts.', 'error');
         qs('#contract-table-count').textContent = 'Contracts unavailable';
-        const empty = qs('#contract-empty-state');
-        empty.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">error</span><strong>Unable to load contracts.</strong><p>${esc(message)}</p>`;
-        empty.classList.remove('hidden');
     }
 
     function actionMenu(row) {

@@ -1,5 +1,5 @@
 ﻿(function () {
-    const state = { page: 1, totalPages: 1, sort: 'updated_at', direction: 'desc', options: {}, activeItem: null, lastFocus: null, bound: false, aiInitialJobs: new Set() };
+    const state = { page: 1, totalPages: 1, sort: 'updated_at', direction: 'desc', options: {}, activeItem: null, lastFocus: null, bound: false, aiInitialJobs: new Set(), loading: false, hasLoaded: false };
     const qs = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const api = path => `../api/${path}`;
@@ -50,12 +50,23 @@
         return p;
     }
 
+    function hasActiveFilters() {
+        if (qs('#legal-search')?.value.trim()) return true;
+        return ['#legal-type-filter', '#legal-priority-filter', '#legal-status-filter', '#legal-department-filter', '#legal-assignee-filter']
+            .some(selector => {
+                const value = qs(selector)?.value;
+                return value && value !== 'all';
+            });
+    }
+
     async function load() {
-        qs('#legal-table-count').textContent = 'Loading legal matters...';
+        if (state.loading) return;
+        state.loading = true;
+        const initial = !state.hasLoaded;
         qs('#legal-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
         qs('#legal-refresh')?.setAttribute('aria-busy', 'true');
         qs('#legal-refresh')?.setAttribute('disabled', 'disabled');
-        qs('#legal-loading-state')?.classList.remove('hidden');
+        if (initial) qs('#legal-table').innerHTML = tableStateRow('Loading legal matters...', 'progress_activity', true);
         try {
             const payload = await window.FAMApi.request(api(`legal/index.php?${params()}`));
             const data = payload.data || {};
@@ -63,12 +74,21 @@
             renderRows(data.items || []);
             renderPagination(data.pagination || {});
             qs('#legal-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+        } catch (error) {
+            if (initial) qs('#legal-table').innerHTML = tableStateRow('Unable to load legal matters.', 'error');
+            qs('#legal-table-count').textContent = 'Legal matters unavailable';
+            window.FAMModal?.showToast(error.message || 'Unable to load legal matters.');
         } finally {
-            qs('#legal-loading-state')?.classList.add('hidden');
             qs('#legal-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
             qs('#legal-refresh')?.removeAttribute('aria-busy');
             qs('#legal-refresh')?.removeAttribute('disabled');
+            state.loading = false;
+            state.hasLoaded = true;
         }
+    }
+
+    function tableStateRow(message, icon, spinning = false) {
+        return `<tr class="fam-table-state-row"><td colspan="7"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
 
     async function loadOptions() {
@@ -90,15 +110,11 @@
 
     function renderRows(items) {
         const body = qs('#legal-table');
-        const empty = qs('#legal-empty-state');
         qs('#legal-table-count').textContent = `Showing ${items.length} legal ${items.length === 1 ? 'matter' : 'matters'}`;
         if (!items.length) {
-            body.innerHTML = '';
-            empty.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">gavel</span><strong>No legal matters found.</strong><p>Legal matters will appear here once created.</p>';
-            empty.classList.remove('hidden');
+            body.innerHTML = tableStateRow(hasActiveFilters() ? 'No legal matters match the current search or filters.' : 'No legal matters found.', 'gavel');
             return;
         }
-        empty.classList.add('hidden');
         body.innerHTML = items.map(row => `<tr>
             <td><button class="document-primary-cell legal-primary-cell" type="button" data-legal-action="view" data-legal-id="${esc(row.id)}"><span class="material-symbols-outlined document-file-icon" aria-hidden="true">gavel</span><span><strong title="${esc(row.title)}">${esc(row.title)}</strong><small>${esc(row.matterNo)}</small></span></button></td>
             <td>${esc(title(row.matterType))}</td>
@@ -1165,8 +1181,6 @@
 
     document.addEventListener('fam:layout-ready', () => init().catch(error => {
         console.error(error);
-        qs('#legal-loading-state')?.classList.add('hidden');
-        qs('#legal-empty-state').innerHTML = "<strong>We couldn't load legal matters.</strong><p>Please refresh the page and try again.</p>";
-        qs('#legal-empty-state')?.classList.remove('hidden');
+        qs('#legal-table').innerHTML = tableStateRow('Unable to load legal matters.', 'error');
     }));
 })();

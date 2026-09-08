@@ -40,13 +40,12 @@
         <section class="facility-section" aria-labelledby="employee-facility-requests-title">
             <div class="facility-table-card employee-records-card">
                 <div class="employee-records-header">
-                    <div><h2 id="employee-facility-requests-title">Request History</h2><p id="employee-request-count">Loading facility requests...</p></div>
+                    <div><h2 id="employee-facility-requests-title">Request History</h2><p id="employee-request-count">0 facility requests</p></div>
                     <div class="employee-records-toolbar">
                         <label class="facility-field facility-search-field"><span class="sr-only">Search my facility requests</span><input id="employee-facility-request-search" type="search" placeholder="Search my requests..."></label>
                         <label class="facility-field facility-filter-field"><span class="sr-only">Filter request status</span><select id="employee-facility-request-status"><option value="">All Statuses</option></select></label>
                     </div>
                 </div>
-                <div id="employee-facility-request-loading" class="fam-state" aria-live="polite"><span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span><span>Loading facility requests...</span></div>
                 <div class="facility-table-scroll employee-records-table-wrap"><table class="facility-data-table employee-data-table"><thead><tr><th scope="col">Request No.</th><th scope="col">Subject</th><th scope="col">Category</th><th scope="col">Facility</th><th scope="col">Priority</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead><tbody id="employee-facility-requests-body" aria-live="polite"></tbody></table></div>
                 <div id="employee-facility-requests-cards" class="employee-mobile-record-list" aria-live="polite"></div>
             </div>

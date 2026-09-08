@@ -32,7 +32,7 @@
                             <div class="facility-title-block">
                                 <h1>Visitor Management</h1>
                                 <p>Manage visitor arrivals, badge assignments, active visits, and check-outs.</p>
-                                <span id="visitor-updated" class="fam-last-updated">Last updated: Loading...</span>
+                                <span id="visitor-updated" class="fam-last-updated">Last updated: Not yet loaded</span>
                             </div>
                             <div class="facility-header-actions">
                                 <button id="visitor-refresh" class="fam-icon-button" type="button" aria-label="Refresh" title="Refresh"><span class="material-symbols-outlined" aria-hidden="true">refresh</span></button>
@@ -48,7 +48,7 @@
                                 <div class="facility-table-header visitor-table-header">
                                     <div>
                                         <h2 id="visitor-table-title">Visitor Records</h2>
-                                        <p id="visitor-table-count">Loading visitor records...</p>
+                                        <p id="visitor-table-count">0 visitor records</p>
                                     </div>
                                     <div class="facility-header-controls visitor-records-toolbar">
                                         <label class="facility-field facility-search-field"><span class="sr-only">Search visitors</span><input id="visitor-search" type="search" placeholder="Search visitors..."></label>
@@ -56,7 +56,6 @@
                                         <label class="facility-field document-filter-field"><span class="sr-only">Status</span><select id="visitor-status-filter"><option value="all">All Statuses</option></select></label>
                                     </div>
                                 </div>
-                                <div id="visitor-loading-state" class="fam-state" aria-live="polite"><span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span><span>Loading visitor records...</span></div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table visitor-management-table">
                                         <colgroup>
@@ -73,7 +72,6 @@
                                         <tbody id="visitor-table"></tbody>
                                     </table>
                                 </div>
-                                <div id="visitor-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
                                 <div class="facility-pagination" aria-label="Visitor pagination"><button id="visitor-prev-page" class="facility-page-button" type="button">Previous</button><span id="visitor-page-status">Page 1 of 1</span><button id="visitor-next-page" class="facility-page-button" type="button">Next</button></div>
                             </div>
                         </section>

@@ -1,5 +1,5 @@
 (function () {
-    const state = { page: 1, totalPages: 1, sort: 'updated_at', direction: 'desc', options: {}, templateOptions: {}, activeItem: null, activeTemplate: null, view: 'documents' };
+    const state = { page: 1, totalPages: 1, sort: 'updated_at', direction: 'desc', options: {}, templateOptions: {}, activeItem: null, activeTemplate: null, view: 'documents', documentLoading: false, documentLoaded: false, templateLoading: false, templateLoaded: false };
     const qs = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const api = path => window.FAMApi?.apiUrl?.(path) || window.FAMNavigation?.apiUrl?.(path) || `/api/${String(path || '').replace(/^api\//, '')}`;
@@ -99,11 +99,13 @@
     }
 
     async function load() {
-        qs('#records-table-count').textContent = 'Loading documents...';
+        if (state.documentLoading) return;
+        state.documentLoading = true;
+        const initial = !state.documentLoaded;
         qs('#records-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
         qs('#records-refresh')?.setAttribute('aria-busy', 'true');
         qs('#records-refresh')?.setAttribute('disabled', 'disabled');
-        qs('#records-loading-state')?.classList.remove('hidden');
+        if (initial) qs('#records-table').innerHTML = tableStateRow(7, 'Loading documents...', 'progress_activity', true);
         try {
             const payload = await window.FAMApi.request(api(`documents/index.php?${params()}`));
             const data = payload.data || {};
@@ -111,12 +113,21 @@
             renderRows(data.items || []);
             renderPagination(data.pagination || {});
             qs('#records-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+        } catch (error) {
+            if (initial) qs('#records-table').innerHTML = tableStateRow(7, 'Unable to load documents.', 'error');
+            qs('#records-table-count').textContent = 'Documents unavailable';
+            window.FAMModal?.showToast(error.message || 'Unable to load documents.');
         } finally {
-            qs('#records-loading-state')?.classList.add('hidden');
             qs('#records-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
             qs('#records-refresh')?.removeAttribute('aria-busy');
             qs('#records-refresh')?.removeAttribute('disabled');
+            state.documentLoading = false;
+            state.documentLoaded = true;
         }
+    }
+
+    function tableStateRow(colspan, message, icon, spinning = false) {
+        return `<tr class="fam-table-state-row"><td colspan="${colspan}"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
 
     function renderSummary(summary) {
@@ -127,7 +138,6 @@
 
     function renderRows(items) {
         const body = qs('#records-table');
-        const empty = qs('#records-empty-state');
         qs('#records-table-count').textContent = `Showing ${items.length} document ${items.length === 1 ? 'record' : 'records'}`;
         const hasFilters = Boolean(qs('#records-search')?.value.trim())
             || ['#document-category-filter', '#document-confidentiality-filter', '#document-status-filter'].some(selector => {
@@ -135,14 +145,9 @@
                 return el && el.value !== 'all';
             });
         if (!items.length) {
-            body.innerHTML = '';
-            empty.innerHTML = hasFilters
-                ? '<span class="material-symbols-outlined" aria-hidden="true">search_off</span><strong>No matching documents</strong><p>Try changing your search or filters.</p>'
-                : `<span class="material-symbols-outlined" aria-hidden="true">folder_open</span><strong>No documents yet</strong><p>Official FAM documents will appear here.</p>${can('records.create') ? '<button class="btn-primary dashboard-action-button" type="button" data-document-add>Add Document</button>' : ''}`;
-            empty.classList.remove('hidden');
+            body.innerHTML = tableStateRow(7, hasFilters ? 'No documents match the current search or filters.' : 'No documents yet.', hasFilters ? 'search_off' : 'folder_open');
             return;
         }
-        empty.classList.add('hidden');
         body.innerHTML = items.map(row => `<tr>
             <td><button class="document-primary-cell" type="button" data-document-action="view" data-document-id="${row.id}"><span class="material-symbols-outlined document-file-icon" aria-hidden="true">${fileIcon(row)}</span><span><strong>${esc(row.title)}</strong><small>${esc(row.documentNo)} · ${esc(title(row.confidentiality))}</small>${row.description ? `<em>${esc(row.description)}</em>` : ''}</span></button></td>
             <td>${esc(row.category)}</td>
@@ -383,9 +388,11 @@
 
     async function loadTemplates() {
         if (!can('document_templates.view')) return;
-        qs('#templates-table-count').textContent = 'Loading templates...';
+        if (state.templateLoading) return;
+        state.templateLoading = true;
+        const initial = !state.templateLoaded;
         qs('#templates-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
-        qs('#templates-loading-state')?.classList.remove('hidden');
+        if (initial) qs('#templates-table').innerHTML = tableStateRow(8, 'Loading templates...', 'progress_activity', true);
         try {
             const payload = await window.FAMApi.request(api(`document-templates/index.php?${templateParams()}`));
             state.templateOptions = payload.data?.options || state.templateOptions || {};
@@ -393,9 +400,14 @@
             fillTemplateSelect(qs('#template-status-filter'), state.templateOptions.statuses || [], 'all', 'template_status', 'All Statuses');
             renderTemplateSummary(payload.data?.items || []);
             renderTemplates(payload.data?.items || []);
+        } catch (error) {
+            if (initial) qs('#templates-table').innerHTML = tableStateRow(8, 'Unable to load templates.', 'error');
+            qs('#templates-table-count').textContent = 'Templates unavailable';
+            window.FAMModal?.showToast(error.message || 'Unable to load templates.');
         } finally {
-            qs('#templates-loading-state')?.classList.add('hidden');
             qs('#templates-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
+            state.templateLoading = false;
+            state.templateLoaded = true;
         }
     }
 
@@ -420,15 +432,11 @@
 
     function renderTemplates(items) {
         const body = qs('#templates-table');
-        const empty = qs('#templates-empty-state');
         qs('#templates-table-count').textContent = `Showing ${items.length} template ${items.length === 1 ? 'record' : 'records'}`;
         if (!items.length) {
-            body.innerHTML = '';
-            empty.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">contract_edit</span><strong>No templates yet</strong><p>Active master templates will appear here.</p>${can('document_templates.create') ? '<button class="btn-primary dashboard-action-button" type="button" data-template-create>Create Template</button>' : ''}`;
-            empty.classList.remove('hidden');
+            body.innerHTML = tableStateRow(8, 'No templates yet.', 'contract_edit');
             return;
         }
-        empty.classList.add('hidden');
         body.innerHTML = items.map(item => `<tr>
             <td><button class="document-primary-cell" type="button" data-template-action="template-details" data-template-id="${esc(item.id)}"><span class="material-symbols-outlined document-file-icon" aria-hidden="true">contract_edit</span><span><strong>${esc(item.templateName)}</strong><small>${esc(item.templateCode)}</small>${item.description ? `<em>${esc(item.description)}</em>` : ''}</span></button></td>
             <td>${esc(templateTypeLabel(item.templateType))}</td>
@@ -731,8 +739,6 @@
 
     document.addEventListener('fam:layout-ready', () => init().catch(error => {
         console.error(error);
-        qs('#records-loading-state')?.classList.add('hidden');
-        qs('#records-empty-state').innerHTML = "<strong>We couldn't load documents.</strong><p>Please refresh the page and try again.</p>";
-        qs('#records-empty-state')?.classList.remove('hidden');
+        qs('#records-table').innerHTML = tableStateRow(7, 'Unable to load documents.', 'error');
     }));
 })();

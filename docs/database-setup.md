@@ -84,3 +84,7 @@ Expected response shape:
 ```
 
 The health endpoint currently sends `Access-Control-Allow-Origin: *` for local development. Restrict this to trusted origins before production deployment.
+
+## Document Storage Synchronization
+
+Database exports contain document and template metadata, but not the physical files referenced by `document_version.storage_path`. When moving or resetting an environment, keep the database rows and the corresponding files under `storage/documents/` synchronized. A database import without its matching files leaves downloads and Google template authoring unavailable; copied files without matching metadata are not application documents.

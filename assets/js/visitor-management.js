@@ -28,8 +28,7 @@
   const badge = (v, type = 'status') => `<span class="facility-badge facility-${type}-${String(v || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${esc(type === 'status' ? statusLabel(v || 'Not applicable') : title(v || 'Not applicable'))}</span>`;
   const trunc = (v, className = 'table-cell-truncate') => `<span class="${className}" title="${esc(v || 'Not applicable')}">${esc(v || 'Not applicable')}</span>`;
   function toast(m) { window.FAMModal?.showToast?.(m); }
-  function spinnerIcon() { return '<span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>'; }
-  function loadingRows(count = 5) { return Array.from({ length: count }, () => `<tr class="fam-loading-table-row" aria-hidden="true">${Array.from({ length: 8 }, (_, index) => `<td><span class="fam-skeleton fam-skeleton-line ${index % 3 === 0 ? 'fam-skeleton-line-lg' : index % 3 === 1 ? 'fam-skeleton-line-md' : 'fam-skeleton-line-sm'}"></span></td>`).join('')}</tr>`).join(''); }
+  function tableStateRow(message, icon, spinning = false) { return `<tr class="fam-table-state-row"><td colspan="8"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`; }
   function params() { const p = new URLSearchParams({ page: state.page, per_page: state.perPage, sort: state.sort, direction: state.direction }); Object.entries(state.filters).forEach(([k, v]) => { if (v && v !== 'all') p.set(k, v); }); return p; }
   function exportUrl() { const p = params(); p.delete('page'); p.delete('per_page'); return `../api/visitors/export-csv.php?${p}`; }
   function activeFilters() { return Object.values(state.filters).some(v => v && v !== 'all'); }
@@ -43,20 +42,13 @@
   }
   function renderSummary(summary = {}) { qs('#visitor-summary').innerHTML = [["Today's Visitors", summary.today], ['Currently Checked In', summary.checked_in], ['Checked Out Today', summary.checked_out_today], ['Available Badges', summary.available_badges], ['Legacy Pending Review', summary.pending_review]].map(([k, v]) => `<span><strong>${Number(v || 0)}</strong>${esc(k)}</span>`).join(''); }
   function renderLoading(initial) {
-    const body = qs('#visitor-table'), empty = qs('#visitor-empty-state'), loading = qs('#visitor-loading-state'), pager = qs('.visitor-management-workspace .facility-pagination'), card = qs('#visitor-table')?.closest('.facility-table-card'), refresh = qs('#visitor-refresh');
-    card?.classList.add('fam-loading-region');
+    const body = qs('#visitor-table'), pager = qs('.visitor-management-workspace .facility-pagination'), card = qs('#visitor-table')?.closest('.facility-table-card'), refresh = qs('#visitor-refresh');
+    card?.classList.toggle('fam-loading-region', initial);
     card?.setAttribute('aria-busy', 'true');
     refresh?.setAttribute('aria-busy', 'true');
     refresh?.setAttribute('disabled', 'disabled');
-    empty?.classList.add('hidden');
-    pager?.classList.add('hidden');
-    qs('#visitor-table-count').textContent = initial ? 'Loading visitor records...' : 'Refreshing visitor records...';
-    if (initial && body) body.innerHTML = loadingRows();
-    if (loading) {
-      loading.innerHTML = `${spinnerIcon()}<span>${initial ? 'Loading visitor records...' : 'Refreshing visitor records...'}</span>`;
-      loading.classList.toggle('hidden', !initial);
-      loading.setAttribute('role', 'status');
-    }
+    if (initial) pager?.classList.add('hidden');
+    if (initial && body) body.innerHTML = tableStateRow('Loading visitor records...', 'progress_activity', true);
   }
   function clearLoading() {
     const card = qs('#visitor-table')?.closest('.facility-table-card'), refresh = qs('#visitor-refresh');
@@ -64,31 +56,26 @@
     card?.removeAttribute('aria-busy');
     refresh?.removeAttribute('aria-busy');
     refresh?.removeAttribute('disabled');
-    qs('#visitor-loading-state')?.classList.add('hidden');
   }
   function renderTable() {
     window.FAMTableMenus?.close();
-    const body = qs('#visitor-table'), empty = qs('#visitor-empty-state'), loading = qs('#visitor-loading-state'), pager = qs('.visitor-management-workspace .facility-pagination');
+    const body = qs('#visitor-table'), pager = qs('.visitor-management-workspace .facility-pagination');
     window.FAMTableAudit?.check(body?.closest('table'), 'visitor-management-table');
-    loading?.classList.add('hidden');
     clearLoading();
     if (state.error) {
       qs('#visitor-table-count').textContent = 'Visitor records unavailable';
-      body.innerHTML = '';
-      empty.classList.remove('hidden');
-      pager.classList.add('hidden');
-      empty.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">error</span><strong>Unable to load visitor records.</strong><span>${esc(state.error)}</span>`;
+      if (!state.hasLoaded) {
+        pager.classList.add('hidden');
+        body.innerHTML = tableStateRow('Unable to load visitor records.', 'error');
+      }
       return;
     }
     qs('#visitor-table-count').textContent = state.total ? `Showing ${state.rows.length} of ${state.total} visitor records` : 'No visitor records';
     if (!state.rows.length) {
-      body.innerHTML = '';
-      empty.classList.remove('hidden');
       pager.classList.add('hidden');
-      empty.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">badge</span><strong>${activeFilters() ? 'No visitors match the current search or filters.' : 'No visitor records found.'}</strong><span>${activeFilters() ? 'Try adjusting the search or filters.' : 'Use the Visitor Reception Console to check in new arrivals.'}</span>`;
+      body.innerHTML = tableStateRow(activeFilters() ? 'No visitors match the current search or filters.' : 'No visitor records found.', 'badge');
       return;
     }
-    empty.classList.add('hidden');
     pager.classList.remove('hidden');
     qs('#visitor-page-status').textContent = `Page ${state.page} of ${Math.max(1, state.totalPages)}`;
     qs('#visitor-prev-page').disabled = state.page <= 1;
@@ -119,8 +106,8 @@
       toast(state.error);
     } finally {
       state.loading = false;
-      state.hasLoaded = true;
       renderTable();
+      state.hasLoaded = true;
       syncToolbar();
     }
   }

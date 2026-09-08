@@ -33,7 +33,7 @@
                             <div class="facility-title-block">
                                 <h1>Records Retention &amp; Compliance</h1>
                                 <p>Control record lifecycle review, legal holds, archive decisions, and logical disposition.</p>
-                                <span id="retention-updated" class="fam-last-updated">Last updated: Loading...</span>
+                                <span id="retention-updated" class="fam-last-updated">Last updated: Not yet loaded</span>
                             </div>
                             <div class="facility-header-actions">
                                 <button id="retention-refresh" class="fam-icon-button" type="button" aria-label="Refresh" title="Refresh">
@@ -60,7 +60,7 @@
                                 <div class="facility-table-header">
                                     <div>
                                         <h2 id="retention-table-title">Compliance Queue</h2>
-                                        <p id="retention-table-count">Loading retention records...</p>
+                                        <p id="retention-table-count">0 retention records</p>
                                     </div>
                                     <div class="facility-header-controls retention-controls">
                                         <label class="facility-field facility-search-field">
@@ -72,10 +72,6 @@
                                         <!-- <label class="facility-field document-filter-field"><span class="sr-only">Due state</span><select id="retention-due-filter"><option value="all">All Review States</option></select></label> -->
                                         <label class="facility-field document-filter-field"><span class="sr-only">Hold</span><select id="retention-hold-filter"><option value="all">All Holds</option></select></label>
                                     </div>
-                                </div>
-                                <div id="retention-loading-state" class="fam-state">
-                                    <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
-                                    <span>Loading retention records...</span>
                                 </div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table records-table retention-table">
@@ -102,7 +98,6 @@
                                         <tbody id="retention-table"></tbody>
                                     </table>
                                 </div>
-                                <div id="retention-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
                                 <div class="facility-pagination" aria-label="Retention records pagination">
                                     <button id="retention-prev-page" class="facility-page-button" type="button">Previous</button>
                                     <span id="retention-page-status">Page 1 of 1</span>

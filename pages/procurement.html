@@ -32,7 +32,7 @@
                             <div class="facility-title-block">
                                 <h1>Procurement Requests</h1>
                                 <p>Manage facility-related purchase requests, approvals, budgets, and Supply Chain coordination.</p>
-                                <span id="procurement-updated" class="fam-last-updated">Last updated: Loading...</span>
+                                <span id="procurement-updated" class="fam-last-updated">Last updated: Not yet loaded</span>
                             </div>
                             <div class="facility-header-actions">
                                 <button id="procurement-refresh" class="fam-icon-button" type="button" aria-label="Refresh" title="Refresh">
@@ -50,7 +50,7 @@
                                 <div class="facility-table-header">
                                     <div>
                                         <h2 id="procurement-table-title">Procurement Requests</h2>
-                                        <p id="procurement-table-count">Loading procurement request records...</p>
+                                        <p id="procurement-table-count">0 procurement request records</p>
                                     </div>
                                     <div class="facility-header-controls">
                                         <label class="facility-field facility-search-field">
@@ -59,10 +59,6 @@
                                         </label>
                                         <button id="procurement-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
                                     </div>
-                                </div>
-                                <div id="procurement-loading-state" class="fam-state">
-                                    <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
-                                    <span>Loading procurement requests...</span>
                                 </div>
                                 <div class="facility-table-scroll">
                                     <table class="facility-requests-table procurement-table">
@@ -89,7 +85,6 @@
                                         <tbody id="procurement-table"></tbody>
                                     </table>
                                 </div>
-                                <div id="procurement-empty-state" class="facility-empty-state hidden" aria-live="polite"></div>
                                 <div class="facility-pagination" aria-label="Procurement request pagination">
                                     <button id="procurement-prev-page" class="facility-page-button" type="button">Previous</button>
                                     <span id="procurement-page-status">Page 1 of 1</span>
