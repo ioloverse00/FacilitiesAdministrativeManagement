@@ -12,15 +12,19 @@
 
     function appBasePath() {
         if (window.FAMNavigation?.appBasePath) return window.FAMNavigation.appBasePath();
-        const marker = '/pages/';
-        const path = window.location.pathname;
-        const index = path.indexOf(marker);
-        if (index >= 0) return path.slice(0, index + 1);
-        return path.endsWith('/') ? path : path.replace(/[^/]*$/, '');
+        const configuredBase = document.body?.dataset?.appBasePath;
+        if (configuredBase) return configuredBase.endsWith('/') ? configuredBase : `${configuredBase}/`;
+        return '/';
+    }
+
+    function appPath(path = '') {
+        const base = appBasePath().replace(/\/+$/, '');
+        const normalized = String(path || '').replace(/^\/+/, '');
+        return normalized ? `${base}/${normalized}`.replace(/^\/\//, '/') : `${base || '/'}`;
     }
 
     function loginUrl() {
-        return `${window.location.origin}${appBasePath()}pages/login.html`;
+        return `${window.location.origin}${appPath('pages/login.html')}`;
     }
 
     function pageLoginUrl() {
@@ -29,10 +33,13 @@
     }
 
     function apiUrl(path) {
+        if (window.FAMNavigation?.apiUrl) return window.FAMNavigation.apiUrl(path);
         if (/^https?:\/\//i.test(path)) return path;
-        if (path.startsWith('../api/')) return `${appBasePath()}api/${path.replace(/^\.\.\/api\//, '')}`;
         if (path.startsWith('/')) return path;
-        return `${appBasePath()}api/${path.replace(/^api\//, '')}`;
+        const normalized = String(path || '')
+            .replace(/^(\.\.\/|\.\/)+/, '')
+            .replace(/^api\/?/, '');
+        return appPath(`api/${normalized}`);
     }
 
     function updateCsrf(data) {
@@ -60,7 +67,7 @@
         }
         if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && csrfToken) headers.set('X-CSRF-Token', csrfToken);
         let response;
-        try { response = await fetch(url, init); }
+        try { response = await fetch(apiUrl(url), init); }
         catch (error) { throw new ApiError('Connection error. Please check the local server and try again.', { status: 0, cause: error }); }
         const text = await response.text();
         let payload = null;
@@ -350,6 +357,7 @@
         request,
         me,
         logout,
+        apiUrl,
         loginUrl,
         pageLoginUrl,
         clearAuthState,

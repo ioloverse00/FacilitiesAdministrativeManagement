@@ -444,14 +444,12 @@ function initAuthenticationPage() {
     const subsystem = params.get('subsystem');
     const isPagesRoute = window.location.pathname.includes('/pages/');
     const basePath = () => {
-        const path = window.location.pathname;
-        const pagesIndex = path.indexOf('/pages/');
-        if (pagesIndex >= 0) return path.slice(0, pagesIndex + 1);
-        const cleanRoutePattern = /\/(?:dashboard|facilities-reservation|visitor-management|contract-management|legal-management|document-management|records-retention|fam-administration|under-maintenance)\/?$/;
-        if (cleanRoutePattern.test(path)) return path.replace(cleanRoutePattern, '/');
-        return path.endsWith('/') ? path : path.replace(/[^/]*$/, '');
+        if (window.FAMNavigation?.appBasePath) return window.FAMNavigation.appBasePath();
+        const configuredBase = document.body?.dataset?.appBasePath;
+        if (configuredBase) return configuredBase.endsWith('/') ? configuredBase : `${configuredBase}/`;
+        return '/';
     };
-    const apiPrefix = isPagesRoute ? '../api/' : 'api/';
+    const apiPrefix = `${basePath()}api/`;
     const pagesPrefix = isPagesRoute ? '' : 'pages/';
 
     const userPortalClassification = user => {

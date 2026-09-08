@@ -27,20 +27,28 @@
         const configuredBase = document.body?.dataset?.appBasePath;
         if (configuredBase) return configuredBase.endsWith('/') ? configuredBase : `${configuredBase}/`;
 
-        const path = window.location.pathname;
-        const pagesIndex = path.indexOf('/pages/');
-        if (pagesIndex >= 0) return path.slice(0, pagesIndex + 1);
+        return '/';
+    }
 
-        const cleanRoutePattern = /\/(?:dashboard|facilities-reservation|visitor-management|contract-management|legal-management|document-management|records-retention|fam-administration|under-maintenance)\/?$/;
-        if (cleanRoutePattern.test(path)) return path.replace(cleanRoutePattern, '/');
+    function appPath(path = '') {
+        const base = appBasePath().replace(/\/+$/, '');
+        const normalized = String(path || '').replace(/^\/+/, '');
+        return normalized ? `${base}/${normalized}`.replace(/^\/\//, '/') : `${base || '/'}`;
+    }
 
-        return path.endsWith('/') ? path : path.replace(/[^/]*$/, '');
+    function apiUrl(path) {
+        if (/^https?:\/\//i.test(path)) return path;
+        const normalized = String(path || '')
+            .replace(/^\/+/, '')
+            .replace(/^(\.\.\/|\.\/)+/, '')
+            .replace(/^api\/?/, '');
+        return appPath(`api/${normalized}`);
     }
 
     function cleanHref(routeKey) {
         const route = cleanRouteMap[routeKey] || routeKey;
         if (!route) return appBasePath();
-        return `${appBasePath()}${route}`;
+        return appPath(route);
     }
 
     function applyCleanRouteLinks(root = document) {
@@ -79,6 +87,8 @@
         initializeActiveNavigation,
         applyCleanRouteLinks,
         cleanHref,
-        appBasePath
+        appBasePath,
+        appPath,
+        apiUrl
     };
 })();

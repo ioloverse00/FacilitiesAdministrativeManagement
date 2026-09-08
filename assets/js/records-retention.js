@@ -2,7 +2,7 @@
     const state = { page: 1, totalPages: 1, sort: 'disposition_date', direction: 'asc', options: {}, activeItem: null, activeRecommendation: null, analysisByRecord: {} };
     const qs = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const api = path => `${window.location.origin}${window.FAMNavigation?.appBasePath?.() || '/'}api/${path}`;
+    const api = path => window.FAMApi?.apiUrl?.(path) || window.FAMNavigation?.apiUrl?.(path) || `/api/${String(path || '').replace(/^api\//, '')}`;
     const can = permission => (window.FAMApi?.currentUser?.permissions || []).includes(permission);
 
     function moveToTopLayer(element) {
@@ -81,7 +81,7 @@
         if (schedule && schedule !== 'all') p.set('retention_schedule_id', schedule);
         if (status && status !== 'all') p.set('status', status);
         if (hold && hold !== 'all') p.set('legal_hold_status', hold);
-        return `../api/reports/export-csv.php?${p}`;
+        return api(`reports/export-csv.php?${p}`);
     }
 
     async function load() {

@@ -7,12 +7,7 @@
         const date = new Date(String(value || '').replace(' ', 'T'));
         return Number.isNaN(date.getTime()) ? 'Just now' : date.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
     };
-    const appBasePath = () => {
-        const marker = '/pages/';
-        const path = window.location.pathname;
-        const index = path.indexOf(marker);
-        return index >= 0 ? path.slice(0, index + 1) : path.replace(/[^/]*$/, '');
-    };
+    const apiUrl = path => window.FAMApi?.apiUrl?.(path) || window.FAMNavigation?.apiUrl?.(path) || `/api/${String(path || '').replace(/^api\//, '')}`;
     const href = item => item.related_entity_id && item.module_code === 'FACILITY_REQUESTS' ? `facility-requests.html?request=${encodeURIComponent(item.related_entity_id)}` : '#';
     const filtered = () => state.filter === 'unread' ? state.items.filter(item => !item.is_read) : state.filter === 'read' ? state.items.filter(item => item.is_read) : state.items;
 
@@ -66,7 +61,7 @@
         state.loading = !quiet;
         render();
         try {
-            const payload = await window.FAMApi.request(`${appBasePath()}api/notifications/index.php?per_page=50`);
+            const payload = await window.FAMApi.request(apiUrl('notifications/index.php?per_page=50'));
             state.items = payload.data?.items || [];
             state.unread = Number(payload.data?.unread_count || 0);
         } finally {
@@ -83,7 +78,7 @@
             render();
         }
         try {
-            await window.FAMApi.request(`${appBasePath()}api/notifications/mark-read.php?id=${encodeURIComponent(id)}`, { method: 'POST', body: {} });
+            await window.FAMApi.request(apiUrl(`notifications/mark-read.php?id=${encodeURIComponent(id)}`), { method: 'POST', body: {} });
         } catch {
             await load(true);
         }

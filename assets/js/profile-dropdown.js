@@ -72,15 +72,13 @@
     };
     const appBasePath = () => {
         if (window.FAMNavigation?.appBasePath) return window.FAMNavigation.appBasePath();
-        const marker = '/pages/';
-        const path = window.location.pathname;
-        const index = path.indexOf(marker);
-        if (index >= 0) return path.slice(0, index + 1);
-        return path.endsWith('/') ? path : path.replace(/[^/]*$/, '');
+        const configuredBase = document.body?.dataset?.appBasePath;
+        if (configuredBase) return configuredBase.endsWith('/') ? configuredBase : `${configuredBase}/`;
+        return '/';
     };
     const cleanHref = route => window.FAMNavigation?.cleanHref?.(route) || `${appBasePath()}${route}`;
     const underMaintenanceHref = () => cleanHref('under-maintenance');
-    const notificationApi = path => `${appBasePath()}api/notifications/${path}`;
+    const notificationApi = path => window.FAMNavigation?.apiUrl?.(`notifications/${path}`) || `/api/notifications/${String(path || '').replace(/^\/+/, '')}`;
     const isEmployeePortal = () => window.location.pathname.includes('/pages/employee/');
     const fmtTime = value => {
         if (!value) return 'Just now';
