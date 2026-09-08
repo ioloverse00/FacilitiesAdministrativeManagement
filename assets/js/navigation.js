@@ -66,7 +66,12 @@
     }
 
     function cleanHref(routeKey) {
-        const route = cleanRouteMap[routeKey] || routeKey;
+        const flatEmployeeAliases = {
+            'employee-tasks': 'employee/tasks',
+            'employee-facility-requests': 'employee/facility-requests',
+            'employee-room-reservations': 'employee/reservations'
+        };
+        const route = cleanRouteMap[routeKey] || flatEmployeeAliases[routeKey] || routeKey;
         if (!route) return appBasePath();
         return appPath(route);
     }

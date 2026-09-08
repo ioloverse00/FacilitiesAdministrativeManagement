@@ -1,4 +1,5 @@
 (function () {
+    const shellVersion = '20260909-flat-employee-route-fix';
     const componentPaths = {
         sidebar: 'components/employee/sidebar.html',
         header: 'components/employee/header.html',
@@ -21,7 +22,9 @@
     async function loadComponent(selector, path) {
         const target = document.querySelector(selector);
         if (!target) return;
-        const response = await fetch(window.FAMNavigation?.appPath?.(path) || path);
+        const url = new URL(window.FAMNavigation?.appPath?.(path) || path, window.location.href);
+        url.searchParams.set('v', shellVersion);
+        const response = await fetch(url.toString());
         if (!response.ok) throw new Error(`Failed to load component: ${path}`);
         target.innerHTML = await response.text();
     }
