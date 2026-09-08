@@ -10270,11 +10270,18 @@ col.table-col-actions { width: 4.75rem; }
 }
 .employee-header-actions,
 .employee-quick-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
-.employee-home-grid {
+.employee-home-grid,
+.employee-home-flow {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   gap: 0.85rem;
   align-items: start;
+}
+.employee-home-grid {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+}
+.employee-home-flow {
+  grid-template-columns: minmax(0, min(100%, 46rem));
+  justify-content: start;
 }
 .employee-home-panel {
   min-width: 0;
@@ -12079,6 +12086,10 @@ body.facility-drawer-open {
 
 .document-page-header .facility-header-actions {
   align-items: center;
+}
+.employee-attention-list .employee-empty-state {
+  min-height: 0;
+  padding: 0.75rem 0.85rem;
 }
 
 .records-primary-tabs {

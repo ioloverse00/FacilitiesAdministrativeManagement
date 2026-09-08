@@ -61,15 +61,9 @@
         } else if (reservation?.allowed_actions?.check_in) {
             items.push(attentionCard('how_to_reg', 'Check-in is open', `${reservation.room || 'Room reservation'} is ready for check-in.`, window.FAMEmployeePortal.routeHref('employee-room-reservations', { reservation: reservation.id }), 'Check In'));
         }
-        if (Number(counts.pending_reservations || 0) > 0) {
-            items.push(attentionCard('pending_actions', `${fmtCount(counts.pending_reservations)} pending room request${Number(counts.pending_reservations) === 1 ? '' : 's'}`, 'Waiting for admin review.', window.FAMEmployeePortal.routeHref('employee-room-reservations')));
-        }
-        if (Number(counts.unread_notifications || 0) > 0) {
-            items.push(attentionCard('notifications', `${fmtCount(counts.unread_notifications)} unread update${Number(counts.unread_notifications) === 1 ? '' : 's'}`, 'Review recent request and reservation changes.', window.FAMEmployeePortal.routeHref('employee-notifications'), 'View'));
-        }
         target.innerHTML = items.length
             ? items.slice(0, 4).join('')
-            : window.FAMEmployeePortal.emptyState('task_alt', 'All clear', 'Nothing needs your attention right now.');
+            : window.FAMEmployeePortal.emptyState('task_alt', "You're all caught up.", 'No items currently require your action.');
     }
 
     function fmt(value) {
