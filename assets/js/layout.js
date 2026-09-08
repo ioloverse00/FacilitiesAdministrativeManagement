@@ -126,7 +126,7 @@
             const persona = auth.user?.persona || {};
             if (persona.is_fam_portal_allowed !== true) {
                 if (persona.is_employee_portal_allowed === true) {
-                    window.location.replace(`${window.FAMNavigation?.appBasePath?.() || '../'}pages/employee/dashboard.html`);
+                    window.location.replace(window.FAMNavigation?.cleanHref?.('employee-dashboard') || `${window.FAMNavigation?.appBasePath?.() || '/'}employee/`);
                 } else {
                     window.location.replace(`${window.FAMNavigation?.appBasePath?.() || '../'}errors/403.html`);
                 }

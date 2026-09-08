@@ -9,7 +9,13 @@
         records: 'document-management',
         'records-retention': 'records-retention',
         settings: 'fam-administration',
-        'under-maintenance': 'under-maintenance'
+        'under-maintenance': 'under-maintenance',
+        'employee-dashboard': 'employee/',
+        'employee-tasks': 'employee/tasks',
+        'employee-facility-requests': 'employee/facility-requests',
+        'employee-room-reservations': 'employee/reservations',
+        'employee-notifications': 'employee/notifications',
+        'employee-profile': 'employee/profile'
     };
 
     const legacyPageMap = {
@@ -76,6 +82,10 @@
             return document.body.dataset.activeNav;
         }
 
+        const cleanPath = window.location.pathname.replace(appBasePath().replace(/\/+$/, ''), '').replace(/^\/+|\/+$/g, '');
+        if (cleanPath === 'employee') return 'employee-dashboard';
+        const employeeRouteEntry = Object.entries(cleanRouteMap).find(([key, route]) => key.startsWith('employee-') && route.replace(/\/+$/g, '') === cleanPath);
+        if (employeeRouteEntry) return employeeRouteEntry[0];
         const segment = window.location.pathname.split('/').filter(Boolean).pop() || 'dashboard';
         const routeEntry = Object.entries(cleanRouteMap).find(([, route]) => route === segment);
         if (routeEntry) return routeEntry[0];

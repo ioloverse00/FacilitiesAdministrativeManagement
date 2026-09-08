@@ -77,9 +77,14 @@
         return '/';
     };
     const cleanHref = route => window.FAMNavigation?.cleanHref?.(route) || `${appBasePath()}${route}`;
+    const employeeHref = (route, params = {}) => {
+        const base = cleanHref(route);
+        const query = new URLSearchParams(params).toString();
+        return query ? `${base}?${query}` : base;
+    };
     const underMaintenanceHref = () => cleanHref('under-maintenance');
     const notificationApi = path => window.FAMNavigation?.apiUrl?.(`notifications/${path}`) || `/api/notifications/${String(path || '').replace(/^\/+/, '')}`;
-    const isEmployeePortal = () => window.location.pathname.includes('/pages/employee/');
+    const isEmployeePortal = () => /\/(pages\/employee|employee)(\/|$)/.test(window.location.pathname);
     const fmtTime = value => {
         if (!value) return 'Just now';
         const date = new Date(String(value).replace(' ', 'T'));
@@ -90,10 +95,10 @@
         const url = String(item.action_url || '').trim();
         if (/^https?:\/\//i.test(url) || url.startsWith('/')) return url;
         if (isEmployeePortal() && item.module_code === 'FACILITY_REQUESTS' && item.related_entity_id) {
-            return `facility-requests.html?request=${encodeURIComponent(item.related_entity_id)}`;
+            return employeeHref('employee-facility-requests', { request: item.related_entity_id });
         }
         if (isEmployeePortal() && item.module_code === 'RESERVATIONS' && item.related_entity_id) {
-            return `room-reservations.html?reservation=${encodeURIComponent(item.related_entity_id)}`;
+            return employeeHref('employee-room-reservations', { reservation: item.related_entity_id });
         }
         if (url.startsWith('pages/')) return `${appBasePath()}${url}`;
         return url || '#';

@@ -1,8 +1,8 @@
 (function () {
     const componentPaths = {
-        sidebar: '../../components/employee/sidebar.html',
-        header: '../../components/employee/header.html',
-        footer: '../../components/employee/footer.html'
+        sidebar: 'components/employee/sidebar.html',
+        header: 'components/employee/header.html',
+        footer: 'components/employee/footer.html'
     };
 
     let contextPromise = null;
@@ -21,7 +21,7 @@
     async function loadComponent(selector, path) {
         const target = document.querySelector(selector);
         if (!target) return;
-        const response = await fetch(path);
+        const response = await fetch(window.FAMNavigation?.appPath?.(path) || path);
         if (!response.ok) throw new Error(`Failed to load component: ${path}`);
         target.innerHTML = await response.text();
     }
@@ -40,13 +40,12 @@
     }
 
     function renderChromeContext(context) {
-        const department = text(context.department?.name || context.department?.code, 'Department not available');
         const name = text(context.full_name, context.username || 'Employee');
         const position = text(context.position, 'Employee');
         const email = text(context.email, context.username || '');
         const avatar = initials(name).toUpperCase();
         const values = {
-            'employee-header-department': department,
+            'employee-header-department': 'Facilities & Administrative Services',
             'employee-header-name': name,
             'employee-header-position': position,
             'employee-header-avatar': avatar,
@@ -79,7 +78,7 @@
 
     async function context() {
         if (!contextPromise) {
-            contextPromise = window.FAMApi.request('../../api/employee/context.php')
+            contextPromise = window.FAMApi.request('employee/context.php')
                 .then(payload => payload.data?.context || null);
         }
         return contextPromise;
@@ -87,7 +86,7 @@
 
     async function dashboard() {
         if (!dashboardPromise) {
-            dashboardPromise = window.FAMApi.request('../../api/employee/dashboard.php')
+            dashboardPromise = window.FAMApi.request('employee/dashboard.php')
                 .then(payload => payload.data?.dashboard || null);
         }
         return dashboardPromise;
@@ -102,6 +101,16 @@
                 ${action ? `<div class="employee-empty-action">${action}</div>` : ''}
             </div>
         `;
+    }
+
+    function routeHref(routeKey, params = {}) {
+        const href = window.FAMNavigation?.cleanHref?.(routeKey) || routeKey;
+        const query = new URLSearchParams();
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') query.set(key, value);
+        });
+        const qs = query.toString();
+        return qs ? `${href}?${qs}` : href;
     }
 
     async function initializeLayout() {
@@ -141,6 +150,7 @@
         context,
         dashboard,
         emptyState,
+        routeHref,
         text
     };
 })();

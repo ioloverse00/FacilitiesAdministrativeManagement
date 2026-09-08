@@ -22,7 +22,7 @@
     };
 
     function api(path) {
-        return `../../api/employee/approvals/${path}`;
+        return `employee/approvals/${path}`;
     }
 
     function badge(status) {

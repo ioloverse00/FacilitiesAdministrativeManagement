@@ -3,9 +3,12 @@
         <button id="desktop-sidebar-toggle" type="button" class="flex items-center justify-center p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low focus:outline-none transition border border-outline-variant/30 shrink-0 min-w-[2.5rem] min-h-[2.5rem]" title="Close Sidebar" aria-label="Toggle employee navigation" aria-controls="app-sidebar" aria-expanded="true">
             <span class="material-symbols-outlined text-xl" id="sidebar-toggle-icon" aria-hidden="true">menu_open</span>
         </button>
+        <a class="employee-header-compact-brand hidden" href="../employee/" data-clean-route="employee-dashboard" data-sidebar-compact-logo aria-label="Employee Portal home" title="Employee Portal">
+            <img src="../assets/logo-icon.svg" alt="">
+        </a>
         <div class="hidden sm:block">
             <p id="employee-header-page" class="text-sm font-semibold text-on-surface">Employee Portal</p>
-            <p id="employee-header-department" class="text-xs text-on-surface-variant">Loading department...</p>
+            <p id="employee-header-department" class="text-xs text-on-surface-variant">Facilities &amp; Administrative Services</p>
         </div>
     </div>
 
@@ -24,7 +27,7 @@
                     </div>
                     <div class="notification-panel-actions">
                         <button type="button" id="notification-mark-all-read">Mark all as read</button>
-                        <a href="notifications.html">View All</a>
+                        <a href="../employee/notifications" data-clean-route="employee-notifications">View All</a>
                     </div>
                 </div>
                 <input id="notification-search-hook" class="sr-only" type="search" aria-label="Search notifications" tabindex="-1" data-future-filter="search">
@@ -55,7 +58,7 @@
                 <div class="px-4 py-2 hidden md:block">
                     <p class="text-xs font-medium text-on-surface-variant uppercase tracking-wider">Account</p>
                 </div>
-                <a href="profile.html" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
+                <a href="../employee/profile" data-clean-route="employee-profile" class="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-low hover:text-primary transition-colors" role="menuitem">
                     <span class="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">person</span>
                     <span class="font-medium">My Profile</span>
                 </a>

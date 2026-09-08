@@ -465,7 +465,7 @@ function initAuthenticationPage() {
 
     const defaultPortalPath = user => {
         const classification = userPortalClassification(user);
-        if (classification.portal === 'employee') return `${pagesPrefix}employee/dashboard.html`;
+        if (classification.portal === 'employee') return `${basePath()}employee/`;
         if (classification.portal === 'fam') return `${basePath()}dashboard`;
         return `${pagesPrefix}login.html`;
     };
@@ -482,7 +482,7 @@ function initAuthenticationPage() {
         }
     };
 
-    const isEmployeePortalPath = path => /(^|\/)pages\/employee\//.test(path) || /^employee\//.test(path);
+    const isEmployeePortalPath = path => /(^|\/)pages\/employee\//.test(path) || /(^|\/)employee(\/|$)/.test(path);
 
     const isFamPortalPath = path => {
         if (isEmployeePortalPath(path)) return false;
@@ -494,9 +494,7 @@ function initAuthenticationPage() {
     const localRedirectPath = path => {
         const normalized = normalizeNextPath(path);
         if (!normalized) return null;
-        const pagesIndex = normalized.indexOf('/pages/');
-        if (pagesIndex >= 0) return normalized.slice(pagesIndex + 1);
-        return normalized.replace(/^\/+/, '');
+        return normalized;
     };
 
     const redirectPathAfterLogin = user => {

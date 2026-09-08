@@ -13,7 +13,7 @@
         if (value < 1048576) return `${Math.ceil(value / 1024)} KB`;
         return `${(value / 1048576).toFixed(value < 10485760 ? 1 : 0)} MB`;
     };
-    const api = path => `../../api/employee/reservations/${path}`;
+    const api = path => `employee/reservations/${path}`;
     const isoDate = value => {
         const d = toDate(value);
         if (!d || Number.isNaN(d.getTime())) return '';

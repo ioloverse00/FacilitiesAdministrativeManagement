@@ -1,5 +1,5 @@
 (function () {
-    const api = path => `../../api/employee/facility-requests/${path}`;
+    const api = path => `employee/facility-requests/${path}`;
     const qs = selector => document.querySelector(selector);
     const qsa = selector => Array.from(document.querySelectorAll(selector));
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

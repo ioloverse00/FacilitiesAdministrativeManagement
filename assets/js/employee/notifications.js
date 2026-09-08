@@ -25,19 +25,24 @@
     };
 
     function api(path) {
-        return `../../api/${path}`;
+        return path;
     }
 
     function href(item) {
+        const routeHref = window.FAMEmployeePortal?.routeHref || ((route, params = {}) => {
+            const base = window.FAMNavigation?.cleanHref?.(route) || '#';
+            const query = new URLSearchParams(params).toString();
+            return query ? `${base}?${query}` : base;
+        });
         if (item.module_code === 'RESERVATIONS' || item.related_entity_type === 'facility_reservation' || String(item.action_url || '').includes('employee/room-reservations.html')) {
-            return item.related_entity_id ? `room-reservations.html?reservation=${encodeURIComponent(item.related_entity_id)}` : 'room-reservations.html';
+            return routeHref('employee-room-reservations', { reservation: item.related_entity_id });
         }
         if (item.module_code === 'FACILITY_REQUESTS' || item.related_entity_type === 'facility_request' || String(item.action_url || '').includes('employee/facility-requests.html')) {
-            return item.related_entity_id ? `facility-requests.html?request=${encodeURIComponent(item.related_entity_id)}` : 'facility-requests.html';
+            return routeHref('employee-facility-requests', { request: item.related_entity_id });
         }
         if (item.module_code === 'contract_management' || item.related_entity_type === 'contract' || String(item.action_url || '').includes('employee/approvals.html') || String(item.action_url || '').includes('employee/tasks.html')) {
             const taskId = item.metadata?.workflow_task_id || '';
-            return taskId ? `tasks.html?task=${encodeURIComponent(taskId)}` : 'tasks.html';
+            return routeHref('employee-tasks', { task: taskId });
         }
         return '#';
     }

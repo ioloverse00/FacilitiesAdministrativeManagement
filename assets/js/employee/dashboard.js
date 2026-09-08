@@ -52,20 +52,20 @@
                 'task_alt',
                 taskLabel(first),
                 taskCopy(first),
-                `tasks.html?task=${encodeURIComponent(first.task_id)}`,
+                window.FAMEmployeePortal.routeHref('employee-tasks', { task: first.task_id }),
                 'Review Task'
             ));
         }
         if (reservation?.allowed_actions?.check_out) {
-            items.push(attentionCard('logout', 'Room is checked in', `${reservation.room || 'Room reservation'} is active.`, `room-reservations.html?reservation=${encodeURIComponent(reservation.id)}`, 'Check Out'));
+            items.push(attentionCard('logout', 'Room is checked in', `${reservation.room || 'Room reservation'} is active.`, window.FAMEmployeePortal.routeHref('employee-room-reservations', { reservation: reservation.id }), 'Check Out'));
         } else if (reservation?.allowed_actions?.check_in) {
-            items.push(attentionCard('how_to_reg', 'Check-in is open', `${reservation.room || 'Room reservation'} is ready for check-in.`, `room-reservations.html?reservation=${encodeURIComponent(reservation.id)}`, 'Check In'));
+            items.push(attentionCard('how_to_reg', 'Check-in is open', `${reservation.room || 'Room reservation'} is ready for check-in.`, window.FAMEmployeePortal.routeHref('employee-room-reservations', { reservation: reservation.id }), 'Check In'));
         }
         if (Number(counts.pending_reservations || 0) > 0) {
-            items.push(attentionCard('pending_actions', `${fmtCount(counts.pending_reservations)} pending room request${Number(counts.pending_reservations) === 1 ? '' : 's'}`, 'Waiting for admin review.', 'room-reservations.html'));
+            items.push(attentionCard('pending_actions', `${fmtCount(counts.pending_reservations)} pending room request${Number(counts.pending_reservations) === 1 ? '' : 's'}`, 'Waiting for admin review.', window.FAMEmployeePortal.routeHref('employee-room-reservations')));
         }
         if (Number(counts.unread_notifications || 0) > 0) {
-            items.push(attentionCard('notifications', `${fmtCount(counts.unread_notifications)} unread update${Number(counts.unread_notifications) === 1 ? '' : 's'}`, 'Review recent request and reservation changes.', 'notifications.html', 'View'));
+            items.push(attentionCard('notifications', `${fmtCount(counts.unread_notifications)} unread update${Number(counts.unread_notifications) === 1 ? '' : 's'}`, 'Review recent request and reservation changes.', window.FAMEmployeePortal.routeHref('employee-notifications'), 'View'));
         }
         target.innerHTML = items.length
             ? items.slice(0, 4).join('')
@@ -150,9 +150,9 @@
         }
         const helper = checkInMessage(item);
         const actions = [
-            item.allowed_actions?.check_in ? `<a class="btn-primary dashboard-action-button" href="room-reservations.html?reservation=${encodeURIComponent(item.id)}">Check In</a>` : '',
-            item.allowed_actions?.check_out ? `<a class="btn-primary dashboard-action-button" href="room-reservations.html?reservation=${encodeURIComponent(item.id)}">Check Out</a>` : '',
-            `<a class="btn-secondary dashboard-action-button" href="room-reservations.html?reservation=${encodeURIComponent(item.id)}">View Details</a>`
+            item.allowed_actions?.check_in ? `<a class="btn-primary dashboard-action-button" href="${esc(window.FAMEmployeePortal.routeHref('employee-room-reservations', { reservation: item.id }))}">Check In</a>` : '',
+            item.allowed_actions?.check_out ? `<a class="btn-primary dashboard-action-button" href="${esc(window.FAMEmployeePortal.routeHref('employee-room-reservations', { reservation: item.id }))}">Check Out</a>` : '',
+            `<a class="btn-secondary dashboard-action-button" href="${esc(window.FAMEmployeePortal.routeHref('employee-room-reservations', { reservation: item.id }))}">View Details</a>`
         ].filter(Boolean).join('');
         target.innerHTML = `
             <article class="fam-card employee-next-card">
@@ -179,7 +179,7 @@
             return;
         }
         const itemHref = item => {
-            if (item.entity_type === 'facility_reservation') return `room-reservations.html?reservation=${encodeURIComponent(item.entity_id)}`;
+            if (item.entity_type === 'facility_reservation') return window.FAMEmployeePortal.routeHref('employee-room-reservations', { reservation: item.entity_id });
             return '';
         };
         activity.innerHTML = `
@@ -203,7 +203,7 @@
         const context = await window.FAMEmployeePortal.context();
         const [dashboard, reservations] = await Promise.all([
             window.FAMEmployeePortal.dashboard(),
-            window.FAMApi.request('../../api/employee/reservations/list.php?per_page=12')
+            window.FAMApi.request('employee/reservations/list.php?per_page=12')
         ]);
         document.getElementById('employee-welcome-name').textContent = window.FAMEmployeePortal.text(context?.full_name, 'Employee');
         document.getElementById('employee-welcome-department').textContent = window.FAMEmployeePortal.text(context?.department?.name || context?.department?.code, 'Department not available');
