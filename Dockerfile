@@ -2,20 +2,15 @@ FROM composer:2 AS composer
 
 FROM php:8.2-apache
 
-# Install system dependencies + compile PHP extensions in parallel
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        libcurl4-openssl-dev \
-        libonig-dev \
-        libzip-dev \
-        unzip \
-    && docker-php-ext-install -j$(nproc) \
-        curl \
-        mbstring \
-        pdo_mysql \
-        zip \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Install PHP extensions
+COPY --from=mlocati/php-extension-installer:latest \
+    /usr/bin/install-php-extensions \
+    /usr/local/bin/
+
+RUN install-php-extensions \
+    mbstring \
+    pdo_mysql \
+    zip
 
 # Apache configuration
 RUN a2enmod rewrite \
@@ -25,11 +20,11 @@ RUN a2enmod rewrite \
 
 WORKDIR /var/www/html
 
+# Copy Composer
+COPY --from=composer /usr/bin/composer /usr/bin/composer
+
 # Copy application
 COPY . /var/www/html/
-
-# Copy Composer from official Composer image
-COPY --from=composer /usr/bin/composer /usr/bin/composer
 
 # Install production dependencies and prepare writable directories
 RUN composer install \
