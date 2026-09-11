@@ -90,6 +90,53 @@
                             </div>
                         </section>
 
+                        <section class="facility-section reservation-records-section" aria-labelledby="reservation-records-title">
+                            <div class="fam-section-heading">
+                                <div>
+                                    <h2 id="reservation-records-title">Reservation Records</h2>
+                                    <p class="fam-muted">Reservations within the currently selected calendar period.</p>
+                                </div>
+                                <span id="reservation-table-count" class="facility-table-count">No reservation records</span>
+                            </div>
+                            <div class="facility-table-card">
+                                <div id="reservation-loading-state" class="fam-state hidden" aria-live="polite" role="status">
+                                    <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
+                                    <span>Loading reservation records...</span>
+                                </div>
+                                <div id="reservation-empty-state" class="fam-state hidden" aria-live="polite"></div>
+                                <div class="facility-table-scroll">
+                                    <table class="reservation-table">
+                                        <colgroup>
+                                            <col class="table-col-reference">
+                                            <col class="table-col-datetime">
+                                            <col class="table-col-location">
+                                            <col class="table-col-requester">
+                                            <col class="table-col-subject">
+                                            <col class="table-col-status">
+                                            <col class="table-col-actions">
+                                        </colgroup>
+                                        <thead>
+                                            <tr>
+                                                <th><button type="button" class="facility-sort-button" data-sort="reservation_number">Reservation No.</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="start_datetime">Date &amp; Time</button></th>
+                                                <th>Facility / Room</th>
+                                                <th>Requested By</th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="purpose">Purpose</button></th>
+                                                <th><button type="button" class="facility-sort-button" data-sort="status">Status</button></th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="reservation-table"></tbody>
+                                    </table>
+                                </div>
+                                <div class="facility-pagination hidden" aria-label="Reservation records pagination">
+                                    <button id="reservation-prev-page" class="facility-page-button" type="button">Previous</button>
+                                    <span id="reservation-page-status">Page 1 of 1</span>
+                                    <button id="reservation-next-page" class="facility-page-button" type="button">Next</button>
+                                </div>
+                            </div>
+                        </section>
+
                         <section class="facility-section reservation-operations-section" aria-labelledby="reservation-operations-title">
                             <div class="fam-section-heading">
                                 <div>

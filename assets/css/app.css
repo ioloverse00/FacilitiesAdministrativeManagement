@@ -5401,7 +5401,7 @@ div[role="group"] button:active {
 
 .reservation-table th:nth-child(5),
 .reservation-table td:nth-child(5) {
-  min-width: 9rem;
+  min-width: 13rem;
 }
 
 .reservation-table th:nth-child(6),
@@ -5410,14 +5410,7 @@ div[role="group"] button:active {
 }
 
 .reservation-table th:nth-child(7),
-.reservation-table td:nth-child(7),
-.reservation-table th:nth-child(8),
-.reservation-table td:nth-child(8) {
-  min-width: 8rem;
-}
-
-.reservation-table th:nth-child(9),
-.reservation-table td:nth-child(9) {
+.reservation-table td:nth-child(7) {
   width: 4.5rem;
   min-width: 4.5rem;
   max-width: 4.5rem;
@@ -6981,17 +6974,15 @@ div[role="group"] button:active {
   }
 
   .reservation-table {
-    min-width: 700px;
+    min-width: 620px;
   }
 
   .reservation-table th:nth-child(3),
   .reservation-table td:nth-child(3),
+  .reservation-table th:nth-child(4),
+  .reservation-table td:nth-child(4),
   .reservation-table th:nth-child(5),
-  .reservation-table td:nth-child(5),
-  .reservation-table th:nth-child(6),
-  .reservation-table td:nth-child(6),
-  .reservation-table th:nth-child(7),
-  .reservation-table td:nth-child(7) {
+  .reservation-table td:nth-child(5) {
     display: none;
   }
 
@@ -7005,19 +6996,13 @@ div[role="group"] button:active {
     width: 16rem;
   }
 
-  .reservation-table th:nth-child(4),
-  .reservation-table td:nth-child(4) {
-    width: 10rem;
-  }
-
-  .reservation-table th:nth-child(8),
-  .reservation-table td:nth-child(8) {
-    display: table-cell;
+  .reservation-table th:nth-child(6),
+  .reservation-table td:nth-child(6) {
     width: 8rem;
   }
 
-  .reservation-table th:nth-child(9),
-  .reservation-table td:nth-child(9) {
+  .reservation-table th:nth-child(7),
+  .reservation-table td:nth-child(7) {
     width: 4rem;
   }
 

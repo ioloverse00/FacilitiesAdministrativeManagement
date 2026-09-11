@@ -42,11 +42,11 @@ final class ReservationService
 
     public function __construct(private readonly PDO $pdo) {}
 
-    public function list(array $query): array
+    public function list(array $query, int $maxPerPage = 100): array
     {
         $this->reconcileExpiredApprovedReservations();
         $page = max(1, (int) ($query['page'] ?? 1));
-        $perPage = min(100, max(1, (int) ($query['per_page'] ?? 10)));
+        $perPage = min(max(1, $maxPerPage), max(1, (int) ($query['per_page'] ?? 10)));
         $sortMap = ['reservation_number'=>'r.reservation_number','purpose'=>'r.purpose','start_datetime'=>'r.start_datetime','status'=>'r.status','approval_status'=>'r.approval_status','created_at'=>'r.created_at'];
         $sort = (string) ($query['sort'] ?? 'start_datetime');
         $direction = strtolower((string) ($query['direction'] ?? 'asc')) === 'desc' ? 'DESC' : 'ASC';
@@ -80,7 +80,8 @@ final class ReservationService
 
     public function calendar(array $query): array
     {
-        return ['items'=>$this->list(array_merge($query, ['per_page'=>200,'sort'=>'start_datetime','direction'=>'asc']))['items']];
+        $result = $this->list(array_merge($query, ['per_page'=>1000,'sort'=>'start_datetime','direction'=>'asc']), 1000);
+        return ['items'=>$result['items'], 'pagination'=>$result['pagination']];
     }
 
     public function options(): array
@@ -552,8 +553,8 @@ final class ReservationService
         if (isset($q['id']) && ctype_digit((string)$q['id'])) { $where[]='r.facility_reservation_id=:id'; $params['id']=(int)$q['id']; }
         if (($q['search'] ?? '') !== '') { $where[]='(r.reservation_number LIKE :search OR r.purpose LIKE :search OR fs.space_name LIKE :search OR e.full_name LIKE :search OR d.department_name LIKE :search)'; $params['search']='%'.trim((string)$q['search']).'%'; }
         foreach (['status'=>'r.status','approval_status'=>'r.approval_status','facility_space_id'=>'r.facility_space_id','building_id'=>'b.building_id','requested_by'=>'r.requested_by_employee_reference_id'] as $key=>$column) if (($q[$key] ?? '') !== '' && ($q[$key] ?? 'all') !== 'all') { $where[]="$column=:$key"; $params[$key]=$q[$key]; }
-        if (($q['date_from'] ?? '') !== '') { $where[]='r.start_datetime>=:date_from'; $params['date_from']=$this->dateTime((string)$q['date_from']); }
-        if (($q['date_to'] ?? '') !== '') { $where[]='r.start_datetime<=:date_to'; $params['date_to']=$this->dateTime((string)$q['date_to']); }
+        if (($q['date_from'] ?? '') !== '') { $where[]='(r.end_datetime IS NULL OR r.end_datetime>=:date_from)'; $params['date_from']=$this->dateTime((string)$q['date_from']); }
+        if (($q['date_to'] ?? '') !== '') { $where[]='r.start_datetime<:date_to'; $params['date_to']=$this->dateTime((string)$q['date_to']); }
         return [' WHERE '.implode(' AND ', $where), $params];
     }
 

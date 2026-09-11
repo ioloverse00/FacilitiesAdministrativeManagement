@@ -119,9 +119,7 @@
 
     function renderCalendar() {
         const panel = qs('reservation-calendar-panel'), r = range(), grouped = new Map();
-        const visible = state.status === 'all'
-            ? state.events.filter(event => ['SUBMITTED','APPROVED','CHECKED_IN','COMPLETED'].includes(String(event.status || '').toUpperCase()))
-            : state.events;
+        const visible = state.events;
         renderToolbar();
         visible.forEach(event => {
             const start = toDate(event.start);
@@ -142,7 +140,7 @@
                 return `<section class="reservation-agenda-day ${sameDay(day, new Date()) ? 'today' : ''}"><header><span>${esc(day.toLocaleDateString(undefined, { weekday: 'short' }))}</span><strong>${esc(day.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</strong></header><div>${items.length ? items.map(item => eventButton(item)).join('') : '<p>No reservations scheduled.</p>'}</div></section>`;
             }).join('')}</div>`;
         }
-        qs('reservation-calendar-message').textContent = visible.length ? `${visible.length} operational reservation${visible.length === 1 ? '' : 's'} scheduled for this period.` : 'No operational reservations scheduled for this period.';
+        qs('reservation-calendar-message').textContent = visible.length ? `${visible.length} reservation${visible.length === 1 ? '' : 's'} found for this period.` : 'No reservations found for this period.';
     }
 
     function focusRow(event) {
@@ -182,14 +180,14 @@
             return;
         }
         empty.classList.add('hidden');
-        pager.classList.remove('hidden');
         const pages = Math.max(1, Number(state.pagination.total_pages || 1));
+        pager.classList.toggle('hidden', pages <= 1);
         qs('reservation-page-status').textContent = `Page ${state.page} of ${pages}`;
         qs('reservation-prev-page').disabled = state.page <= 1;
         qs('reservation-next-page').disabled = state.page >= pages;
         body.innerHTML = state.rows.map(row => {
             const actions = `<button type="button" role="menuitem" data-open-reservation-details="${esc(row.id)}">View Details</button>`;
-            return `<tr><td class="facility-request-number">${trunc(row.reservationNo, 'table-cell-primary')}</td><td><div class="facility-subject-cell table-cell-stack">${trunc(title(row.reservationType || 'Reservation'), 'table-cell-primary')}${trunc(`${row.attendees || 0} attendees`, 'table-cell-secondary')}</div></td><td>${trunc(row.room || 'Not assigned')}</td><td class="facility-date-cell">${trunc(fmtDateTime(row.start))}</td><td>${badge(row.status)}</td><td class="facility-actions-cell"><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-reservation-menu="${esc(row.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${esc(row.reservationNo)}">&#8942;</button><div class="facility-action-dropdown hidden" data-reservation-menu-panel="${esc(row.id)}" role="menu">${actions}</div></div></td></tr>`;
+            return `<tr><td class="facility-request-number"><button type="button" class="facility-link-button" data-open-reservation-details="${esc(row.id)}">${trunc(row.reservationNo, 'table-cell-primary')}</button></td><td class="facility-date-cell">${trunc(`${fmtDateTime(row.start)} - ${fmtTime(row.end)}`)}</td><td>${trunc(row.room || 'Not assigned')}</td><td>${trunc(row.requester || 'Requester unavailable')}</td><td><div class="facility-subject-cell table-cell-stack">${trunc(row.purpose || title(row.reservationType || 'Reservation'), 'table-cell-primary')}${trunc(title(row.reservationType || 'Reservation'), 'table-cell-secondary')}</div></td><td>${badge(row.status)}</td><td class="facility-actions-cell"><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-reservation-menu="${esc(row.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${esc(row.reservationNo)}">&#8942;</button><div class="facility-action-dropdown hidden" data-reservation-menu-panel="${esc(row.id)}" role="menu">${actions}</div></div></td></tr>`;
         }).join('');
         window.FAMTableAudit?.check(body.closest('table'), 'reservation-table');
     }
@@ -346,7 +344,10 @@
             renderList();
         }
     }
-    async function refreshAll() { renderToolbar(); await loadCalendar(); }
+    async function refreshAll() {
+        renderToolbar();
+        await Promise.all([loadCalendar(), loadList()]);
+    }
     async function processReservation(action, id) {
         const body = {};
         if (['reject','cancel','no-show'].includes(action)) {
