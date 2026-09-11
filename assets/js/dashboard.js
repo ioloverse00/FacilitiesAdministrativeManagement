@@ -51,6 +51,11 @@
     }
 
     function setLoading() {
+        const updated = document.getElementById('dashboard-last-updated');
+        if (updated) {
+            updated.hidden = true;
+            updated.textContent = '';
+        }
         const kpis = document.getElementById('dashboard-kpis');
         if (kpis) {
             kpis.setAttribute('aria-busy', 'true');
@@ -227,7 +232,11 @@
         if (initial) setLoading();
         try {
             const data = await service.getDashboardPayload();
-            document.getElementById('dashboard-last-updated').textContent = formatUpdatedAt(data.generatedAt);
+            const updated = document.getElementById('dashboard-last-updated');
+            if (updated) {
+                updated.textContent = formatUpdatedAt(data.generatedAt);
+                updated.hidden = false;
+            }
             renderKpis(data.kpis);
             renderCharts(data.charts);
             renderTodaySchedule(data.todaySchedule);
@@ -244,17 +253,27 @@
                 container.removeAttribute('aria-busy');
                 container.innerHTML = stateMessage('Unable to load dashboard activity.', 'error');
             });
+            const updated = document.getElementById('dashboard-last-updated');
+            if (updated) {
+                updated.textContent = 'Last updated unavailable';
+                updated.hidden = false;
+            }
         } finally {
             refresh?.removeAttribute('aria-busy');
             refresh?.removeAttribute('disabled');
         }
     }
 
-    document.addEventListener('fam:layout-ready', () => {
+    function bindDashboard() {
+        if (document.body.dataset.dashboardInitialized === 'true') return;
+        document.body.dataset.dashboardInitialized = 'true';
         initializeDashboard();
         document.getElementById('dashboard-refresh')?.addEventListener('click', initializeDashboard);
         window.addEventListener('fam:themechange', initializeDashboard);
-    });
+    }
+
+    document.addEventListener('fam:shell-ready', bindDashboard);
+    document.addEventListener('fam:layout-ready', bindDashboard);
 })();
 
 

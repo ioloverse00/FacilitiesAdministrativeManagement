@@ -1848,6 +1848,26 @@ button, label[for^="filter-"] {
   min-height: 0;
 }
 
+body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-sidebar-slot {
+  width: 16rem;
+  flex-basis: 16rem;
+}
+
+body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-sidebar-slot:empty {
+  border-right: 1px solid var(--outline-variant, #e2e8f0);
+  background: var(--surface, #fff);
+}
+
+body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-sidebar-slot:empty::before {
+  content: '';
+  display: block;
+  width: 9.25rem;
+  height: 2.25rem;
+  margin: 0.85rem auto;
+  border-radius: var(--radius-md, 0.75rem);
+  background: rgba(148, 163, 184, 0.16);
+}
+
 .app-main-panel {
   display: flex;
   min-width: 0;
@@ -1860,6 +1880,12 @@ button, label[for^="filter-"] {
 #app-header-slot {
   position: relative;
   z-index: 100;
+}
+
+body.app-body:not(.employee-portal-body):not(.fam-shell-ready) #app-header-slot {
+  min-height: 4rem;
+  border-bottom: 1px solid var(--outline-variant, #e2e8f0);
+  background: color-mix(in srgb, var(--surface, #fff) 82%, transparent);
 }
 
 .app-main {
@@ -1883,14 +1909,49 @@ button, label[for^="filter-"] {
   padding: 1.5rem;
 }
 
+body.app-body:not(.employee-portal-body):not(.fam-shell-ready) #page-content {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-main::before {
+  content: 'Loading application...';
+  display: grid;
+  min-height: 14rem;
+  place-items: center;
+  padding: 2rem;
+  color: var(--text-muted, #64748b);
+  font: 500 0.875rem/1.4 var(--font-body, system-ui, sans-serif);
+}
+
 .app-footer-slot {
   flex-shrink: 0;
   margin-top: auto;
   padding-inline: 1.5rem;
 }
 
+body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-footer-slot {
+  min-height: 4.5rem;
+}
+
 .app-footer {
   margin-top: 0;
+}
+
+@media (max-width: 767px) {
+  body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-sidebar-slot {
+    width: 0;
+    flex-basis: 0;
+  }
+
+  body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-sidebar-slot:empty {
+    border-right: 0;
+  }
+
+  body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-sidebar-slot:empty::before {
+    display: none;
+  }
 }
 
 @media (min-width: 768px) {

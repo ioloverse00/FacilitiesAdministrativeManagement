@@ -1,15 +1,20 @@
 ﻿(function () {
     const componentPaths = {
-        sidebar: `${window.FAMNavigation?.appBasePath?.() || '../'}components/sidebar.html`,
-        header: `${window.FAMNavigation?.appBasePath?.() || '../'}components/header.html`,
-        footer: `${window.FAMNavigation?.appBasePath?.() || '../'}components/footer.html`
+        sidebar: 'components/sidebar.html',
+        header: 'components/header.html',
+        footer: 'components/footer.html'
     };
+
+    function appPath(path) {
+        if (window.FAMNavigation?.appPath) return window.FAMNavigation.appPath(path);
+        return `${window.FAMNavigation?.appBasePath?.() || '../'}${path}`;
+    }
 
     async function loadComponent(selector, path) {
         const target = document.querySelector(selector);
         if (!target) return;
 
-        const response = await fetch(path);
+        const response = await fetch(appPath(path));
         if (!response.ok) {
             throw new Error(`Failed to load component: ${path}`);
         }
@@ -44,6 +49,24 @@
         window.location.replace(`${window.FAMNavigation?.appBasePath?.() || '../'}errors/403.html`);
         return false;
     }
+
+    function markShellReady() {
+        const body = document.body;
+        if (!body || body.classList.contains('fam-shell-ready')) return;
+        document.dispatchEvent(new CustomEvent('fam:shell-ready'));
+        requestAnimationFrame(() => {
+            body.classList.remove('fam-shell-loading');
+            body.classList.add('fam-shell-ready');
+        });
+    }
+
+    function markShellFailed() {
+        const body = document.body;
+        if (!body) return;
+        body.classList.remove('fam-shell-loading');
+        body.classList.add('fam-shell-ready', 'fam-shell-failed');
+    }
+
     function applyPageMetadata() {
         const config = window.pageConfig || {};
         const title = config.title || document.body.dataset.pageTitle;
@@ -143,11 +166,10 @@
     }
     async function initializeLayout() {
         try {
+            document.body?.classList.add('fam-shell-loading');
             await ensureApiClient();
             if (!await verifyProtectedSession()) return;
             if (!enforcePagePermission()) return;
-            await ensureDetailsModal();
-            await ensureLiveModule();
 
             await Promise.all([
                 loadComponent('#app-sidebar-slot', componentPaths.sidebar),
@@ -161,9 +183,15 @@
             window.FAMSidebar?.initializeSidebar();
             window.FAMProfileDropdown?.initializeProfileDropdown();
             window.FAMModal?.initializeModals();
+            markShellReady();
+            await Promise.all([
+                ensureDetailsModal(),
+                ensureLiveModule()
+            ]);
             document.dispatchEvent(new CustomEvent('fam:layout-ready'));
         } catch (error) {
             console.error(error);
+            markShellFailed();
             const content = document.getElementById('app-content');
             if (content) {
                 content.insertAdjacentHTML('afterbegin', '<div class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Shared layout components could not be loaded. Serve this project through a local web server instead of opening the file directly.</div>');
