@@ -1,5 +1,5 @@
 (function () {
-    const shellVersion = '20260909-flat-employee-route-fix';
+    const shellVersion = '20260911-corporate-footer';
     const componentPaths = {
         sidebar: 'components/employee/sidebar.html',
         header: 'components/employee/header.html',

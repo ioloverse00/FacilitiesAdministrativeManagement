@@ -1,4 +1,5 @@
-﻿(function () {
+(function () {
+    const shellVersion = '20260911-corporate-footer';
     const componentPaths = {
         sidebar: 'components/sidebar.html',
         header: 'components/header.html',
@@ -14,7 +15,9 @@
         const target = document.querySelector(selector);
         if (!target) return;
 
-        const response = await fetch(appPath(path));
+        const url = new URL(appPath(path), window.location.href);
+        url.searchParams.set('v', shellVersion);
+        const response = await fetch(url.toString());
         if (!response.ok) {
             throw new Error(`Failed to load component: ${path}`);
         }
