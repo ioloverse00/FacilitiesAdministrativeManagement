@@ -75,12 +75,9 @@
     function setCalendarBusy(isBusy, initial = false) {
         const card = qs('reservation-calendar-panel')?.closest('.reservation-calendar-card');
         const overlay = qs('reservation-calendar-loading');
-        const refresh = qs('reservation-refresh');
         const controls = ['reservation-today', 'reservation-prev-period', 'reservation-next-period', 'reservation-room-filter', 'reservation-status-filter', 'reservation-search', 'reservation-reset-filters'];
         card?.classList.toggle('fam-loading-region', isBusy);
         card?.setAttribute('aria-busy', String(isBusy));
-        refresh?.toggleAttribute('aria-busy', isBusy);
-        if (refresh) refresh.disabled = isBusy;
         controls.forEach(id => {
             const control = qs(id);
             if (control) control.disabled = Boolean(isBusy && initial);
@@ -397,7 +394,6 @@
     }
 
     document.addEventListener('fam:layout-ready', init);
-    qs('reservation-refresh')?.addEventListener('click', refreshAll);
     qs('reservation-today')?.addEventListener('click', () => { state.anchor = new Date(); state.page = 1; refreshAll(); });
     qs('reservation-prev-period')?.addEventListener('click', () => shift(-1));
     qs('reservation-next-period')?.addEventListener('click', () => shift(1));

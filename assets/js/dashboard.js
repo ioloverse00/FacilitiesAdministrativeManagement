@@ -225,10 +225,7 @@
     async function initializeDashboard() {
         const service = window.FAMDashboardService;
         if (!service) return;
-        const refresh = document.getElementById('dashboard-refresh');
         const initial = !document.getElementById('dashboard-kpis')?.children.length;
-        refresh?.setAttribute('aria-busy', 'true');
-        refresh?.setAttribute('disabled', 'disabled');
         if (initial) setLoading();
         try {
             const data = await service.getDashboardPayload();
@@ -258,9 +255,6 @@
                 updated.textContent = 'Last updated unavailable';
                 updated.hidden = false;
             }
-        } finally {
-            refresh?.removeAttribute('aria-busy');
-            refresh?.removeAttribute('disabled');
         }
     }
 
@@ -268,7 +262,6 @@
         if (document.body.dataset.dashboardInitialized === 'true') return;
         document.body.dataset.dashboardInitialized = 'true';
         initializeDashboard();
-        document.getElementById('dashboard-refresh')?.addEventListener('click', initializeDashboard);
         window.addEventListener('fam:themechange', initializeDashboard);
     }
 

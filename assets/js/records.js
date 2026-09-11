@@ -103,8 +103,6 @@
         state.documentLoading = true;
         const initial = !state.documentLoaded;
         qs('#records-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
-        qs('#records-refresh')?.setAttribute('aria-busy', 'true');
-        qs('#records-refresh')?.setAttribute('disabled', 'disabled');
         if (initial) qs('#records-table').innerHTML = tableStateRow(7, 'Loading documents...', 'progress_activity', true);
         try {
             const payload = await window.FAMApi.request(api(`documents/index.php?${params()}`));
@@ -119,8 +117,6 @@
             window.FAMModal?.showToast(error.message || 'Unable to load documents.');
         } finally {
             qs('#records-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
-            qs('#records-refresh')?.removeAttribute('aria-busy');
-            qs('#records-refresh')?.removeAttribute('disabled');
             state.documentLoading = false;
             state.documentLoaded = true;
         }
@@ -592,7 +588,6 @@
     function bind() {
         qs('#document-add')?.addEventListener('click', () => { state.activeItem = null; openForm(); });
         qs('#template-add')?.addEventListener('click', () => openTemplateForm().catch(console.error));
-        qs('#records-refresh')?.addEventListener('click', () => load().catch(console.error));
         qs('#records-export')?.addEventListener('click', () => { window.location.href = exportUrl(); });
         document.querySelectorAll('[data-records-tab]').forEach(button => {
             button.addEventListener('click', () => activateRecordsTab(button.dataset.recordsTab));

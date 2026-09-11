@@ -126,7 +126,6 @@
     const newRequestButton = qs('#facility-new-request');
     if (newRequestButton) newRequestButton.hidden = !can('facility_requests.create');
     newRequestButton?.addEventListener('click', openCreate);
-    qs('#facility-refresh')?.addEventListener('click', () => loadList(true));
     qs('#facility-export')?.addEventListener('click', () => { window.location.href = exportUrl(); });
     qs('.facility-requests-table')?.addEventListener('click', tableClick);
     document.addEventListener('click', docClick);

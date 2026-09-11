@@ -474,7 +474,6 @@
   }
 
   function bind() {
-    qs('#reports-refresh')?.addEventListener('click', load);
     qs('#reports-panel')?.addEventListener('click', event => {
       const csv = event.target.closest('#reports-export-csv');
       const pdf = event.target.closest('#reports-export-pdf');

@@ -42,20 +42,16 @@
   }
   function renderSummary(summary = {}) { qs('#visitor-summary').innerHTML = [["Today's Visitors", summary.today], ['Currently Checked In', summary.checked_in], ['Checked Out Today', summary.checked_out_today], ['Available Badges', summary.available_badges], ['Legacy Pending Review', summary.pending_review]].map(([k, v]) => `<span><strong>${Number(v || 0)}</strong>${esc(k)}</span>`).join(''); }
   function renderLoading(initial) {
-    const body = qs('#visitor-table'), pager = qs('.visitor-management-workspace .facility-pagination'), card = qs('#visitor-table')?.closest('.facility-table-card'), refresh = qs('#visitor-refresh');
+    const body = qs('#visitor-table'), pager = qs('.visitor-management-workspace .facility-pagination'), card = qs('#visitor-table')?.closest('.facility-table-card');
     card?.classList.toggle('fam-loading-region', initial);
     card?.setAttribute('aria-busy', 'true');
-    refresh?.setAttribute('aria-busy', 'true');
-    refresh?.setAttribute('disabled', 'disabled');
     if (initial) pager?.classList.add('hidden');
     if (initial && body) body.innerHTML = tableStateRow('Loading visitor records...', 'progress_activity', true);
   }
   function clearLoading() {
-    const card = qs('#visitor-table')?.closest('.facility-table-card'), refresh = qs('#visitor-refresh');
+    const card = qs('#visitor-table')?.closest('.facility-table-card');
     card?.classList.remove('fam-loading-region');
     card?.removeAttribute('aria-busy');
-    refresh?.removeAttribute('aria-busy');
-    refresh?.removeAttribute('disabled');
   }
   function renderTable() {
     window.FAMTableMenus?.close();
@@ -157,7 +153,6 @@
   async function submitCheckin(form) { const data = Object.fromEntries(new FormData(form).entries()); data.identity_verified = Boolean(data.identity_verified); await window.FAMApi.request(`../api/visitors/check-in.php?id=${form.dataset.id}`, { method:'POST', body:data }); closeDialog(); toast('Visitor checked in.'); await load(); openDetails(form.dataset.id); }
   function resetFilters() { state.filters = { search:'', visitor_type:'all', visit_status:'all' }; state.sort = 'scheduled_start_at'; state.direction = 'desc'; state.page = 1; state.openColumnMenu = null; syncToolbar(); load(); }
   function bind() {
-    qs('#visitor-refresh')?.addEventListener('click', load);
     qs('#visitor-export')?.addEventListener('click', () => { window.location.href = exportUrl(); });
     qs('#visitor-prev-page')?.addEventListener('click', () => { state.page = Math.max(1, state.page - 1); load(); });
     qs('#visitor-next-page')?.addEventListener('click', () => { state.page += 1; load(); });

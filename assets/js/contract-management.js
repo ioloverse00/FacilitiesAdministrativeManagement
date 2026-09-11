@@ -159,8 +159,6 @@
         const initial = !state.hasLoaded;
         const body = qs('#contract-table');
         body?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
-        qs('#contract-refresh')?.setAttribute('aria-busy', 'true');
-        qs('#contract-refresh')?.setAttribute('disabled', 'disabled');
         if (initial && body) body.innerHTML = tableStateRow('Loading contracts...', 'progress_activity', true);
         try {
             const payload = await window.FAMApi.request(api(`contracts/index.php?${params()}`));
@@ -174,8 +172,6 @@
             window.FAMModal?.showToast('Unable to load contracts. Try again.');
         } finally {
             qs('#contract-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
-            qs('#contract-refresh')?.removeAttribute('aria-busy');
-            qs('#contract-refresh')?.removeAttribute('disabled');
             state.loading = false;
             state.hasLoaded = true;
         }
@@ -1334,7 +1330,6 @@
     function bind() {
         if (!can('contract.create')) qs('#contract-new')?.classList.add('hidden');
         qs('#contract-new')?.addEventListener('click', () => openForm());
-        qs('#contract-refresh')?.addEventListener('click', load);
         qs('#contract-export')?.addEventListener('click', () => { window.location.href = exportUrl(); });
         ['#contract-search','#contract-status-filter','#contract-type-filter','#contract-expiry-filter'].forEach(selector => {
             qs(selector)?.addEventListener('input', () => { state.page = 1; load(); });

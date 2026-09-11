@@ -33,11 +33,9 @@
         return `<tr class="fam-table-state-row"><td class="fam-table-state-cell" colspan="${columns}"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
     }
     function setLoading(config, state, isLoading, initial = false) {
-        const body = qs(config.tableBodyId), pager = document.querySelector(config.paginationSelector), card = body?.closest('.facility-table-card'), refresh = qs(config.refreshId);
+        const body = qs(config.tableBodyId), pager = document.querySelector(config.paginationSelector), card = body?.closest('.facility-table-card');
         card?.classList.toggle('fam-loading-region', isLoading && initial);
         card?.setAttribute('aria-busy', String(isLoading));
-        refresh?.toggleAttribute('aria-busy', isLoading);
-        if (refresh) refresh.disabled = isLoading;
         if (!isLoading) card?.classList.remove('fam-loading-region');
         if (initial && body) body.innerHTML = tableStateRow(config, `Loading ${config.recordLabel}...`, 'progress_activity', true);
         if (initial) pager?.classList.add('hidden');
@@ -104,7 +102,6 @@
         qs(config.searchId)?.addEventListener('input', e => { state.filters.search = e.target.value.trim(); state.page = 1; clearTimeout(state.timer); state.timer = setTimeout(load, 300); });
         qs(config.prevId)?.addEventListener('click', () => { state.page = Math.max(1, state.page - 1); load(); });
         qs(config.nextId)?.addEventListener('click', () => { state.page += 1; load(); });
-        qs(config.refreshId)?.addEventListener('click', load);
         qs(config.resetId)?.addEventListener('click', () => { state.filters = {}; state.page = 1; const search = qs(config.searchId); if (search) search.value = ''; load(); });
         if (config.createId) qs(config.createId)?.addEventListener('click', () => window.FAMModal?.showToast('This workflow will be enabled in a later implementation step.'));
         qs(config.exportId)?.addEventListener('click', () => {

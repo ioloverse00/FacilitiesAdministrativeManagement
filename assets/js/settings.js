@@ -537,11 +537,6 @@
                 window.FAMModal?.showToast('Administration workflow hook opened.');
             }
         });
-        document.getElementById('admin-refresh')?.addEventListener('click', () => {
-            document.getElementById('admin-updated').textContent = formatUpdatedAt();
-            setDirty(false);
-            renderPanel();
-        });
         document.addEventListener('keydown', event => {
             const activeOrgTab = event.target.closest('[data-org-tab]');
             if (activeOrgTab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {

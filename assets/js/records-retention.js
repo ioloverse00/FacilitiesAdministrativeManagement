@@ -98,8 +98,6 @@
         state.loading = true;
         const initial = !state.hasLoaded;
         qs('#retention-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
-        qs('#retention-refresh')?.setAttribute('aria-busy', 'true');
-        qs('#retention-refresh')?.setAttribute('disabled', 'disabled');
         if (initial) qs('#retention-table').innerHTML = tableStateRow('Loading retention records...', 'progress_activity', true);
         try {
             const payload = await window.FAMApi.request(api(`retention/index.php?${params()}`));
@@ -114,8 +112,6 @@
             window.FAMModal?.showToast(error.message || 'Unable to load retention records.');
         } finally {
             qs('#retention-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
-            qs('#retention-refresh')?.removeAttribute('aria-busy');
-            qs('#retention-refresh')?.removeAttribute('disabled');
             state.loading = false;
             state.hasLoaded = true;
         }
@@ -556,7 +552,6 @@
     }
 
     function bind() {
-        qs('#retention-refresh')?.addEventListener('click', () => load().catch(console.error));
         qs('#retention-export')?.addEventListener('click', () => { window.location.href = exportUrl(); });
         qs('#retention-prev-page')?.addEventListener('click', () => { if (state.page > 1) { state.page--; load().catch(console.error); } });
         qs('#retention-next-page')?.addEventListener('click', () => { if (state.page < state.totalPages) { state.page++; load().catch(console.error); } });

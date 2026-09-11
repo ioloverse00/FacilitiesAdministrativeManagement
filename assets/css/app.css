@@ -1993,37 +1993,14 @@ body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-footer-slot 
    ========================================================================== */
 .app-footer {
   margin-top: auto;
-  padding: 2rem 0;
+  width: 100%;
+  padding: 1rem 0;
   border-top: 1px solid var(--bg-surface-highest);
   background: #ffffff;
-  text-align: center;
-}
-
-.footer-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.footer-text {
   font-size: 0.875rem;
+  line-height: 1.5;
   color: var(--text-muted);
-}
-
-.footer-links {
-  display: flex;
-  gap: 1.5rem;
-  font-size: 0.875rem;
-  color: var(--text-muted);
-}
-
-@media (max-width: 640px) {
-  .footer-content {
-    flex-direction: column;
-    text-align: center;
-  }
+  text-align: left;
 }
 
 /* ==========================================================================

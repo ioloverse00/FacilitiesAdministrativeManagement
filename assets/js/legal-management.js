@@ -64,8 +64,6 @@
         state.loading = true;
         const initial = !state.hasLoaded;
         qs('#legal-table')?.closest('.facility-table-card')?.setAttribute('aria-busy', 'true');
-        qs('#legal-refresh')?.setAttribute('aria-busy', 'true');
-        qs('#legal-refresh')?.setAttribute('disabled', 'disabled');
         if (initial) qs('#legal-table').innerHTML = tableStateRow('Loading legal matters...', 'progress_activity', true);
         try {
             const payload = await window.FAMApi.request(api(`legal/index.php?${params()}`));
@@ -81,8 +79,6 @@
             window.FAMModal?.showToast(error.message || 'Unable to load legal matters.');
         } finally {
             qs('#legal-table')?.closest('.facility-table-card')?.removeAttribute('aria-busy');
-            qs('#legal-refresh')?.removeAttribute('aria-busy');
-            qs('#legal-refresh')?.removeAttribute('disabled');
             state.loading = false;
             state.hasLoaded = true;
         }
@@ -975,7 +971,6 @@
     function bind() {
         if (state.bound) return;
         state.bound = true;
-        qs('#legal-refresh')?.addEventListener('click', () => load().catch(console.error));
         qs('#legal-new-matter')?.addEventListener('click', () => openMatterForm());
         qs('#legal-prev-page')?.addEventListener('click', () => { if (state.page > 1) { state.page--; load().catch(console.error); } });
         qs('#legal-next-page')?.addEventListener('click', () => { if (state.page < state.totalPages) { state.page++; load().catch(console.error); } });
