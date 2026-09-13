@@ -90,11 +90,38 @@
                             </div>
                         </section>
 
+                        <section class="facility-section reservation-operations-section" aria-labelledby="reservation-operations-title">
+                            <div class="fam-section-heading">
+                                <div>
+                                    <h2 id="reservation-operations-title">Requests Queue</h2>
+                                    <p class="fam-muted">A quick operational view of reservations that need attention.</p>
+                                </div>
+                            </div>
+                            <div class="reservation-focus-grid">
+                                <article class="reservation-focus-panel">
+                                    <h3>Pending Approval</h3>
+                                    <div id="reservation-pending-list" class="reservation-focus-list" aria-live="polite"></div>
+                                </article>
+                                <article class="reservation-focus-panel">
+                                    <h3>Today</h3>
+                                    <div id="reservation-today-list" class="reservation-focus-list" aria-live="polite"></div>
+                                </article>
+                                <article class="reservation-focus-panel">
+                                    <h3>Upcoming</h3>
+                                    <div id="reservation-upcoming-list" class="reservation-focus-list" aria-live="polite"></div>
+                                </article>
+                                <article class="reservation-focus-panel">
+                                    <h3>Rejected or Cancelled</h3>
+                                    <div id="reservation-recent-list" class="reservation-focus-list" aria-live="polite"></div>
+                                </article>
+                            </div>
+                        </section>
+
                         <section class="facility-section reservation-records-section" aria-labelledby="reservation-records-title">
                             <div class="fam-section-heading">
                                 <div>
                                     <h2 id="reservation-records-title">Reservation Records</h2>
-                                    <p class="fam-muted">Reservations within the currently selected calendar period.</p>
+                                    <p class="fam-muted">Complete reservation register across all dates.</p>
                                 </div>
                                 <span id="reservation-table-count" class="facility-table-count">No reservation records</span>
                             </div>
@@ -134,33 +161,6 @@
                                     <span id="reservation-page-status">Page 1 of 1</span>
                                     <button id="reservation-next-page" class="facility-page-button" type="button">Next</button>
                                 </div>
-                            </div>
-                        </section>
-
-                        <section class="facility-section reservation-operations-section" aria-labelledby="reservation-operations-title">
-                            <div class="fam-section-heading">
-                                <div>
-                                    <h2 id="reservation-operations-title">Requests Queue</h2>
-                                    <p class="fam-muted">A quick operational view of reservations that need attention.</p>
-                                </div>
-                            </div>
-                            <div class="reservation-focus-grid">
-                                <article class="reservation-focus-panel">
-                                    <h3>Pending Approval</h3>
-                                    <div id="reservation-pending-list" class="reservation-focus-list" aria-live="polite"></div>
-                                </article>
-                                <article class="reservation-focus-panel">
-                                    <h3>Today</h3>
-                                    <div id="reservation-today-list" class="reservation-focus-list" aria-live="polite"></div>
-                                </article>
-                                <article class="reservation-focus-panel">
-                                    <h3>Upcoming</h3>
-                                    <div id="reservation-upcoming-list" class="reservation-focus-list" aria-live="polite"></div>
-                                </article>
-                                <article class="reservation-focus-panel">
-                                    <h3>Rejected or Cancelled</h3>
-                                    <div id="reservation-recent-list" class="reservation-focus-list" aria-live="polite"></div>
-                                </article>
                             </div>
                         </section>
 

@@ -6,7 +6,7 @@
     const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const toDate = value => value ? new Date(String(value).replace(' ', 'T')) : null;
     const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-    const state = { view: window.matchMedia('(max-width: 520px)').matches ? 'day' : 'month', anchor: new Date(), room: 'all', status: 'all', search: '', page: 1, perPage: 10, sort: 'start_datetime', direction: 'asc', events: [], rows: [], pagination: { total: 0, total_pages: 1 }, options: {}, details: new Map(), calendarLoading: false, calendarLoaded: false, listLoading: false };
+    const state = { view: window.matchMedia('(max-width: 520px)').matches ? 'day' : 'month', anchor: new Date(), room: 'all', status: 'all', search: '', page: 1, perPage: 10, sort: 'start_datetime', direction: 'desc', events: [], rows: [], pagination: { total: 0, total_pages: 1 }, options: {}, details: new Map(), expandedDays: new Set(), calendarLoading: false, calendarLoaded: false, listLoading: false };
     const fmtTime = value => { const d = value instanceof Date ? value : toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'Time unavailable'; };
     const fmtDateTime = value => { const d = toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not applicable'; };
     const fileSize = bytes => {
@@ -98,11 +98,30 @@
         const value = `${event.approval || ''} ${event.status || ''}`.toLowerCase();
         if (value.includes('reject')) return 'danger';
         if (value.includes('cancel')) return 'muted';
+        if (value.includes('no_show') || value.includes('no show')) return 'muted';
         if (value.includes('pending') || value.includes('submit')) return 'warning';
         if (value.includes('check') || value.includes('active')) return 'info';
         if (value.includes('complete')) return 'info';
         if (value.includes('approve')) return 'success';
         return 'info';
+    }
+    function displayPriority(event) {
+        const status = String(event.status || '').toUpperCase();
+        if (['COMPLETED','CHECKED_IN'].includes(status)) return 1;
+        if (status === 'APPROVED') return 2;
+        if (status === 'NO_SHOW') return 3;
+        if (status === 'SUBMITTED') return 4;
+        if (['REJECTED','CANCELLED'].includes(status)) return 5;
+        return 6;
+    }
+    function sortEventsForDisplay(items) {
+        return [...items].sort((a, b) => {
+            if (state.status === 'all') {
+                const priority = displayPriority(a) - displayPriority(b);
+                if (priority) return priority;
+            }
+            return (toDate(a.start) || 0) - (toDate(b.start) || 0);
+        });
     }
 
     function eventButton(event) {
@@ -131,12 +150,15 @@
         if (state.view === 'month') {
             panel.innerHTML = '<div class="reservation-calendar-weekdays">' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day => `<span>${day}</span>`).join('') + '</div>' +
                 `<div class="reservation-month-grid">${days(r.start, r.end).map(day => {
-                    const items = grouped.get(isoDate(day)) || [];
-                    return `<section class="reservation-day-cell ${day.getMonth() !== state.anchor.getMonth() ? 'muted' : ''} ${sameDay(day, new Date()) ? 'today' : ''}" aria-label="${esc(day.toLocaleDateString())}"><div class="reservation-day-number">${day.getDate()}</div><div class="reservation-day-events">${items.slice(0, 3).map(item => eventButton(item)).join('')}${items.length > 3 ? `<span class="reservation-more-events">${items.length - 3} more</span>` : ''}</div></section>`;
+                    const key = isoDate(day);
+                    const items = sortEventsForDisplay(grouped.get(key) || []);
+                    const expanded = state.expandedDays.has(key) || state.status !== 'all';
+                    const shown = expanded ? items : items.slice(0, 3);
+                    return `<section class="reservation-day-cell ${day.getMonth() !== state.anchor.getMonth() ? 'muted' : ''} ${sameDay(day, new Date()) ? 'today' : ''}" aria-label="${esc(day.toLocaleDateString())}"><div class="reservation-day-number">${day.getDate()}</div><div class="reservation-day-events">${shown.map(item => eventButton(item)).join('')}${items.length > shown.length ? `<button class="reservation-more-events" type="button" data-calendar-day-more="${esc(key)}">+${items.length - shown.length} more</button>` : ''}</div></section>`;
                 }).join('')}</div>`;
         } else {
             panel.innerHTML = `<div class="reservation-agenda">${days(r.start, r.end).map(day => {
-                const items = grouped.get(isoDate(day)) || [];
+                const items = sortEventsForDisplay(grouped.get(isoDate(day)) || []);
                 return `<section class="reservation-agenda-day ${sameDay(day, new Date()) ? 'today' : ''}"><header><span>${esc(day.toLocaleDateString(undefined, { weekday: 'short' }))}</span><strong>${esc(day.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</strong></header><div>${items.length ? items.map(item => eventButton(item)).join('') : '<p>No reservations scheduled.</p>'}</div></section>`;
             }).join('')}</div>`;
         }
@@ -328,11 +350,10 @@
     async function loadList() {
         if (state.listLoading) return;
         if (!qs('reservation-table')) return;
-        const r = range();
         state.listLoading = true;
         qs('reservation-loading-state')?.classList.remove('hidden');
         try {
-            const payload = await window.FAMApi.request(`../api/reservations/index.php?${query({ page: state.page, per_page: state.perPage, sort: state.sort, direction: state.direction, date_from: isoDate(r.start), date_to: isoDate(r.end) })}`);
+            const payload = await window.FAMApi.request(`../api/reservations/index.php?${query({ page: state.page, per_page: state.perPage, sort: state.sort, direction: state.direction })}`);
             state.rows = payload.data?.items || [];
             state.pagination = payload.data?.pagination || state.pagination;
         } catch (error) {
@@ -344,7 +365,11 @@
             renderList();
         }
     }
-    async function refreshAll() {
+    async function refreshCalendar() {
+        renderToolbar();
+        await loadCalendar();
+    }
+    async function refreshFilteredViews() {
         renderToolbar();
         await Promise.all([loadCalendar(), loadList()]);
     }
@@ -363,7 +388,7 @@
         if (action === 'approve' && !await window.FAMModal.confirm('Approve this room reservation?', { title: 'Approve Reservation', confirmLabel: 'Approve' })) return;
         await window.FAMApi.request(`../api/reservations/${action}.php?id=${encodeURIComponent(id)}`, { method: 'POST', body });
         state.details.delete(String(id));
-        await refreshAll();
+        await refreshFilteredViews();
         await openDetails(id);
         window.FAMModal?.showToast('Reservation updated.');
     }
@@ -371,8 +396,8 @@
         if (state.view === 'month') state.anchor.setMonth(state.anchor.getMonth() + amount);
         if (state.view === 'week') state.anchor.setDate(state.anchor.getDate() + amount * 7);
         if (state.view === 'day') state.anchor.setDate(state.anchor.getDate() + amount);
-        state.page = 1;
-        refreshAll();
+        state.expandedDays.clear();
+        refreshCalendar();
     }
     async function init() {
         renderToolbar();
@@ -381,7 +406,7 @@
             const options = await window.FAMApi.request('../api/reservations/options.php');
             state.options = options.data || {};
             populateFilters();
-            refreshAll();
+            refreshFilteredViews();
         } catch (error) {
             if (error.status === 401) {
                 window.location.href = window.FAMApi.pageLoginUrl();
@@ -395,13 +420,13 @@
     }
 
     document.addEventListener('fam:layout-ready', init);
-    qs('reservation-today')?.addEventListener('click', () => { state.anchor = new Date(); state.page = 1; refreshAll(); });
+    qs('reservation-today')?.addEventListener('click', () => { state.anchor = new Date(); state.expandedDays.clear(); refreshCalendar(); });
     qs('reservation-prev-period')?.addEventListener('click', () => shift(-1));
     qs('reservation-next-period')?.addEventListener('click', () => shift(1));
-    document.querySelectorAll('[data-calendar-view]').forEach(button => button.addEventListener('click', () => { state.view = button.dataset.calendarView; state.page = 1; refreshAll(); }));
-    qs('reservation-room-filter')?.addEventListener('change', event => { state.room = event.target.value; state.page = 1; refreshAll(); });
-    qs('reservation-status-filter')?.addEventListener('change', event => { state.status = event.target.value; state.page = 1; refreshAll(); });
-    qs('reservation-search')?.addEventListener('input', event => { state.search = event.target.value; state.page = 1; clearTimeout(state.timer); state.timer = setTimeout(refreshAll, 300); renderToolbar(); });
+    document.querySelectorAll('[data-calendar-view]').forEach(button => button.addEventListener('click', () => { state.view = button.dataset.calendarView; state.expandedDays.clear(); refreshCalendar(); }));
+    qs('reservation-room-filter')?.addEventListener('change', event => { state.room = event.target.value; state.page = 1; state.expandedDays.clear(); refreshFilteredViews(); });
+    qs('reservation-status-filter')?.addEventListener('change', event => { state.status = event.target.value; state.page = 1; state.expandedDays.clear(); refreshFilteredViews(); });
+    qs('reservation-search')?.addEventListener('input', event => { state.search = event.target.value; state.page = 1; state.expandedDays.clear(); clearTimeout(state.timer); state.timer = setTimeout(refreshFilteredViews, 300); renderToolbar(); });
     qs('reservation-reset-filters')?.addEventListener('click', () => {
         state.room = 'all';
         state.status = 'all';
@@ -410,7 +435,8 @@
         qs('reservation-room-filter').value = 'all';
         qs('reservation-status-filter').value = 'all';
         if (qs('reservation-search')) qs('reservation-search').value = '';
-        refreshAll();
+        state.expandedDays.clear();
+        refreshFilteredViews();
     });
     qs('reservation-export')?.addEventListener('click', () => { window.location.href = exportUrl(); });
     qs('reservation-prev-page')?.addEventListener('click', () => { state.page = Math.max(1, state.page - 1); loadList(); });
@@ -434,6 +460,12 @@
         if (detailAction) return openDetails(detailAction.dataset.openReservationDetails);
         const open = event.target.closest('[data-reservation-id]');
         if (open) return openDetails(open.dataset.reservationId);
+        const more = event.target.closest('[data-calendar-day-more]');
+        if (more) {
+            const key = more.dataset.calendarDayMore;
+            state.expandedDays.has(key) ? state.expandedDays.delete(key) : state.expandedDays.add(key);
+            return renderCalendar();
+        }
         const action = event.target.closest('[data-reservation-action]');
         if (action) return processReservation(action.dataset.reservationAction, action.dataset.actionId).catch(error => window.FAMModal?.showToast(error.message || 'Unable to update reservation.'));
         if (event.target.closest('[data-close-reservation-drawer]')) return closeDetails();

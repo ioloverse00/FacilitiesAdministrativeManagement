@@ -5290,6 +5290,15 @@ div[role="group"] button:active {
   font-weight: 700;
 }
 
+button.reservation-more-events {
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
 .reservation-calendar-message {
   border-top: 1px solid rgba(148, 163, 184, 0.18);
   padding: 0.9rem 1rem;
