@@ -1863,23 +1863,27 @@ body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-sidebar-slot
 body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-sidebar-slot:empty::before {
   content: '';
   display: block;
-  width: calc(100% - 2rem);
-  height: calc(100% - 2rem);
-  margin: 1rem;
-  border-radius: var(--radius-lg, 1rem);
+  width: 100%;
+  height: 100%;
   background:
-    linear-gradient(90deg, rgba(148, 163, 184, 0.22), rgba(148, 163, 184, 0.1), rgba(148, 163, 184, 0.22)) 0 0 / 220% 100%,
-    radial-gradient(circle at 1.25rem 1.25rem, rgba(148, 163, 184, 0.22) 0 1.1rem, transparent 1.15rem),
-    linear-gradient(rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.2)) 3rem 0.5rem / 8.25rem 0.85rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 3rem 1.75rem / 5.75rem 0.55rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.18)) 0 4.25rem / 12.75rem 2.25rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 0 7.25rem / 10.5rem 1rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 0 9.35rem / 11.75rem 1rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 0 11.45rem / 9.75rem 1rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 0 13.55rem / 12rem 1rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 0 15.65rem / 10.25rem 1rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 0 calc(100% - 3.25rem) / 12.75rem 2.75rem no-repeat;
-  animation: fam-shell-skeleton-shimmer 1.45s ease-in-out infinite;
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 0 15.48rem / 100% 1px no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 1rem 0.75rem / 13.95rem 13.95rem no-repeat,
+    radial-gradient(circle at 1.75rem 17.28rem, rgba(148, 163, 184, 0.22) 0 0.62rem, transparent 0.66rem),
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 3.25rem 16.95rem / 5.5rem 0.78rem no-repeat,
+    radial-gradient(circle at 1.75rem 21.18rem, rgba(148, 163, 184, 0.22) 0 0.62rem, transparent 0.66rem),
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 3.25rem 20.85rem / 9.3rem 0.78rem no-repeat,
+    radial-gradient(circle at 1.75rem 25.1rem, rgba(148, 163, 184, 0.22) 0 0.62rem, transparent 0.66rem),
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 3.25rem 24.75rem / 8.65rem 0.78rem no-repeat,
+    radial-gradient(circle at 1.75rem 29rem, rgba(148, 163, 184, 0.22) 0 0.62rem, transparent 0.66rem),
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 3.25rem 28.65rem / 8.9rem 0.78rem no-repeat,
+    radial-gradient(circle at 1.75rem 32.9rem, rgba(148, 163, 184, 0.22) 0 0.62rem, transparent 0.66rem),
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 3.25rem 32.55rem / 7.6rem 0.78rem no-repeat,
+    radial-gradient(circle at 1.75rem 36.8rem, rgba(148, 163, 184, 0.22) 0 0.62rem, transparent 0.66rem),
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 3.25rem 36.45rem / 9rem 0.78rem no-repeat,
+    radial-gradient(circle at 1.75rem 40.7rem, rgba(148, 163, 184, 0.22) 0 0.62rem, transparent 0.66rem),
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 3.25rem 40.25rem / 9.75rem 0.62rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 3.25rem 41.35rem / 6.8rem 0.55rem no-repeat;
+  animation: fam-shell-skeleton-pulse 1.6s ease-in-out infinite;
 }
 
 .app-main-panel {
@@ -1907,16 +1911,15 @@ body.app-body:not(.employee-portal-body):not(.fam-shell-ready) #app-header-slot 
 body.app-body:not(.employee-portal-body):not(.fam-shell-ready) #app-header-slot::before {
   content: '';
   position: absolute;
-  inset: 0.9rem 1.5rem;
+  inset: 0;
   background:
-    linear-gradient(90deg, rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.1), rgba(148, 163, 184, 0.2)) 0 0 / 220% 100%,
-    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 0 0.3rem / 2.25rem 1.35rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 3rem 0.45rem / min(18rem, 30vw) 1rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) calc(100% - 9.5rem) 0.25rem / 2.35rem 1.45rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) calc(100% - 6.4rem) 0.25rem / 2.35rem 1.45rem no-repeat,
-    radial-gradient(circle at calc(100% - 1.2rem) 1rem, rgba(148, 163, 184, 0.22) 0 1.05rem, transparent 1.1rem);
-  border-radius: var(--radius-lg, 1rem);
-  animation: fam-shell-skeleton-shimmer 1.45s ease-in-out infinite;
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 1.5rem 0.75rem / 2.5rem 2.5rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) calc(100% - 15rem) 0.75rem / 2.5rem 2.5rem no-repeat,
+    radial-gradient(circle at calc(100% - 10.9rem) 2rem, rgba(148, 163, 184, 0.22) 0 1.12rem, transparent 1.16rem),
+    linear-gradient(rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.2)) calc(100% - 8.9rem) 1.1rem / 5.5rem 0.75rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) calc(100% - 8.9rem) 2.15rem / 4rem 0.58rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) calc(100% - 2rem) 1.72rem / 0.9rem 0.56rem no-repeat;
+  animation: fam-shell-skeleton-pulse 1.6s ease-in-out infinite;
 }
 
 .app-main {
@@ -1947,28 +1950,28 @@ body.app-body:not(.employee-portal-body):not(.fam-shell-ready) #page-content {
 
 body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-main {
   background:
-    linear-gradient(90deg, rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.18)) 1.5rem 1.5rem / calc(100% - 3rem) min(42rem, calc(100dvh - 8.5rem)) no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.22), rgba(148, 163, 184, 0.22)) 1.5rem 1.5rem / min(24rem, 70%) 1.8rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.13), rgba(148, 163, 184, 0.13)) 1.5rem 4.05rem / min(34rem, 88%) 0.9rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 1.5rem 7.25rem / calc((100% - 7.5rem) * 0.22) 6.5rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) calc(1.5rem + ((100% - 7.5rem) * 0.26)) 7.25rem / calc((100% - 7.5rem) * 0.22) 6.5rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) calc(1.5rem + ((100% - 7.5rem) * 0.52)) 7.25rem / calc((100% - 7.5rem) * 0.22) 6.5rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) calc(1.5rem + ((100% - 7.5rem) * 0.78)) 7.25rem / calc((100% - 7.5rem) * 0.22) 6.5rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.18)) 1.5rem 16rem / calc((100% - 3rem) * 0.64) 14rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) calc(100% - 1.5rem - ((100% - 3rem) * 0.3)) 16rem / calc((100% - 3rem) * 0.3) 3rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) calc(100% - 1.5rem - ((100% - 3rem) * 0.3)) 20rem / calc((100% - 3rem) * 0.3) 3rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) calc(100% - 1.5rem - ((100% - 3rem) * 0.3)) 24rem / calc((100% - 3rem) * 0.3) 3rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 1.5rem 32.5rem / calc(100% - 3rem) 7rem no-repeat;
+    linear-gradient(rgba(148, 163, 184, 0.24), rgba(148, 163, 184, 0.24)) 1.5rem 2rem / min(24rem, 62%) 1.55rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 1.5rem 4.3rem / min(34rem, 78%) 0.82rem no-repeat,
+    linear-gradient(#ffffff, #ffffff) 1.5rem 7.25rem / calc(100% - 3.75rem) 16rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.22), rgba(148, 163, 184, 0.22)) 3rem 8.75rem / min(15rem, 45%) 1rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 3rem 11.25rem / calc(100% - 6.75rem) 0.68rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 3rem 13.25rem / calc(100% - 6.75rem) 0.68rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 3rem 15.25rem / calc(100% - 6.75rem) 0.68rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 3rem 17.25rem / calc(100% - 6.75rem) 0.68rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 3rem 19.25rem / calc(100% - 6.75rem) 0.68rem no-repeat;
   background-color: var(--surface-container-lowest, #f8fafc);
-  animation: fam-shell-main-skeleton-shimmer 1.45s ease-in-out infinite;
+  animation: fam-shell-skeleton-pulse 1.6s ease-in-out infinite;
 }
 
 body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-main::before {
   content: '';
-  display: block;
-  flex: 1 0 auto;
-  min-height: min(42rem, calc(100dvh - 8.5rem));
-  margin: 1.5rem;
+  position: absolute;
+  top: 7.25rem;
+  right: 2.25rem;
+  left: 1.5rem;
+  height: 16rem;
+  pointer-events: none;
+  border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: var(--radius-xl, 1.25rem);
   background: transparent;
 }
@@ -2004,37 +2007,35 @@ body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-footer-slot 
   body.app-body:not(.employee-portal-body):not(.fam-shell-ready) #app-header-slot::before {
     inset-inline: 1rem;
     background:
-      linear-gradient(90deg, rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.1), rgba(148, 163, 184, 0.2)) 0 0 / 220% 100%,
-      linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 0 0.35rem / 2.25rem 1.35rem no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 3rem 0.55rem / 35% 0.9rem no-repeat,
-      radial-gradient(circle at calc(100% - 1rem) 1rem, rgba(148, 163, 184, 0.22) 0 1.05rem, transparent 1.1rem);
+      linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 0 0.75rem / 2.5rem 2.5rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) calc(100% - 7.1rem) 0.75rem / 2.5rem 2.5rem no-repeat,
+      radial-gradient(circle at calc(100% - 2.85rem) 2rem, rgba(148, 163, 184, 0.22) 0 1.12rem, transparent 1.16rem),
+      linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) calc(100% - 0.25rem) 1.72rem / 0.9rem 0.56rem no-repeat;
   }
 
   body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-main::before {
-    min-height: min(38rem, calc(100dvh - 8rem));
-    margin: 1rem;
+    top: 6.3rem;
+    right: 1rem;
+    left: 1rem;
+    height: 14rem;
   }
 
   body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-main {
     background:
-      linear-gradient(90deg, rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.18)) 1rem 1rem / calc(100% - 2rem) min(38rem, calc(100dvh - 8rem)) no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.22), rgba(148, 163, 184, 0.22)) 1rem 1rem / 78% 1.55rem no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.13), rgba(148, 163, 184, 0.13)) 1rem 3.3rem / 92% 0.85rem no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 1rem 6rem / calc(100% - 2rem) 5.25rem no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 1rem 12.25rem / calc(100% - 2rem) 5.25rem no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.18)) 1rem 19.5rem / calc(100% - 2rem) 10rem no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 1rem 31rem / calc(100% - 2rem) 5rem no-repeat;
+      linear-gradient(rgba(148, 163, 184, 0.24), rgba(148, 163, 184, 0.24)) 1rem 1.5rem / 76% 1.45rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 1rem 3.65rem / 88% 0.78rem no-repeat,
+      linear-gradient(#ffffff, #ffffff) 1rem 6.3rem / calc(100% - 2rem) 14rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.22), rgba(148, 163, 184, 0.22)) 2rem 7.75rem / 48% 0.95rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 2rem 10.1rem / calc(100% - 4rem) 0.65rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 2rem 12rem / calc(100% - 4rem) 0.65rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 2rem 13.9rem / calc(100% - 4rem) 0.65rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) 2rem 15.8rem / calc(100% - 4rem) 0.65rem no-repeat;
   }
 }
 
-@keyframes fam-shell-skeleton-shimmer {
-  0% { background-position-x: 220%, 0, 3rem, 3rem, 0, 0, 0, 0, 0, 0, 0; }
-  100% { background-position-x: -220%, 0, 3rem, 3rem, 0, 0, 0, 0, 0, 0, 0; }
-}
-
-@keyframes fam-shell-main-skeleton-shimmer {
-  0% { background-position-x: 220%, 1.5rem, 1.5rem, 1.5rem, calc(1.5rem + ((100% - 7.5rem) * 0.26)), calc(1.5rem + ((100% - 7.5rem) * 0.52)), calc(1.5rem + ((100% - 7.5rem) * 0.78)), 1.5rem, calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), 1.5rem; }
-  100% { background-position-x: -220%, 1.5rem, 1.5rem, 1.5rem, calc(1.5rem + ((100% - 7.5rem) * 0.26)), calc(1.5rem + ((100% - 7.5rem) * 0.52)), calc(1.5rem + ((100% - 7.5rem) * 0.78)), 1.5rem, calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), 1.5rem; }
+@keyframes fam-shell-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
 }
 
 @media (min-width: 768px) {
