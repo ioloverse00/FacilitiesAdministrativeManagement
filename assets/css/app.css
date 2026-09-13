@@ -1941,9 +1941,26 @@ body.app-body:not(.employee-portal-body):not(.fam-shell-ready) #app-header-slot:
 }
 
 body.app-body:not(.employee-portal-body):not(.fam-shell-ready) #page-content {
-  opacity: 0;
-  visibility: hidden;
+  display: none;
   pointer-events: none;
+}
+
+body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-main {
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.18)) 1.5rem 1.5rem / calc(100% - 3rem) min(42rem, calc(100dvh - 8.5rem)) no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.22), rgba(148, 163, 184, 0.22)) 1.5rem 1.5rem / min(24rem, 70%) 1.8rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.13), rgba(148, 163, 184, 0.13)) 1.5rem 4.05rem / min(34rem, 88%) 0.9rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 1.5rem 7.25rem / calc((100% - 7.5rem) * 0.22) 6.5rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) calc(1.5rem + ((100% - 7.5rem) * 0.26)) 7.25rem / calc((100% - 7.5rem) * 0.22) 6.5rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) calc(1.5rem + ((100% - 7.5rem) * 0.52)) 7.25rem / calc((100% - 7.5rem) * 0.22) 6.5rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) calc(1.5rem + ((100% - 7.5rem) * 0.78)) 7.25rem / calc((100% - 7.5rem) * 0.22) 6.5rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.18)) 1.5rem 16rem / calc((100% - 3rem) * 0.64) 14rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) calc(100% - 1.5rem - ((100% - 3rem) * 0.3)) 16rem / calc((100% - 3rem) * 0.3) 3rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) calc(100% - 1.5rem - ((100% - 3rem) * 0.3)) 20rem / calc((100% - 3rem) * 0.3) 3rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) calc(100% - 1.5rem - ((100% - 3rem) * 0.3)) 24rem / calc((100% - 3rem) * 0.3) 3rem no-repeat,
+    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 1.5rem 32.5rem / calc(100% - 3rem) 7rem no-repeat;
+  background-color: var(--surface-container-lowest, #f8fafc);
+  animation: fam-shell-main-skeleton-shimmer 1.45s ease-in-out infinite;
 }
 
 body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-main::before {
@@ -1953,20 +1970,7 @@ body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-main::before
   min-height: min(42rem, calc(100dvh - 8.5rem));
   margin: 1.5rem;
   border-radius: var(--radius-xl, 1.25rem);
-  background:
-    linear-gradient(90deg, rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.18)) 0 0 / 220% 100%,
-    linear-gradient(rgba(148, 163, 184, 0.22), rgba(148, 163, 184, 0.22)) 0 0 / min(24rem, 70%) 1.8rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.13), rgba(148, 163, 184, 0.13)) 0 2.55rem / min(34rem, 88%) 0.9rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 0 5.75rem / 22% 6.5rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 26% 5.75rem / 22% 6.5rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 52% 5.75rem / 22% 6.5rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 78% 5.75rem / 22% 6.5rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.18)) 0 14.5rem / 64% 14rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) calc(100% - 30%) 14.5rem / 30% 3rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) calc(100% - 30%) 18.5rem / 30% 3rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)) calc(100% - 30%) 22.5rem / 30% 3rem no-repeat,
-    linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 0 31rem / 100% 7rem no-repeat;
-  animation: fam-shell-skeleton-shimmer 1.45s ease-in-out infinite;
+  background: transparent;
 }
 
 .app-footer-slot {
@@ -2009,20 +2013,28 @@ body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-footer-slot 
   body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-main::before {
     min-height: min(38rem, calc(100dvh - 8rem));
     margin: 1rem;
+  }
+
+  body.app-body:not(.employee-portal-body):not(.fam-shell-ready) .app-main {
     background:
-      linear-gradient(90deg, rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.18)) 0 0 / 220% 100%,
-      linear-gradient(rgba(148, 163, 184, 0.22), rgba(148, 163, 184, 0.22)) 0 0 / 78% 1.55rem no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.13), rgba(148, 163, 184, 0.13)) 0 2.3rem / 92% 0.85rem no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 0 5rem / 100% 5.25rem no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 0 11.25rem / 100% 5.25rem no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.18)) 0 18.5rem / 100% 10rem no-repeat,
-      linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 0 30rem / 100% 5rem no-repeat;
+      linear-gradient(90deg, rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.18)) 1rem 1rem / calc(100% - 2rem) min(38rem, calc(100dvh - 8rem)) no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.22), rgba(148, 163, 184, 0.22)) 1rem 1rem / 78% 1.55rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.13), rgba(148, 163, 184, 0.13)) 1rem 3.3rem / 92% 0.85rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 1rem 6rem / calc(100% - 2rem) 5.25rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)) 1rem 12.25rem / calc(100% - 2rem) 5.25rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.18)) 1rem 19.5rem / calc(100% - 2rem) 10rem no-repeat,
+      linear-gradient(rgba(148, 163, 184, 0.14), rgba(148, 163, 184, 0.14)) 1rem 31rem / calc(100% - 2rem) 5rem no-repeat;
   }
 }
 
 @keyframes fam-shell-skeleton-shimmer {
   0% { background-position-x: 220%, 0, 3rem, 3rem, 0, 0, 0, 0, 0, 0, 0; }
   100% { background-position-x: -220%, 0, 3rem, 3rem, 0, 0, 0, 0, 0, 0, 0; }
+}
+
+@keyframes fam-shell-main-skeleton-shimmer {
+  0% { background-position-x: 220%, 1.5rem, 1.5rem, 1.5rem, calc(1.5rem + ((100% - 7.5rem) * 0.26)), calc(1.5rem + ((100% - 7.5rem) * 0.52)), calc(1.5rem + ((100% - 7.5rem) * 0.78)), 1.5rem, calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), 1.5rem; }
+  100% { background-position-x: -220%, 1.5rem, 1.5rem, 1.5rem, calc(1.5rem + ((100% - 7.5rem) * 0.26)), calc(1.5rem + ((100% - 7.5rem) * 0.52)), calc(1.5rem + ((100% - 7.5rem) * 0.78)), 1.5rem, calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), calc(100% - 1.5rem - ((100% - 3rem) * 0.3)), 1.5rem; }
 }
 
 @media (min-width: 768px) {
