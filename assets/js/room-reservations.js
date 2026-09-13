@@ -49,17 +49,26 @@
         return { start, end, label: a.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) };
     }
 
-    function query(base = {}) {
+    function filteredQuery(base = {}) {
         const p = new URLSearchParams(base);
         if (state.room !== 'all') p.set('facility_space_id', state.room);
         if (state.status !== 'all') p.set('status', state.status);
         if (state.search.trim()) p.set('search', state.search.trim());
         return p;
     }
+    function calendarQuery(base = {}) {
+        return filteredQuery(base);
+    }
+    function listQuery(base = {}) {
+        const p = filteredQuery(base);
+        p.delete('date_from');
+        p.delete('date_to');
+        return p;
+    }
 
     function exportUrl() {
         const r = range();
-        const p = query({ sort: state.sort, direction: state.direction, date_from: isoDate(r.start), date_to: isoDate(r.end) });
+        const p = calendarQuery({ sort: state.sort, direction: state.direction, date_from: isoDate(r.start), date_to: isoDate(r.end) });
         return `../api/reservations/export-csv.php?${p}`;
     }
 
@@ -191,14 +200,14 @@
         const body = qs('reservation-table');
         if (!body) return;
         qs('reservation-loading-state')?.classList.add('hidden');
-        const empty = qs('reservation-empty-state'), pager = document.querySelector('.reservation-workspace .facility-pagination');
+        const empty = qs('reservation-empty-state'), pager = document.querySelector('.reservation-records-section .facility-pagination');
         window.FAMTableAudit?.check(body?.closest('table'), 'reservation-table');
         qs('reservation-table-count').textContent = state.pagination.total ? `Showing ${state.rows.length} of ${state.pagination.total} reservation records` : 'No reservation records';
         if (!state.rows.length) {
             body.innerHTML = '';
             empty.classList.remove('hidden');
             pager.classList.add('hidden');
-            empty.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">event_busy</span><strong>No reservation requests found.</strong><span>Reservations will appear here when they exist in the selected period.</span>';
+            empty.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">event_busy</span><strong>No reservation records found.</strong>';
             return;
         }
         empty.classList.add('hidden');
@@ -331,7 +340,7 @@
         state.calendarLoading = true;
         setCalendarBusy(true, !state.calendarLoaded);
         try {
-            const payload = await window.FAMApi.request(`../api/reservations/calendar.php?${query({ date_from: isoDate(r.start), date_to: isoDate(r.end) })}`);
+            const payload = await window.FAMApi.request(`../api/reservations/calendar.php?${calendarQuery({ date_from: isoDate(r.start), date_to: isoDate(r.end) })}`);
             state.events = payload.data?.items || [];
             renderCalendar();
             renderFocusPanels();
@@ -353,7 +362,7 @@
         state.listLoading = true;
         qs('reservation-loading-state')?.classList.remove('hidden');
         try {
-            const payload = await window.FAMApi.request(`../api/reservations/index.php?${query({ page: state.page, per_page: state.perPage, sort: state.sort, direction: state.direction })}`);
+            const payload = await window.FAMApi.request(`../api/reservations/index.php?${listQuery({ page: state.page, per_page: state.perPage, sort: state.sort, direction: state.direction })}`);
             state.rows = payload.data?.items || [];
             state.pagination = payload.data?.pagination || state.pagination;
         } catch (error) {
