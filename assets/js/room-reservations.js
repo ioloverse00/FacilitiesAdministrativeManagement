@@ -197,22 +197,20 @@
     }
 
     function renderList() {
-        const body = qs('reservation-table');
+        const body = qs('reservation-records-body');
         if (!body) return;
         qs('reservation-loading-state')?.classList.add('hidden');
-        const empty = qs('reservation-empty-state'), pager = document.querySelector('.reservation-records-section .facility-pagination');
         window.FAMTableAudit?.check(body?.closest('table'), 'reservation-table');
         qs('reservation-table-count').textContent = state.pagination.total ? `Showing ${state.rows.length} of ${state.pagination.total} reservation records` : 'No reservation records';
         if (!state.rows.length) {
-            body.innerHTML = '';
-            empty.classList.remove('hidden');
-            pager.classList.add('hidden');
-            empty.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">event_busy</span><strong>No reservation records found.</strong>';
+            const pager = document.querySelector('.reservation-records-section .facility-pagination');
+            pager?.classList.add('hidden');
+            body.innerHTML = '<tr class="fam-table-state-row"><td colspan="7"><div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">event_busy</span><strong>No reservation records found.</strong></div></td></tr>';
             return;
         }
-        empty.classList.add('hidden');
+        const pager = document.querySelector('.reservation-records-section .facility-pagination');
         const pages = Math.max(1, Number(state.pagination.total_pages || 1));
-        pager.classList.toggle('hidden', pages <= 1);
+        pager?.classList.toggle('hidden', pages <= 1);
         qs('reservation-page-status').textContent = `Page ${state.page} of ${pages}`;
         qs('reservation-prev-page').disabled = state.page <= 1;
         qs('reservation-next-page').disabled = state.page >= pages;
@@ -358,7 +356,7 @@
     }
     async function loadList() {
         if (state.listLoading) return;
-        if (!qs('reservation-table')) return;
+        if (!qs('reservation-records-body')) return;
         state.listLoading = true;
         qs('reservation-loading-state')?.classList.remove('hidden');
         try {

@@ -14,7 +14,7 @@
     <script src="../assets/js/layout.js?v=20260911-corporate-footer" defer></script>
     <script src="../assets/js/api-client.js" defer></script>
     <script src="../assets/js/table-audit.js" defer></script>
-    <script src="../assets/js/room-reservations.js" defer></script>
+    <script src="../assets/js/room-reservations.js?v=20260913-reservation-register-fix" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body"
     data-page-title="Room Reservations"
@@ -130,7 +130,6 @@
                                     <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
                                     <span>Loading reservation records...</span>
                                 </div>
-                                <div id="reservation-empty-state" class="fam-state hidden" aria-live="polite"></div>
                                 <div class="facility-table-scroll">
                                     <table class="reservation-table">
                                         <colgroup>
@@ -153,7 +152,7 @@
                                                 <th>Actions</th>
                                             </tr>
                                         </thead>
-                                        <tbody id="reservation-table"></tbody>
+                                        <tbody id="reservation-records-body"></tbody>
                                     </table>
                                 </div>
                                 <div class="facility-pagination hidden" aria-label="Reservation records pagination">
