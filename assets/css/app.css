@@ -1589,7 +1589,7 @@ button, label[for^="filter-"] {
 }
 
 .employee-sidebar-brand {
-  min-height: 5.35rem;
+  min-height: 4.4rem;
 }
 
 .employee-sidebar-brand-logo {
@@ -1607,30 +1607,27 @@ button, label[for^="filter-"] {
 
 .header-clock,
 .employee-header-clock {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  min-width: 7.4rem;
+  min-width: 11.85rem;
   padding-right: 0.35rem;
   color: var(--text-main, #111827);
   font-variant-numeric: tabular-nums;
-  line-height: 1.15;
+  line-height: 1;
   white-space: nowrap;
 }
 
 .header-clock-date,
 .employee-header-clock-date {
-  color: var(--text-muted, #64748b);
-  font-size: 0.72rem;
-  font-weight: 650;
+  color: var(--text-main, #111827);
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .header-clock-time,
 .employee-header-clock-time {
-  color: var(--text-main, #111827);
-  font-size: 0.9rem;
-  font-weight: 800;
+  display: none;
 }
 
 .employee-header-compact-brand {
@@ -11555,12 +11552,6 @@ col.table-col-actions { width: 4.75rem; }
 @media (max-width: 760px) {
   .header-clock,
   .employee-header-clock {
-    min-width: 0;
-    padding-right: 0;
-  }
-
-  .header-clock-date,
-  .employee-header-clock-date {
     display: none;
   }
 }

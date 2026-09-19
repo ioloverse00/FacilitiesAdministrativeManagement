@@ -1,5 +1,5 @@
 (function () {
-    const shellVersion = '20260919-main-header-clock';
+    const shellVersion = '20260919-main-header-clock-refinement';
     const componentPaths = {
         sidebar: 'components/sidebar.html',
         header: 'components/header.html',
@@ -93,26 +93,26 @@
         const timeNode = document.getElementById('fam-header-clock-time');
         if (!clock || !dateNode || !timeNode) return;
 
+        const pad = value => String(value).padStart(2, '0');
+        const formatClock = date => {
+            const month = pad(date.getMonth() + 1);
+            const day = pad(date.getDate());
+            const year = date.getFullYear();
+            const hour24 = date.getHours();
+            const period = hour24 >= 12 ? 'PM' : 'AM';
+            const hour12 = hour24 % 12 || 12;
+            return `${month} ${day} ${year} | ${hour12}:${pad(date.getMinutes())}:${pad(date.getSeconds())} ${period}`;
+        };
+
         const render = () => {
             const now = new Date();
             clock.dateTime = now.toISOString();
-            dateNode.textContent = now.toLocaleDateString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric'
-            });
-            timeNode.textContent = now.toLocaleTimeString(undefined, {
-                hour: 'numeric',
-                minute: '2-digit'
-            });
+            dateNode.textContent = formatClock(now);
+            timeNode.textContent = '';
         };
 
         render();
-        const delay = Math.max(1000, (60 - new Date().getSeconds()) * 1000);
-        window.setTimeout(() => {
-            render();
-            window.setInterval(render, 60000);
-        }, delay);
+        window.setInterval(render, 1000);
     }
 
 
