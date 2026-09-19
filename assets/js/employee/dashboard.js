@@ -5,7 +5,6 @@
         const target = document.getElementById('employee-summary-cards');
         if (!target) return;
         const cards = [
-            [counts.pending_tasks, `Pending Task${Number(counts.pending_tasks || 0) === 1 ? '' : 's'}`],
             [counts.upcoming_reservations, 'Upcoming Reservations'],
             [counts.pending_reservations, 'Pending Reservations']
         ];
@@ -33,29 +32,10 @@
         `;
     }
 
-    function taskLabel(item) {
-        if (item.module === 'contract_management' && item.entity_type === 'contract') return 'Approve Contract';
-        return title(item.title || 'Assigned Task');
-    }
-
-    function taskCopy(item) {
-        return [item.contract?.number || item.entity_reference, item.step_name].filter(Boolean).join(' - ');
-    }
-
-    function renderAttention(counts, reservation, tasks = []) {
+    function renderAttention(counts, reservation) {
         const target = document.getElementById('employee-attention-list');
         if (!target) return;
         const items = [];
-        if (tasks.length) {
-            const first = tasks[0];
-            items.push(attentionCard(
-                'task_alt',
-                taskLabel(first),
-                taskCopy(first),
-                window.FAMEmployeePortal.routeHref('employee-tasks', { task: first.task_id }),
-                'Review Task'
-            ));
-        }
         if (reservation?.allowed_actions?.check_out) {
             items.push(attentionCard('logout', 'Room is checked in', `${reservation.room || 'Room reservation'} is active.`, window.FAMEmployeePortal.routeHref('employee-room-reservations', { reservation: reservation.id }), 'Check Out'));
         } else if (reservation?.allowed_actions?.check_in) {
@@ -169,7 +149,7 @@
         const activity = document.getElementById('employee-recent-activity');
         if (!activity) return;
         if (!items?.length) {
-            activity.innerHTML = window.FAMEmployeePortal.emptyState('history', 'No recent activity', 'Your recent requests, reservations, and assigned task activity will appear here.');
+            activity.innerHTML = window.FAMEmployeePortal.emptyState('history', 'No recent activity', 'Your recent room reservation activity will appear here.');
             return;
         }
         const itemHref = item => {
@@ -202,7 +182,7 @@
         document.getElementById('employee-welcome-name').textContent = window.FAMEmployeePortal.text(context?.full_name, 'Employee');
         document.getElementById('employee-welcome-department').textContent = window.FAMEmployeePortal.text(context?.department?.name || context?.department?.code, 'Department not available');
         const reservation = nextReservation(reservations.data?.items || []);
-        renderAttention(dashboard?.counts || {}, reservation, dashboard?.assigned_tasks || []);
+        renderAttention(dashboard?.counts || {}, reservation);
         renderNextUp(reservation);
         renderCards(dashboard?.counts || {});
         renderActivity(dashboard?.recent_activity || []);

@@ -1,5 +1,5 @@
 (function () {
-    const shellVersion = '20260919-employee-brand-clock-refinement';
+    const shellVersion = '20260919-requester-portal';
     const componentPaths = {
         sidebar: 'components/employee/sidebar.html',
         header: 'components/employee/header.html',
@@ -48,7 +48,7 @@
         const email = text(context.email, context.username || '');
         const avatar = initials(name).toUpperCase();
         const values = {
-            'employee-header-department': "Department Head's Portal",
+            'employee-header-department': 'Requester Portal',
             'employee-header-name': name,
             'employee-header-position': position,
             'employee-header-avatar': avatar,
@@ -68,14 +68,15 @@
         if (!clock || !dateNode || !timeNode) return;
 
         const pad = value => String(value).padStart(2, '0');
+        const months = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May.', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
         const formatClock = date => {
-            const month = pad(date.getMonth() + 1);
+            const month = months[date.getMonth()];
             const day = pad(date.getDate());
             const year = date.getFullYear();
             const hour24 = date.getHours();
             const period = hour24 >= 12 ? 'PM' : 'AM';
             const hour12 = hour24 % 12 || 12;
-            return `${month} ${day} ${year} | ${hour12}:${pad(date.getMinutes())}:${pad(date.getSeconds())} ${period}`;
+            return `${month} ${day}, ${year} | ${hour12}:${pad(date.getMinutes())}:${pad(date.getSeconds())} ${period}`;
         };
 
         const render = () => {

@@ -191,6 +191,7 @@
     }
 
     async function loadCalendar() {
+        if (!qs('#employee-calendar-panel')) return;
         const room = state.calendarRoom || state.options?.facility_spaces?.[0]?.id;
         if (!room) {
             renderCalendar();
@@ -202,7 +203,8 @@
         if (select) select.value = state.calendarRoom;
         const metaRoom = selectedRoom();
         const meta = [metaRoom?.building_name, metaRoom?.capacity ? `${metaRoom.capacity} capacity` : ''].filter(Boolean).join(' - ');
-        qs('#employee-calendar-room-meta').textContent = meta || 'Room availability for the selected space.';
+        const metaNode = qs('#employee-calendar-room-meta');
+        if (metaNode) metaNode.textContent = meta || 'Room availability for the selected space.';
         const range = calendarRange();
         try {
             const payload = await window.FAMApi.request(api(`calendar.php?${new URLSearchParams({ facility_space_id: state.calendarRoom, date_from: isoDate(range.start), date_to: isoDate(range.end) })}`));
@@ -315,13 +317,14 @@
     function render() {
         const body = qs('#employee-room-reservations-body');
         const cards = qs('#employee-room-reservations-cards');
+        renderNextReservation();
         if (!body) return;
         qs('#employee-room-loading')?.classList.add('hidden');
-        qs('#employee-reservation-count').textContent = state.rows.length ? `${state.rows.length} reservation${state.rows.length === 1 ? '' : 's'} found` : 'No matching room reservations';
+        const count = qs('#employee-reservation-count');
+        if (count) count.textContent = state.rows.length ? `${state.rows.length} reservation${state.rows.length === 1 ? '' : 's'} found` : 'No matching room reservations';
         const now = Date.now();
         if (qs('#employee-upcoming-count')) qs('#employee-upcoming-count').textContent = state.rows.filter(row => (toDate(row.start)?.getTime() || 0) >= now && !['CANCELLED','REJECTED','COMPLETED','NO_SHOW'].includes(String(row.status))).length;
         if (qs('#employee-pending-count')) qs('#employee-pending-count').textContent = state.rows.filter(row => String(row.status).toUpperCase() === 'SUBMITTED' && String(row.approval).toUpperCase() === 'PENDING').length;
-        renderNextReservation();
         const emptyTitle = state.search || state.status ? 'No matching reservations' : 'No room reservations yet';
         const emptyCopy = state.search || state.status ? 'Try adjusting your search or status filter.' : 'Your room reservation requests will appear here.';
         body.innerHTML = state.rows.length ? state.rows.map(rowHtml).join('') : emptyRow(emptyTitle, emptyCopy);
@@ -706,8 +709,10 @@
         state.calendarRoom = storedRoom && (state.options.facility_spaces || []).some(room => String(room.id) === String(storedRoom))
             ? String(storedRoom)
             : String(state.options.facility_spaces?.[0]?.id || '');
-        qs('#employee-calendar-room').innerHTML = (state.options.facility_spaces || []).map(room => `<option value="${esc(room.id)}">${esc(room.name || room.code || 'Room')}</option>`).join('');
-        qs('#employee-reservation-status').innerHTML = '<option value="">All Statuses</option>' + (state.options.statuses || []).map(status => `<option value="${esc(status)}">${esc(title(status))}</option>`).join('');
+        const roomSelect = qs('#employee-calendar-room');
+        if (roomSelect) roomSelect.innerHTML = (state.options.facility_spaces || []).map(room => `<option value="${esc(room.id)}">${esc(room.name || room.code || 'Room')}</option>`).join('');
+        const statusSelect = qs('#employee-reservation-status');
+        if (statusSelect) statusSelect.innerHTML = '<option value="">All Statuses</option>' + (state.options.statuses || []).map(status => `<option value="${esc(status)}">${esc(title(status))}</option>`).join('');
         bind();
         await loadCalendar();
         await load();

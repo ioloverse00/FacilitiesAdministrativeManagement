@@ -11,6 +11,7 @@
         settings: 'fam-administration',
         'under-maintenance': 'under-maintenance',
         'employee-dashboard': 'employee/',
+        'employee-request-room': 'employee/request-room',
         'employee-tasks': 'employee/tasks',
         'employee-facility-requests': 'employee/facility-requests',
         'employee-room-reservations': 'employee/reservations',
@@ -68,6 +69,7 @@
     function cleanHref(routeKey) {
         const flatEmployeeAliases = {
             'employee-tasks': 'employee/tasks',
+            'employee-request-room': 'employee/request-room',
             'employee-facility-requests': 'employee/facility-requests',
             'employee-room-reservations': 'employee/reservations'
         };

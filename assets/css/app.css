@@ -1620,9 +1620,9 @@ button, label[for^="filter-"] {
 
 .header-clock-date,
 .employee-header-clock-date {
-  color: var(--text-main, #111827);
-  font-size: 0.82rem;
-  font-weight: 800;
+  color: var(--text-muted, #64748b);
+  font-size: 0.76rem;
+  font-weight: 500;
 }
 
 .header-clock-time,

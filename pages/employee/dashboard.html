@@ -6,14 +6,14 @@
     <title>Employee Portal Home</title>
     <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
     <script src="../assets/js/theme.js"></script>
-    <link href="../assets/css/app.css?v=20260919-portal-brand-clock-refinement" rel="stylesheet">
+    <link href="../assets/css/app.css?v=20260919-clock-subtext-format" rel="stylesheet">
     <script src="../assets/js/api-client.js" defer></script>
-    <script src="../assets/js/navigation.js?v=20260909-flat-employee-route-fix" defer></script>
+    <script src="../assets/js/navigation.js?v=20260919-requester-portal" defer></script>
     <script src="../assets/js/sidebar.js" defer></script>
     <script src="../assets/js/profile-dropdown.js" defer></script>
     <script src="../assets/js/modal.js" defer></script>
-    <script src="../assets/js/employee/portal.js?v=20260919-portal-brand-clock-refinement" defer></script>
-    <script src="../assets/js/employee/dashboard.js" defer></script>
+    <script src="../assets/js/employee/portal.js?v=20260919-requester-portal" defer></script>
+    <script src="../assets/js/employee/dashboard.js?v=20260919-requester-portal" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body employee-portal-body"
     data-page-title="Employee Portal Home"
@@ -33,7 +33,7 @@
                                 <p><strong id="employee-welcome-department">Loading...</strong></p>
                             </div>
                             <div class="facility-header-actions">
-                                <a class="btn-primary dashboard-action-button" href="../employee/reservations" data-clean-route="employee-room-reservations"><span class="material-symbols-outlined" aria-hidden="true">event</span>Request Room</a>
+                                <a class="btn-primary dashboard-action-button" href="../employee/request-room" data-clean-route="employee-request-room"><span class="material-symbols-outlined" aria-hidden="true">event</span>Request Room</a>
                             </div>
                         </header>
 
@@ -50,7 +50,7 @@
                             <div class="employee-home-panel" aria-labelledby="employee-attention-title">
                                 <div class="fam-section-heading employee-section-heading">
                                     <h2 id="employee-attention-title">Needs Attention</h2>
-                                    <p>Actionable items assigned to you.</p>
+                                    <p>Reservation actions that need your attention.</p>
                                 </div>
                                 <div id="employee-attention-list" class="employee-attention-list" aria-live="polite"></div>
                             </div>

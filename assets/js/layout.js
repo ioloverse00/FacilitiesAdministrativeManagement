@@ -1,5 +1,5 @@
 (function () {
-    const shellVersion = '20260919-main-header-clock-refinement';
+    const shellVersion = '20260919-clock-subtext-format';
     const componentPaths = {
         sidebar: 'components/sidebar.html',
         header: 'components/header.html',
@@ -94,14 +94,15 @@
         if (!clock || !dateNode || !timeNode) return;
 
         const pad = value => String(value).padStart(2, '0');
+        const months = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May.', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
         const formatClock = date => {
-            const month = pad(date.getMonth() + 1);
+            const month = months[date.getMonth()];
             const day = pad(date.getDate());
             const year = date.getFullYear();
             const hour24 = date.getHours();
             const period = hour24 >= 12 ? 'PM' : 'AM';
             const hour12 = hour24 % 12 || 12;
-            return `${month} ${day} ${year} | ${hour12}:${pad(date.getMinutes())}:${pad(date.getSeconds())} ${period}`;
+            return `${month} ${day}, ${year} | ${hour12}:${pad(date.getMinutes())}:${pad(date.getSeconds())} ${period}`;
         };
 
         const render = () => {

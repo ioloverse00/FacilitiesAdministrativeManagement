@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Request a Room</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css?v=20260919-clock-subtext-format" rel="stylesheet">
+    <script src="../assets/js/api-client.js" defer></script>
+    <script src="../assets/js/navigation.js?v=20260919-requester-portal" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/employee/portal.js?v=20260919-requester-portal" defer></script>
+    <script src="../assets/js/employee/room-reservations.js?v=20260919-requester-portal" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body employee-portal-body" data-active-nav="employee-request-room" data-page-title="Request a Room" data-page-heading="Request a Room" data-page-description="Check room availability and submit a reservation request.">
+    <div id="app-shell" class="app-shell"><div id="app-sidebar-slot" class="app-sidebar-slot"></div><div class="app-main-panel"><div id="app-header-slot" class="shrink-0"></div><main id="app-content" class="app-main bg-surface-container-lowest"><div id="page-content" class="app-page-content employee-workspace"><div class="employee-shell">
+        <header class="facility-page-header employee-request-page-header"><div class="facility-title-block"><h1 id="page-heading">Request a Room</h1><p id="page-description">Check room availability and submit a reservation request.</p></div><div class="facility-header-actions"><button id="employee-request-room" class="btn-primary dashboard-action-button" type="button"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Request Room</button></div></header>
+        <section class="employee-reservation-workspace" aria-label="Room request workspace">
+            <article class="fam-card employee-calendar-panel" aria-labelledby="employee-calendar-title">
+                <div class="employee-calendar-header">
+                    <div>
+                        <h2 id="employee-calendar-title">Room Availability</h2>
+                        <p>Review existing reservations before choosing a schedule.</p>
+                    </div>
+                    <label class="employee-room-selector">
+                        <span>Room</span>
+                        <select id="employee-calendar-room"></select>
+                    </label>
+                </div>
+                <p id="employee-calendar-room-meta" class="fam-muted employee-room-meta">Select a room to view availability.</p>
+                <div class="employee-calendar-toolbar" aria-label="Availability calendar controls">
+                    <h3 id="employee-calendar-heading">Loading schedule...</h3>
+                    <div class="employee-calendar-controls">
+                        <button id="employee-calendar-today" class="facility-page-button" type="button">Today</button>
+                        <button id="employee-calendar-prev" class="fam-icon-button" type="button" aria-label="Previous calendar period"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
+                        <button id="employee-calendar-next" class="fam-icon-button" type="button" aria-label="Next calendar period"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
+                        <div class="reservation-view-toggle employee-calendar-view-toggle" role="group" aria-label="Calendar view">
+                            <button class="active" type="button" data-employee-calendar-view="month" aria-pressed="true">Month</button>
+                            <button type="button" data-employee-calendar-view="week" aria-pressed="false">Week</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="employee-calendar-panel" class="employee-availability-calendar" aria-live="polite"></div>
+                <p id="employee-calendar-message" class="reservation-calendar-message" aria-live="polite"></p>
+            </article>
+            <aside class="employee-next-panel" aria-label="Reservation planning details">
+                <section class="fam-card employee-selected-date-panel" aria-labelledby="employee-selected-date-title">
+                    <div class="employee-selected-date-header">
+                        <div>
+                            <h2 id="employee-selected-date-title">Selected Date</h2>
+                            <p id="employee-selected-date-summary">Choose a room and date to view scheduled times.</p>
+                        </div>
+                        <button id="employee-request-selected-date" class="btn-primary dashboard-action-button" type="button" hidden><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Request this room</button>
+                    </div>
+                    <div id="employee-selected-date-list" class="employee-selected-date-list" aria-live="polite"></div>
+                </section>
+                <section class="fam-card employee-side-card" aria-labelledby="employee-next-reservation-title">
+                    <div class="fam-section-heading employee-section-heading">
+                        <h2 id="employee-next-reservation-title">Next Reservation</h2>
+                        <p>Your nearest active room booking.</p>
+                    </div>
+                    <div id="employee-next-reservation" class="employee-next-up" aria-live="polite"></div>
+                </section>
+            </aside>
+        </section>
+    </div></div><div id="app-footer-slot" class="app-footer-slot"></div></main></div></div>
+</body>
+</html>
