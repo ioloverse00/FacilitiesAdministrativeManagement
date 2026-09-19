@@ -6,34 +6,18 @@
     <title>My Reservations</title>
     <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
     <script src="../assets/js/theme.js"></script>
-    <link href="../assets/css/app.css?v=20260919-clock-subtext-format" rel="stylesheet">
+    <link href="../assets/css/app.css?v=20260919-requester-postfix" rel="stylesheet">
     <script src="../assets/js/api-client.js" defer></script>
-    <script src="../assets/js/navigation.js?v=20260919-requester-portal" defer></script>
+    <script src="../assets/js/navigation.js?v=20260919-requester-postfix" defer></script>
     <script src="../assets/js/sidebar.js" defer></script>
-    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js?v=20260919-notification-state" defer></script>
     <script src="../assets/js/modal.js" defer></script>
-    <script src="../assets/js/employee/portal.js?v=20260919-requester-portal" defer></script>
-    <script src="../assets/js/employee/room-reservations.js?v=20260919-requester-portal" defer></script>
+    <script src="../assets/js/employee/portal.js?v=20260919-requester-postfix" defer></script>
+    <script src="../assets/js/employee/room-reservations.js?v=20260919-requester-postfix" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body employee-portal-body" data-active-nav="employee-room-reservations" data-page-title="My Reservations" data-page-heading="My Reservations" data-page-description="Track your room reservation history and requester actions.">
     <div id="app-shell" class="app-shell"><div id="app-sidebar-slot" class="app-sidebar-slot"></div><div class="app-main-panel"><div id="app-header-slot" class="shrink-0"></div><main id="app-content" class="app-main bg-surface-container-lowest"><div id="page-content" class="app-page-content employee-workspace"><div class="employee-shell">
         <header class="facility-page-header employee-request-page-header"><div class="facility-title-block"><h1 id="page-heading">My Reservations</h1><p id="page-description">Track your room reservation history and requester actions.</p></div><div class="facility-header-actions"><a class="btn-primary dashboard-action-button" href="../employee/request-room" data-clean-route="employee-request-room"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Request Room</a></div></header>
-        <section class="employee-home-flow" aria-label="Reservation status">
-                <section class="employee-home-panel" aria-labelledby="employee-next-reservation-title">
-                    <div class="fam-section-heading employee-section-heading">
-                        <h2 id="employee-next-reservation-title">Next Reservation</h2>
-                        <p>Your nearest active room booking.</p>
-                    </div>
-                    <div id="employee-next-reservation" class="employee-next-up" aria-live="polite"></div>
-                </section>
-                <section class="employee-home-panel" aria-labelledby="employee-reservation-help-title">
-                    <div class="fam-section-heading employee-section-heading">
-                        <h2 id="employee-reservation-help-title">Need a Room?</h2>
-                        <p>Use the dedicated request page to check availability and submit a reservation.</p>
-                    </div>
-                    <div class="employee-next-actions"><a class="btn-primary dashboard-action-button" href="../employee/request-room" data-clean-route="employee-request-room"><span class="material-symbols-outlined" aria-hidden="true">event_available</span>Request a Room</a></div>
-                </section>
-        </section>
         <section class="facility-section" aria-labelledby="employee-reservations-title">
             <div class="facility-table-card employee-records-card">
                 <div class="facility-table-header">

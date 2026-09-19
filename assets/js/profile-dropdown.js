@@ -242,6 +242,10 @@
         let notifications = [];
         let unread = 0;
         let loading = false;
+        let loadingMore = false;
+        let page = 1;
+        let totalPages = 1;
+        const perPage = 8;
         let pollingTimer = null;
 
         const unreadCount = () => unread;
@@ -264,14 +268,30 @@
             return true;
         });
 
-        const loadNotifications = async (quiet = false) => {
+        const mergeNotifications = items => {
+            const existing = new Set(notifications.map(item => String(item.id)));
+            (items || []).forEach(item => {
+                if (!existing.has(String(item.id))) {
+                    notifications.push(item);
+                    existing.add(String(item.id));
+                }
+            });
+        };
+
+        const loadNotifications = async (quiet = false, nextPage = 1, append = false) => {
             if (loading || !window.FAMApi) return;
-            loading = true;
+            if (append && loadingMore) return;
+            if (append) loadingMore = true;
+            else loading = true;
             if (!quiet && list) renderLoading();
             try {
-                const payload = await window.FAMApi.request(notificationApi('index.php?per_page=8'), { skipAuthRedirect: true });
-                notifications = payload.data?.items || [];
+                const payload = await window.FAMApi.request(notificationApi(`index.php?page=${encodeURIComponent(nextPage)}&per_page=${encodeURIComponent(perPage)}`), { skipAuthRedirect: true });
+                if (append) mergeNotifications(payload.data?.items || []);
+                else notifications = payload.data?.items || [];
                 unread = Number(payload.data?.unread_count || 0);
+                const pagination = payload.data?.pagination || {};
+                page = Number(pagination.page || nextPage || 1);
+                totalPages = Number(pagination.total_pages || 1);
                 updateCount();
                 if (list) render();
             } catch (error) {
@@ -280,22 +300,43 @@
                 }
             } finally {
                 loading = false;
+                loadingMore = false;
             }
         };
 
         const markRead = async id => {
             const item = notifications.find(entry => String(entry.id) === String(id));
-            if (item && !item.is_read) {
-                item.is_read = true;
-                unread = Math.max(0, unread - 1);
+            try {
+                const payload = await window.FAMApi.request(notificationApi(`mark-read.php?id=${encodeURIComponent(id)}`), { method: 'POST', body: {} });
+                if (item) item.is_read = true;
+                unread = Number(payload.data?.unread_count ?? Math.max(0, unread - 1));
                 updateCount();
                 if (list) render();
-            }
-            try {
-                await window.FAMApi.request(notificationApi(`mark-read.php?id=${encodeURIComponent(id)}`), { method: 'POST', body: {} });
             } catch {
                 await loadNotifications(true);
             }
+        };
+
+        const markUnread = async id => {
+            const item = notifications.find(entry => String(entry.id) === String(id));
+            try {
+                const payload = await window.FAMApi.request(notificationApi(`mark-unread.php?id=${encodeURIComponent(id)}`), { method: 'POST', body: {} });
+                if (item) item.is_read = false;
+                unread = Number(payload.data?.unread_count ?? unread + 1);
+                updateCount();
+                if (list) render();
+            } catch {
+                await loadNotifications(true);
+            }
+        };
+
+        const markAllReadPersisted = async () => {
+            if (unread <= 0) return;
+            const payload = await window.FAMApi.request(notificationApi('mark-all-read.php'), { method: 'POST', body: {} });
+            notifications.forEach(item => { item.is_read = true; });
+            unread = Number(payload.data?.unread_count || 0);
+            updateCount();
+            if (list) render();
         };
 
         const startPolling = () => {
@@ -356,12 +397,16 @@
                             <span class="material-symbols-outlined notification-chevron" aria-hidden="true">chevron_right</span>
                         </a>
                         <div class="notification-card-actions" aria-label="Notification actions">
-                            <button type="button" data-notification-read="${esc(item.id)}">${item.is_read ? 'Read' : 'Mark as Read'}</button>
+                            <button type="button" data-notification-toggle-read="${esc(item.id)}">${item.is_read ? 'Unread' : 'Read'}</button>
                             <a href="${esc(href)}" data-notification-open="${esc(item.id)}">Open</a>
                         </div>
                     </article>
                 `;
-            }).join('');
+            }).join('') + (page < totalPages || loadingMore ? `
+                <div class="notification-pagination-sentinel" data-notification-load-more>
+                    ${loadingMore ? 'Loading older notifications...' : 'Scroll for older notifications'}
+                </div>
+            ` : '');
         };
 
         if (!panel || !list) {
@@ -388,6 +433,7 @@
             panel.classList.remove('block', 'opacity-100', 'scale-100');
             panel.classList.add('opacity-0', 'scale-95');
             toggle.setAttribute('aria-expanded', 'false');
+            markAllReadPersisted().catch(() => loadNotifications(true));
             setTimeout(() => {
                 if (!isOpen) panel.classList.add('hidden');
             }, 200);
@@ -408,19 +454,18 @@
         });
 
         markAll?.addEventListener('click', () => {
-            notifications.forEach(item => { item.is_read = true; });
-            unread = 0;
-            render();
-            window.FAMApi.request(notificationApi('mark-all-read.php'), { method: 'POST', body: {} }).catch(() => loadNotifications(true));
+            markAllReadPersisted().catch(() => loadNotifications(true));
         });
 
         list.addEventListener('click', event => {
-            const readId = event.target.closest('[data-notification-read]')?.dataset.notificationRead;
+            const toggleReadId = event.target.closest('[data-notification-toggle-read]')?.dataset.notificationToggleRead;
             const openId = event.target.closest('[data-notification-open]')?.dataset.notificationOpen;
 
-            if (readId) {
+            if (toggleReadId) {
                 event.preventDefault();
-                markRead(readId);
+                const item = notifications.find(entry => String(entry.id) === String(toggleReadId));
+                if (item?.is_read) markUnread(toggleReadId);
+                else markRead(toggleReadId);
             }
 
             if (openId) {
@@ -442,6 +487,13 @@
             if (event.key === 'ArrowUp') {
                 event.preventDefault();
                 items[(currentIndex - 1 + items.length) % items.length]?.focus();
+            }
+        });
+
+        list.addEventListener('scroll', () => {
+            if (loading || loadingMore || page >= totalPages) return;
+            if (list.scrollTop + list.clientHeight >= list.scrollHeight - 80) {
+                loadNotifications(true, page + 1, true);
             }
         });
 

@@ -148,6 +148,13 @@ SQL)->fetchAll();
         return $stmt->rowCount() > 0;
     }
 
+    public function markUnread(int $userId, int $notificationId): bool
+    {
+        $stmt = $this->pdo->prepare('UPDATE notification SET is_read = 0, read_at = NULL WHERE notification_id = :id AND recipient_user_id = :user_id AND is_dismissed = 0');
+        $stmt->execute(['id' => $notificationId, 'user_id' => $userId]);
+        return $stmt->rowCount() > 0;
+    }
+
     public function markAllRead(int $userId): int
     {
         $stmt = $this->pdo->prepare('UPDATE notification SET is_read = 1, read_at = COALESCE(read_at, NOW()) WHERE recipient_user_id = :user_id AND is_dismissed = 0 AND is_read = 0');

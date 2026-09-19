@@ -7613,6 +7613,13 @@ button.reservation-more-events {
   opacity: 0.78;
 }
 
+.notification-pagination-sentinel {
+  padding: 0.75rem;
+  color: var(--color-on-surface-variant, #64748b);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
 .notification-card:hover,
 .notification-card:focus-within {
   background: var(--color-surface-container-low, #f8fafc);
@@ -10430,6 +10437,9 @@ col.table-col-actions { width: 4.75rem; }
   grid-template-columns: minmax(0, min(100%, 46rem)) minmax(18rem, 24rem);
   align-items: stretch;
   justify-content: start;
+}
+body[data-active-nav="employee-dashboard"] .employee-home-flow {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 .employee-home-panel {
   display: flex;

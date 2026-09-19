@@ -1,5 +1,5 @@
 (function () {
-    const shellVersion = '20260919-requester-portal';
+    const shellVersion = '20260919-requester-postfix';
     const componentPaths = {
         sidebar: 'components/employee/sidebar.html',
         header: 'components/employee/header.html',
@@ -44,7 +44,7 @@
 
     function renderChromeContext(context) {
         const name = text(context.full_name, context.username || 'Employee');
-        const position = text(context.position, 'Employee');
+        const position = text(context.department?.name || context.department?.code, text(context.position, 'Employee'));
         const email = text(context.email, context.username || '');
         const avatar = initials(name).toUpperCase();
         const values = {
