@@ -1,0 +1,11 @@
+-- DEPRECATED - DO NOT EXECUTE.
+--
+-- This combined staging migration was intentionally retired after final
+-- pre-execution review because it mixed ALTER TABLE DDL with transactional DML.
+-- MariaDB/MySQL ALTER TABLE performs implicit commits, so this file must not be
+-- used for HostForge execution.
+--
+-- Use the reviewed two-step replacement instead:
+--
+-- 1. database/01_staging_email_auth_schema.sql
+-- 2. database/02_staging_email_auth_accounts.sql

@@ -22,24 +22,25 @@ final class AuthService
     {
     }
 
-    public function login(string $username, string $password): AuthResult
+    public function login(string $email, string $password): AuthResult
     {
-        $account = $this->findAccountByUsername($username);
+        $email = $this->normalizeEmail($email) ?? '';
+        $account = $email === '' ? null : $this->findAccountByEmail($email);
 
         if ($account === null) {
             $this->safeAudit('AUTH_LOGIN_FAILED', null, [
-                'attempted_username' => $username,
+                'attempted_email' => $email,
                 'result' => 'unknown_account',
             ]);
 
-            return new AuthResult(false, 'Invalid username or password.', 401);
+            return new AuthResult(false, 'Invalid email or password.', 401);
         }
 
         $userId = (int) $account['user_account_id'];
 
         if ($this->isLocked($account)) {
             $this->safeAudit('AUTH_LOGIN_FAILED', $userId, [
-                'attempted_username' => $username,
+                'attempted_email' => $email,
                 'result' => 'locked',
             ]);
 
@@ -48,7 +49,7 @@ final class AuthService
 
         if (!$this->hasAvailableAccountState($account)) {
             $this->safeAudit('AUTH_LOGIN_FAILED', $userId, [
-                'attempted_username' => $username,
+                'attempted_email' => $email,
                 'result' => 'unavailable',
             ]);
 
@@ -56,9 +57,9 @@ final class AuthService
         }
 
         if (!password_verify($password, (string) $account['password_hash'])) {
-            $this->registerFailedLogin($account, $username);
+            $this->registerFailedLogin($account, $email);
 
-            return new AuthResult(false, 'Invalid username or password.', 401);
+            return new AuthResult(false, 'Invalid email or password.', 401);
         }
 
         if (password_needs_rehash((string) $account['password_hash'], PASSWORD_DEFAULT)) {
@@ -245,13 +246,14 @@ final class AuthService
     /**
      * @return array<string, mixed>|null
      */
-    private function findAccountByUsername(string $username): ?array
+    private function findAccountByEmail(string $email): ?array
     {
         $statement = $this->pdo->prepare(
             'SELECT
                 u.user_account_id,
                 u.employee_reference_id,
                 u.username,
+                u.email AS account_email,
                 u.password_hash,
                 u.account_status,
                 u.failed_login_count,
@@ -269,10 +271,10 @@ final class AuthService
             FROM user_account u
             INNER JOIN employee_reference e ON e.employee_reference_id = u.employee_reference_id
             LEFT JOIN department_reference d ON d.department_reference_id = e.department_reference_id
-            WHERE u.username = :username
+            WHERE u.email = :email
             LIMIT 1'
         );
-        $statement->execute(['username' => $username]);
+        $statement->execute(['email' => $email]);
         $row = $statement->fetch();
 
         return is_array($row) ? $row : null;
@@ -285,6 +287,7 @@ final class AuthService
                 u.user_account_id,
                 u.employee_reference_id,
                 u.username,
+                u.email AS account_email,
                 u.password_hash,
                 u.account_status,
                 u.failed_login_count,
@@ -339,7 +342,7 @@ final class AuthService
     /**
      * @param array<string, mixed> $account
      */
-    private function registerFailedLogin(array $account, string $username): void
+    private function registerFailedLogin(array $account, string $email): void
     {
         $userId = (int) $account['user_account_id'];
         $failedCount = ((int) $account['failed_login_count']) + 1;
@@ -382,13 +385,13 @@ final class AuthService
 
         if ($accountLocked) {
             $this->safeAudit('AUTH_ACCOUNT_LOCKED', $userId, [
-                'attempted_username' => $username,
+                'attempted_email' => $email,
                 'result' => 'locked',
             ]);
         }
 
         $this->safeAudit('AUTH_LOGIN_FAILED', $userId, [
-            'attempted_username' => $username,
+            'attempted_email' => $email,
             'result' => 'invalid_credentials',
         ]);
     }
@@ -421,7 +424,7 @@ final class AuthService
 
     private function authoritativeEmail(array $account): ?string
     {
-        return $this->normalizeEmail($account['email_address'] ?? null);
+        return $this->normalizeEmail($account['account_email'] ?? null);
     }
 
     private function normalizeEmail(mixed $email): ?string

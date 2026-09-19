@@ -541,7 +541,7 @@ function initAuthenticationPage() {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: formData.get('username'), password: formData.get('password') })
+                body: JSON.stringify({ email: String(formData.get('email') || '').trim(), password: formData.get('password') })
             });
             const payload = await response.json().catch(() => null);
             if (!response.ok || payload?.success === false) throw new Error(payload?.message || 'Sign in failed.');

@@ -7,14 +7,16 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.php';
 requireMethod('POST');
 
 $body = readJsonBody();
-$username = trim((string) ($body['username'] ?? ''));
+$email = trim((string) ($body['email'] ?? ''));
 $password = (string) ($body['password'] ?? '');
 $errors = [];
 
-if ($username === '') {
-    $errors['username'] = 'Username is required.';
-} elseif (strlen($username) > 100) {
-    $errors['username'] = 'Username is too long.';
+if ($email === '') {
+    $errors['email'] = 'Email is required.';
+} elseif (strlen($email) > 190) {
+    $errors['email'] = 'Email is too long.';
+} elseif (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+    $errors['email'] = 'Enter a valid email address.';
 }
 
 if ($password === '') {
@@ -28,6 +30,6 @@ if ($errors !== []) {
 }
 
 $service = new AuthService(Database::connection());
-$result = $service->login($username, $password);
+$result = $service->login($email, $password);
 
 jsonResponse($result->success, $result->message, $result->data, $result->status);
