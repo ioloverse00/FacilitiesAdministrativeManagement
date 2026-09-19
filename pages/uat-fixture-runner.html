@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Controlled UAT Fixture Runner</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
+    <script src="../assets/js/theme.js"></script>
+    <link href="../assets/css/app.css" rel="stylesheet">
+    <script src="../assets/js/navigation.js?v=visitor-scanner-route-20260908" defer></script>
+    <script src="../assets/js/sidebar.js" defer></script>
+    <script src="../assets/js/profile-dropdown.js" defer></script>
+    <script src="../assets/js/modal.js" defer></script>
+    <script src="../assets/js/layout.js" defer></script>
+    <script src="../assets/js/uat-fixture-runner.js" defer></script>
+</head>
+<body class="app-body bg-background text-on-background font-body"
+    data-page-title="Controlled UAT Fixture Runner"
+    data-breadcrumb-title="UAT Fixture Runner"
+    data-active-nav=""
+    data-requires-permission="facility_requests.create"
+    data-page-heading="Controlled UAT Fixture Runner"
+    data-page-description="Create the locked Visitor Management and Facility Requests UAT baseline through authenticated application APIs.">
+    <div id="app-shell" class="app-shell">
+        <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+        <div class="app-main-panel">
+            <div id="app-header-slot" class="shrink-0"></div>
+            <main id="app-content" class="app-main bg-surface-container-lowest">
+                <div id="page-content" class="app-page-content facility-requests-workspace">
+                    <div class="facility-requests-shell">
+                        <header class="facility-page-header">
+                            <div class="facility-title-block">
+                                <h1>Controlled UAT Fixture Runner</h1>
+                                <p>Authenticated, fail-closed creation for the locked Visitor and Facility UAT baseline.</p>
+                            </div>
+                            <div class="facility-header-actions">
+                                <button class="btn-secondary dashboard-action-button" type="button" data-uat-preflight>Run Preflight</button>
+                                <button class="btn-primary dashboard-action-button" type="button" data-uat-create disabled>Create Baseline</button>
+                            </div>
+                        </header>
+                        <section class="facility-table-card">
+                            <div class="facility-table-header"><div><h2>Preflight</h2><p data-uat-preflight-status>Not checked</p></div></div>
+                            <div class="facility-dialog-body"><pre data-uat-preflight-output class="uat-fixture-log" aria-live="polite"></pre></div>
+                        </section>
+                        <section class="facility-table-card">
+                            <div class="facility-table-header"><div><h2>Creation Progress</h2><p data-uat-progress-status>Waiting</p></div></div>
+                            <div class="facility-dialog-body"><pre data-uat-progress-output class="uat-fixture-log" aria-live="polite"></pre></div>
+                        </section>
+                        <section class="facility-table-card">
+                            <div class="facility-table-header"><div><h2>Final Verification</h2><p data-uat-verification-status>Not run</p></div></div>
+                            <div class="facility-dialog-body"><pre data-uat-verification-output class="uat-fixture-log" aria-live="polite"></pre></div>
+                        </section>
+                    </div>
+                </div>
+                <div id="app-footer-slot" class="app-footer-slot"></div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

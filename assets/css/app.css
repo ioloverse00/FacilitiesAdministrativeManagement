@@ -1588,15 +1588,49 @@ button, label[for^="filter-"] {
   background: rgba(59, 130, 246, 0.14);
 }
 
-.employee-sidebar-brand-card {
-  border-radius: 1.5rem;
+.employee-sidebar-brand {
+  min-height: 5.35rem;
 }
 
 .employee-sidebar-brand-logo {
   display: block;
-  width: min(9.75rem, 100%);
-  height: 3rem;
+  width: 100%;
+  max-width: 9.25rem;
+  height: auto;
   object-fit: contain;
+}
+
+.header-actions-group,
+.employee-header-actions-group {
+  min-width: 0;
+}
+
+.header-clock,
+.employee-header-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 7.4rem;
+  padding-right: 0.35rem;
+  color: var(--text-main, #111827);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.header-clock-date,
+.employee-header-clock-date {
+  color: var(--text-muted, #64748b);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.header-clock-time,
+.employee-header-clock-time {
+  color: var(--text-main, #111827);
+  font-size: 0.9rem;
+  font-weight: 800;
 }
 
 .employee-header-compact-brand {
@@ -10397,9 +10431,12 @@ col.table-col-actions { width: 4.75rem; }
 }
 .employee-home-flow {
   grid-template-columns: minmax(0, min(100%, 46rem)) minmax(18rem, 24rem);
+  align-items: stretch;
   justify-content: start;
 }
 .employee-home-panel {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   padding: 1rem 1.1rem;
   background: var(--surface-card, #fff);
@@ -10410,6 +10447,7 @@ col.table-col-actions { width: 4.75rem; }
 .employee-attention-list {
   display: grid;
   gap: 0.55rem;
+  flex: 1;
 }
 .employee-attention-card {
   display: grid;
@@ -10764,6 +10802,7 @@ col.table-col-actions { width: 4.75rem; }
 }
 .employee-next-up {
   width: 100%;
+  flex: 1;
 }
 .employee-next-card {
   display: grid;
@@ -11512,6 +11551,18 @@ col.table-col-actions { width: 4.75rem; }
   .employee-header-actions,
   .employee-header-actions .dashboard-action-button { width: 100%; }
   .employee-header-actions .dashboard-action-button { justify-content: center; }
+}
+@media (max-width: 760px) {
+  .header-clock,
+  .employee-header-clock {
+    min-width: 0;
+    padding-right: 0;
+  }
+
+  .header-clock-date,
+  .employee-header-clock-date {
+    display: none;
+  }
 }
 @media (max-width: 640px) {
   .employee-workspace { padding-top: 1rem; }

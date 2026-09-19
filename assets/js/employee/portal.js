@@ -1,5 +1,5 @@
 (function () {
-    const shellVersion = '20260911-corporate-footer';
+    const shellVersion = '20260919-employee-portal-cleanup';
     const componentPaths = {
         sidebar: 'components/employee/sidebar.html',
         header: 'components/employee/header.html',
@@ -59,6 +59,34 @@
             const node = document.getElementById(id);
             if (node) node.textContent = value;
         });
+    }
+
+    function initializeClock() {
+        const clock = document.getElementById('employee-header-clock');
+        const dateNode = document.getElementById('employee-header-clock-date');
+        const timeNode = document.getElementById('employee-header-clock-time');
+        if (!clock || !dateNode || !timeNode) return;
+
+        const render = () => {
+            const now = new Date();
+            clock.dateTime = now.toISOString();
+            dateNode.textContent = now.toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+            timeNode.textContent = now.toLocaleTimeString(undefined, {
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        };
+
+        render();
+        const delay = Math.max(1000, (60 - new Date().getSeconds()) * 1000);
+        window.setTimeout(() => {
+            render();
+            window.setInterval(render, 60000);
+        }, delay);
     }
 
     function renderAccessDenied(message) {
@@ -130,6 +158,7 @@
             window.FAMSidebar?.initializeSidebar();
             window.FAMProfileDropdown?.initializeProfileDropdown();
             window.FAMModal?.initializeModals?.();
+            initializeClock();
             const employeeContext = await context();
             renderChromeContext(employeeContext || {});
             document.dispatchEvent(new CustomEvent('fam:employee-layout-ready', { detail: { context: employeeContext } }));

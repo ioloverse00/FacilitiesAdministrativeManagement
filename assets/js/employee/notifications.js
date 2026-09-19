@@ -38,7 +38,7 @@
             return routeHref('employee-room-reservations', { reservation: item.related_entity_id });
         }
         if (item.module_code === 'FACILITY_REQUESTS' || item.related_entity_type === 'facility_request' || String(item.action_url || '').includes('employee/facility-requests.html')) {
-            return routeHref('employee-facility-requests', { request: item.related_entity_id });
+            return '#';
         }
         if (item.module_code === 'contract_management' || item.related_entity_type === 'contract' || String(item.action_url || '').includes('employee/approvals.html') || String(item.action_url || '').includes('employee/tasks.html')) {
             const taskId = item.metadata?.workflow_task_id || '';
@@ -52,7 +52,7 @@
             return { icon: 'calendar_month', label: 'Room Reservations' };
         }
         if (item.module_code === 'FACILITY_REQUESTS' || item.related_entity_type === 'facility_request') {
-            return { icon: 'domain', label: 'Facility Request' };
+            return { icon: 'notifications', label: 'Archived request' };
         }
         if (item.module_code === 'contract_management' || item.related_entity_type === 'contract') {
             return { icon: 'approval_delegation', label: 'Contract Approval' };
@@ -201,7 +201,7 @@
             event.preventDefault();
             const target = link.getAttribute('href');
             markRead(link.dataset.employeeNotificationOpen).finally(() => {
-                if (target) window.location.href = target;
+                if (target && target !== '#') window.location.href = target;
             });
         });
 

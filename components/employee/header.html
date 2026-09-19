@@ -12,7 +12,11 @@
         </div>
     </div>
 
-    <div class="flex items-center gap-2">
+    <div class="employee-header-actions-group flex items-center gap-2">
+        <time id="employee-header-clock" class="employee-header-clock" datetime="" aria-live="polite">
+            <span id="employee-header-clock-date" class="employee-header-clock-date">Loading date</span>
+            <span id="employee-header-clock-time" class="employee-header-clock-time">--:--</span>
+        </time>
         <div class="notification-center relative">
             <button id="notification-dropdown-toggle" type="button" class="notification-bell-button" aria-expanded="false" aria-controls="notification-dropdown-menu" aria-haspopup="dialog" aria-label="Open notifications" title="Notifications">
                 <span class="material-symbols-outlined text-xl" aria-hidden="true">notifications</span>

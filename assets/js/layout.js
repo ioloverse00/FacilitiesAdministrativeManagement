@@ -1,5 +1,5 @@
 (function () {
-    const shellVersion = '20260911-corporate-footer';
+    const shellVersion = '20260919-main-header-clock';
     const componentPaths = {
         sidebar: 'components/sidebar.html',
         header: 'components/header.html',
@@ -85,6 +85,34 @@
         if (breadcrumbTarget && breadcrumb) breadcrumbTarget.textContent = breadcrumb;
         if (headingTarget && heading) headingTarget.textContent = heading;
         if (descriptionTarget && description) descriptionTarget.textContent = description;
+    }
+
+    function initializeClock() {
+        const clock = document.getElementById('fam-header-clock');
+        const dateNode = document.getElementById('fam-header-clock-date');
+        const timeNode = document.getElementById('fam-header-clock-time');
+        if (!clock || !dateNode || !timeNode) return;
+
+        const render = () => {
+            const now = new Date();
+            clock.dateTime = now.toISOString();
+            dateNode.textContent = now.toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+            timeNode.textContent = now.toLocaleTimeString(undefined, {
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        };
+
+        render();
+        const delay = Math.max(1000, (60 - new Date().getSeconds()) * 1000);
+        window.setTimeout(() => {
+            render();
+            window.setInterval(render, 60000);
+        }, delay);
     }
 
 
@@ -186,6 +214,7 @@
             window.FAMSidebar?.initializeSidebar();
             window.FAMProfileDropdown?.initializeProfileDropdown();
             window.FAMModal?.initializeModals();
+            initializeClock();
             markShellReady();
             await Promise.all([
                 ensureDetailsModal(),
