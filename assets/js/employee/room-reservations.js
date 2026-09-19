@@ -14,6 +14,10 @@
         return `${(value / 1048576).toFixed(value < 10485760 ? 1 : 0)} MB`;
     };
     const api = path => `employee/reservations/${path}`;
+    const requestLetterUrl = (id, mode) => {
+        const path = `employee/reservations/request-letter.php?id=${encodeURIComponent(id)}&mode=${encodeURIComponent(mode)}`;
+        return window.FAMApi?.apiUrl?.(path) || window.FAMNavigation?.apiUrl?.(path) || `/api/${path}`;
+    };
     const isoDate = value => {
         const d = toDate(value);
         if (!d || Number.isNaN(d.getTime())) return '';
@@ -455,9 +459,8 @@
 
     function detail(label, value, className = '') { return `<dl class="facility-detail-row ${esc(className)}"><dt>${esc(label)}</dt><dd>${esc(value || 'Not available')}</dd></dl>`; }
     function detailGrid(content) { return `<div class="detail-grid">${content}</div>`; }
-    function requestLetterLinks(item, base = 'request-letter.php') {
+    function requestLetterLinks(item) {
         if (!item.request_letter) return '<p>No request letter is attached to this reservation.</p>';
-        const id = encodeURIComponent(item.id);
         const letter = item.request_letter || {};
         const meta = [
             letter.fileName,
@@ -465,7 +468,7 @@
             fileSize(letter.fileSize),
             letter.uploadedAt ? `Uploaded ${fmtDateTime(letter.uploadedAt)}` : ''
         ].filter(Boolean).join(' · ');
-        return `<article class="document-file-row reservation-request-letter-row"><div><span class="material-symbols-outlined document-file-icon" aria-hidden="true">description</span><div><strong>Request Letter</strong>${meta ? `<small>${esc(meta)}</small>` : ''}</div></div><div class="document-file-actions"><a href="${esc(api(`${base}?id=${id}&mode=view`))}" target="_blank" rel="noopener">View</a><a href="${esc(api(`${base}?id=${id}&mode=download`))}" target="_blank" rel="noopener">Download</a></div></article>`;
+        return `<article class="document-file-row reservation-request-letter-row"><div><span class="material-symbols-outlined document-file-icon" aria-hidden="true">description</span><div><strong>Request Letter</strong>${meta ? `<small>${esc(meta)}</small>` : ''}</div></div><div class="document-file-actions"><a href="${esc(requestLetterUrl(item.id, 'view'))}" target="_blank" rel="noopener">View</a><a href="${esc(requestLetterUrl(item.id, 'download'))}" target="_blank" rel="noopener">Download</a></div></article>`;
     }
     function actionHelper(item) {
         if (item.allowed_actions?.check_in_not_yet) return 'Check-in will be available 30 minutes before your reservation.';
