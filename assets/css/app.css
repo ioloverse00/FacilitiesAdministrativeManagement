@@ -10568,6 +10568,9 @@ body[data-active-nav="employee-dashboard"] .employee-home-flow {
   gap: 0.85rem;
   align-items: stretch;
 }
+body[data-active-nav="employee-request-room"] .employee-reservation-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
 .employee-calendar-panel,
 .employee-selected-date-panel {
   padding: 1rem 1.1rem;
@@ -10688,6 +10691,12 @@ body[data-active-nav="employee-dashboard"] .employee-home-flow {
   border-bottom: 1px solid var(--outline-variant, #d6dbe6);
   background: var(--surface, #fff);
 }
+.employee-calendar-day.bookable {
+  cursor: pointer;
+}
+.employee-calendar-day.bookable:hover {
+  background: var(--surface-container-low, #f8fafc);
+}
 .employee-calendar-week .employee-calendar-day {
   min-height: 8.75rem;
 }
@@ -10754,7 +10763,6 @@ body[data-active-nav="employee-dashboard"] .employee-home-flow {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.employee-calendar-available,
 .employee-calendar-more {
   color: var(--text-muted, #64748b);
   font-size: 0.75rem;

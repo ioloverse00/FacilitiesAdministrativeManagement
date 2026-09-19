@@ -46,36 +46,33 @@ $statement = $pdo->prepare(
        FROM facility_reservation
       WHERE deleted_at IS NULL
         AND facility_space_id = :space_id
-        AND status IN ('SUBMITTED','APPROVED','CHECKED_IN')
+        AND requested_by_employee_reference_id = :employee_id
+        AND status = 'APPROVED'
+        AND approval_status = 'APPROVED'
         AND start_datetime <= :date_to
         AND end_datetime >= :date_from
       ORDER BY start_datetime ASC"
 );
+$employeeId = (int) $user['employee_id'];
 $statement->execute([
     'space_id' => $spaceId,
+    'employee_id' => $employeeId,
     'date_from' => $start->format('Y-m-d H:i:s'),
     'date_to' => $end->format('Y-m-d H:i:s'),
 ]);
 
-$employeeId = (int) $user['employee_id'];
-$events = array_map(static function (array $row) use ($employeeId): array {
-    $self = (int) $row['requested_by_employee_reference_id'] === $employeeId;
-    $event = [
+$events = array_map(static function (array $row): array {
+    return [
         'start' => $row['start_datetime'],
         'end' => $row['end_datetime'],
-        'ownership' => $self ? 'SELF' : 'OTHER',
+        'ownership' => 'SELF',
         'occupancy' => 'RESERVED',
+        'reservation_id' => (int) $row['facility_reservation_id'],
+        'reservation_number' => (string) $row['reservation_number'],
+        'purpose' => (string) $row['purpose'],
+        'status' => (string) $row['status'],
+        'approval_status' => (string) $row['approval_status'],
     ];
-
-    if ($self) {
-        $event['reservation_id'] = (int) $row['facility_reservation_id'];
-        $event['reservation_number'] = (string) $row['reservation_number'];
-        $event['purpose'] = (string) $row['purpose'];
-        $event['status'] = (string) $row['status'];
-        $event['approval_status'] = (string) $row['approval_status'];
-    }
-
-    return $event;
 }, $statement->fetchAll());
 
 jsonResponse(true, 'Room availability calendar retrieved.', [

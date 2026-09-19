@@ -23,6 +23,8 @@
     const sameDay = (a, b) => dateKey(a) === dateKey(b);
     const addDays = (date, amount) => { const next = new Date(date); next.setDate(next.getDate() + amount); return next; };
     const startOfWeek = date => { const d = new Date(date); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - d.getDay()); return d; };
+    const startOfDay = date => { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; };
+    const bookableDate = date => startOfDay(date).getTime() >= startOfDay(new Date()).getTime();
     const daysBetween = (start, end) => {
         const days = [];
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) days.push(new Date(d));
@@ -102,7 +104,8 @@
             <div class="employee-calendar-week-strip" role="list" aria-label="Week dates">
                 ${days.map(day => {
                     const events = blockingEventsForDay(day);
-                    return `<button class="employee-calendar-strip-day ${sameDay(day, state.selectedDate) ? 'selected' : ''} ${sameDay(day, new Date()) ? 'today' : ''}" type="button" data-calendar-date="${esc(isoDate(day))}" aria-pressed="${sameDay(day, state.selectedDate)}" role="listitem">
+                    const bookable = bookableDate(day);
+                    return `<button class="employee-calendar-strip-day ${sameDay(day, state.selectedDate) ? 'selected' : ''} ${sameDay(day, new Date()) ? 'today' : ''} ${bookable ? 'bookable' : 'disabled'}" type="button" ${bookable ? `data-calendar-request-date="${esc(isoDate(day))}"` : 'disabled'} aria-pressed="${sameDay(day, state.selectedDate)}" role="listitem">
                         <span>${esc(day.toLocaleDateString(undefined, { weekday: 'short' }))}</span>
                         <strong>${esc(String(day.getDate()))}</strong>
                         ${events.length ? '<i aria-hidden="true"></i>' : ''}
@@ -115,7 +118,7 @@
                     const events = blockingEventsForDay(state.selectedDate);
                     return events.length
                         ? `<div class="employee-calendar-mobile-agenda-list">${events.map(event => calendarEventButton(event)).join('')}</div>`
-                        : window.FAMEmployeePortal.emptyState('event_available', 'No reservations scheduled for this date.', 'This room currently appears available.');
+                        : window.FAMEmployeePortal.emptyState('event_available', 'No approved reservations of yours shown for this date.', 'Pick a date to start a request. Time conflicts are checked before submission.');
                 })()}
             </div>
         `;
@@ -135,15 +138,13 @@
             button.setAttribute('aria-pressed', String(active));
         });
         if (!state.calendarRoom) {
-            panel.innerHTML = window.FAMEmployeePortal.emptyState('meeting_room', 'Select a room', 'Choose a room to view availability.');
+            panel.innerHTML = window.FAMEmployeePortal.emptyState('meeting_room', 'Select a room', 'Choose a room to pick a request date.');
             if (message) message.textContent = '';
-            renderSelectedDate();
             return;
         }
         if (mobileCalendar()) {
             renderMobileCalendar(panel, range);
             if (message) message.textContent = state.calendarError || '';
-            renderSelectedDate();
             return;
         }
         const days = daysBetween(range.start, range.end);
@@ -152,42 +153,17 @@
             `<div class="employee-calendar-grid">${days.map(day => {
                 const events = blockingEventsForDay(day);
                 const outside = state.calendarView === 'month' && day.getMonth() !== state.calendarAnchor.getMonth();
-                return `<section class="employee-calendar-day ${outside ? 'outside' : ''} ${sameDay(day, new Date()) ? 'today' : ''} ${sameDay(day, state.selectedDate) ? 'selected' : ''}">
-                    <button class="employee-calendar-date-button" type="button" data-calendar-date="${esc(isoDate(day))}"><span class="employee-calendar-day-number">${esc(String(day.getDate()))}</span></button>
-                    <span class="employee-calendar-day-events">${events.length ? (state.calendarView === 'month' ? events.slice(0, 2).map(event => calendarEventButton(event, true)).join('') + (events.length > 2 ? `<span class="employee-calendar-more">${events.length - 2} more</span>` : '') : events.map(event => calendarEventButton(event)).join('')) : '<span class="employee-calendar-available">Available</span>'}</span>
+                const bookable = bookableDate(day);
+                return `<section class="employee-calendar-day ${outside ? 'outside' : ''} ${sameDay(day, new Date()) ? 'today' : ''} ${sameDay(day, state.selectedDate) ? 'selected' : ''} ${bookable ? 'bookable' : 'disabled'}" ${bookable ? `data-calendar-request-date="${esc(isoDate(day))}"` : ''}>
+                    <button class="employee-calendar-date-button" type="button" ${bookable ? `data-calendar-request-date="${esc(isoDate(day))}"` : 'disabled'}><span class="employee-calendar-day-number">${esc(String(day.getDate()))}</span></button>
+                    <span class="employee-calendar-day-events">${events.length ? (state.calendarView === 'month' ? events.slice(0, 2).map(event => calendarEventButton(event, true)).join('') + (events.length > 2 ? `<span class="employee-calendar-more">${events.length - 2} more</span>` : '') : events.map(event => calendarEventButton(event)).join('')) : ''}</span>
                 </section>`;
             }).join('')}</div>`;
-        if (message) message.textContent = state.calendarError || (state.calendarEvents.length ? `${state.calendarEvents.length} reserved time${state.calendarEvents.length === 1 ? '' : 's'} shown for this room.` : 'No reserved times in this period.');
-        renderSelectedDate();
+        if (message) message.textContent = state.calendarError || (state.calendarEvents.length ? `${state.calendarEvents.length} approved reservation time${state.calendarEvents.length === 1 ? '' : 's'} of yours shown for this room.` : 'No approved reservations of yours shown in this period. Time conflicts are checked before submission.');
     }
 
     function selectedRoom() {
         return (state.options?.facility_spaces || []).find(room => String(room.id) === String(state.calendarRoom));
-    }
-
-    function renderSelectedDate() {
-        const summary = qs('#employee-selected-date-summary');
-        const list = qs('#employee-selected-date-list');
-        const request = qs('#employee-request-selected-date');
-        if (!list) return;
-        const room = selectedRoom();
-        const dateText = state.selectedDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
-        if (summary) summary.textContent = room ? `${dateText} - ${room.name || 'Selected room'}` : dateText;
-        if (request) request.hidden = !room;
-        if (!room) {
-            list.innerHTML = window.FAMEmployeePortal.emptyState('meeting_room', 'Select a room', 'Choose a room to view the selected date schedule.');
-            return;
-        }
-        const events = blockingEventsForDay(state.selectedDate);
-        if (!events.length) {
-            list.innerHTML = window.FAMEmployeePortal.emptyState('event_available', `No reservations scheduled for this room on ${dateText}.`, 'This room currently appears available. Final availability is checked when you submit.');
-            return;
-        }
-        list.innerHTML = events.map(event => `<div class="employee-selected-date-row ${ownCalendarEvent(event) ? 'self' : 'other'}">
-            <span>${esc(fmtTime(event.start))} - ${esc(fmtTime(event.end))}</span>
-            <strong>${esc(eventLabel(event))}</strong>
-            ${ownCalendarEvent(event) ? `<small>${esc(event.reservation_number || '')} ${event.purpose ? `- ${esc(event.purpose)}` : ''}</small>${badge({ status: event.status, approval: event.approval_status })}` : '<small>Unavailable</small>'}
-        </div>`).join('');
     }
 
     async function loadCalendar() {
@@ -204,7 +180,7 @@
         const metaRoom = selectedRoom();
         const meta = [metaRoom?.building_name, metaRoom?.capacity ? `${metaRoom.capacity} capacity` : ''].filter(Boolean).join(' - ');
         const metaNode = qs('#employee-calendar-room-meta');
-        if (metaNode) metaNode.textContent = meta || 'Room availability for the selected space.';
+        if (metaNode) metaNode.textContent = meta || 'Room schedule for the selected space.';
         const range = calendarRange();
         try {
             const payload = await window.FAMApi.request(api(`calendar.php?${new URLSearchParams({ facility_space_id: state.calendarRoom, date_from: isoDate(range.start), date_to: isoDate(range.end) })}`));
@@ -265,59 +241,9 @@
         `;
     }
 
-    function nextReservation() {
-        const now = Date.now();
-        const active = ['SUBMITTED', 'APPROVED', 'CHECKED_IN'];
-        return state.rows
-            .filter(row => active.includes(String(row.status || '').toUpperCase()))
-            .sort((a, b) => {
-                if (String(a.status).toUpperCase() === 'CHECKED_IN') return -1;
-                if (String(b.status).toUpperCase() === 'CHECKED_IN') return 1;
-                return Math.abs((toDate(a.start)?.getTime() || Number.MAX_SAFE_INTEGER) - now) - Math.abs((toDate(b.start)?.getTime() || Number.MAX_SAFE_INTEGER) - now);
-            })[0];
-    }
-
-    function checkInMessage(item) {
-        if (item.allowed_actions?.check_in) return 'Check-in is open now.';
-        if (item.allowed_actions?.check_out) return 'You are currently checked in.';
-        if (item.allowed_actions?.check_in_not_yet) {
-            const start = toDate(item.start);
-            if (start && !Number.isNaN(start.getTime())) return `Check-in opens at ${fmtTime(new Date(start.getTime() - 30 * 60000))}.`;
-        }
-        if (item.allowed_actions?.check_in_ended) return 'The check-in period has ended.';
-        return '';
-    }
-
-    function renderNextReservation() {
-        const target = qs('#employee-next-reservation');
-        if (!target) return;
-        const item = nextReservation();
-        if (!item) {
-            target.innerHTML = window.FAMEmployeePortal.emptyState('event_available', 'No upcoming reservations', 'Approved and pending room reservations will appear here.');
-            return;
-        }
-        const helper = checkInMessage(item);
-        const actions = [
-            item.allowed_actions?.check_in ? `<button class="btn-primary dashboard-action-button" type="button" data-check-in-reservation="${esc(item.id)}">Check In</button>` : '',
-            item.allowed_actions?.check_out ? `<button class="btn-primary dashboard-action-button" type="button" data-check-out-reservation="${esc(item.id)}">Check Out</button>` : '',
-            `<button class="btn-secondary dashboard-action-button" type="button" data-open-reservation="${esc(item.id)}">View Details</button>`
-        ].filter(Boolean).join('');
-        target.innerHTML = `<article class="fam-card employee-next-card">
-            <div>
-                <div class="employee-next-card-top"><span class="employee-card-kicker">Room Reservation</span>${badge(item)}</div>
-                <h3>${esc(item.room || 'Room reservation')}</h3>
-                <p class="employee-next-meta">${esc(fmtDate(item.start))} &middot; ${esc(fmtTime(item.start))} - ${esc(fmtTime(item.end))}</p>
-                <p>${esc(title(item.reservationType || 'MEETING'))}</p>
-                ${helper ? `<p class="employee-next-helper">${esc(helper)}</p>` : ''}
-            </div>
-            <div class="employee-next-actions">${actions}</div>
-        </article>`;
-    }
-
     function render() {
         const body = qs('#employee-room-reservations-body');
         const cards = qs('#employee-room-reservations-cards');
-        renderNextReservation();
         if (!body) return;
         qs('#employee-room-loading')?.classList.add('hidden');
         const count = qs('#employee-reservation-count');
@@ -651,7 +577,6 @@
             state.calendarView = button.dataset.employeeCalendarView || 'month';
             loadCalendar().catch(console.error);
         }));
-        qs('#employee-request-selected-date')?.addEventListener('click', () => openForm({ facility_space_id: state.calendarRoom, date: isoDate(state.selectedDate) }));
         qs('#employee-reservation-search')?.addEventListener('input', event => { state.search = event.target.value.trim(); clearTimeout(state.timer); state.timer = setTimeout(() => load().catch(console.error), 250); });
         qs('#employee-reservation-status')?.addEventListener('change', event => { state.status = event.target.value; load().catch(console.error); });
         document.addEventListener('input', event => {
@@ -666,17 +591,22 @@
         });
         document.addEventListener('click', event => {
             if (event.target.closest('[data-open-room-form]')) return openForm();
-            const calendarDate = event.target.closest('[data-calendar-date]');
-            if (calendarDate) {
-                state.selectedDate = toDate(`${calendarDate.dataset.calendarDate}T00:00:00`) || new Date();
-                renderCalendar();
-                return;
-            }
             if (event.target.closest('[data-close-dialog]') || event.target === qs('#employee-reservation-dialog')) return closeDialog();
             const menuToggle = event.target.closest('[data-employee-menu]');
             if (menuToggle) return window.FAMTableMenus?.toggle(menuToggle, qs(`[data-employee-menu-panel="${CSS.escape(menuToggle.dataset.employeeMenu)}"]`));
             const open = event.target.closest('[data-open-reservation]');
             if (open) return openDetails(open.dataset.openReservation);
+            const calendarDate = event.target.closest('[data-calendar-request-date]');
+            if (calendarDate) {
+                event.preventDefault();
+                event.stopPropagation();
+                const date = calendarDate.dataset.calendarRequestDate;
+                const parsed = toDate(`${date}T00:00:00`);
+                if (!date || !parsed || !bookableDate(parsed) || !state.calendarRoom) return;
+                state.selectedDate = parsed;
+                renderCalendar();
+                return openForm({ facility_space_id: state.calendarRoom, date });
+            }
             const checkIn = event.target.closest('[data-check-in-reservation]');
             if (checkIn) return checkInReservation(checkIn.dataset.checkInReservation).catch(error => window.FAMModal?.showToast(error.message || 'Unable to check in.'));
             const checkOut = event.target.closest('[data-check-out-reservation]');
