@@ -44,7 +44,7 @@
             await window.FAMApi.logout();
             window.FAMHeaderMenus?.closeProfile?.();
             window.FAMModal?.closeModal?.('dash-logout-modal');
-            window.location.replace(window.FAMApi.loginUrl());
+            window.location.replace(window.FAMNavigation?.appBasePath?.() || '/');
         } catch (error) {
             logoutInFlight = false;
             setLogoutBusy(button, false);

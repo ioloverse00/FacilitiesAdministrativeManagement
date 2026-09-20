@@ -509,6 +509,22 @@ function initAuthenticationPage() {
         return decodedNext;
     };
 
+    const isCanonicalRootLogin = () => {
+        const base = basePath().replace(/\/+$/, '');
+        const current = window.location.pathname.replace(/\/+$/, '') || '/';
+        return current === (base || '/');
+    };
+
+    if (isCanonicalRootLogin()) {
+        fetch(`${apiPrefix}auth/me.php`, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(response => response.ok ? response.json() : null)
+            .then(payload => {
+                const user = payload?.data?.user;
+                if (user) window.location.replace(defaultPortalPath(user));
+            })
+            .catch(() => {});
+    }
+
     if (subsystem && forgotPasswordLink) {
         forgotPasswordLink.href = `${pagesPrefix}forgot-password.html?subsystem=${encodeURIComponent(subsystem)}`;
     }

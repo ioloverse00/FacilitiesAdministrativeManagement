@@ -69,7 +69,7 @@ RewriteCond %{REQUEST_URI} ^(.*/)pages/employee/profile\.html$ [NC]
 RewriteRule ^pages/employee/profile\.html$ %1employee/profile [R=302,L]
 
 # Public FAM routes. These are internal rewrites, so the browser URL stays clean.
-RewriteRule ^$ pages/dashboard.html [L]
+RewriteRule ^$ pages/login.html [L]
 RewriteRule ^dashboard/?$ pages/dashboard.html [L]
 RewriteRule ^facilities-reservation/?$ pages/room-reservations.html [L]
 RewriteRule ^visitor-management/?$ pages/visitor-management.html [L]
