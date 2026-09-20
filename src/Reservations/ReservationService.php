@@ -116,7 +116,9 @@ final class ReservationService
 
     public function canView(array $item, array $user): bool
     {
-        if ($this->employeeOwns($item, $user) && ReservationPolicy::hasPermission($user, 'reservations.view')) return true;
+        if ($this->employeeOwns($item, $user)
+            && (ReservationPolicy::hasPermission($user, 'reservations.view')
+                || ReservationPolicy::hasPermission($user, 'reservations.view_own'))) return true;
         return ReservationPolicy::hasPermission($user, 'reservations.view')
             && (($user['persona']['is_fam_portal_allowed'] ?? false) === true
                 || ReservationPolicy::hasPermission($user, 'reservations.manage')
