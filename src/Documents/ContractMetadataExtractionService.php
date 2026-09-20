@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Support' . DIRECTORY_SEPARATOR . 'StoragePath.php';
+
 final class ContractMetadataExtractionService
 {
     private const PROVIDER = 'GEMINI';
@@ -47,10 +49,10 @@ final class ContractMetadataExtractionService
         if (!is_array($row)) {
             return null;
         }
-        $path = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string) $row['storage_path']);
+        $path = StoragePath::resolveExistingWithin('documents', (string) $row['storage_path']);
         $mime = (string) ($row['mime_type'] ?? '');
         $size = (int) ($row['file_size'] ?? 0);
-        if (!in_array($mime, self::READABLE_MIME, true) || $size <= 0 || $size > self::MAX_SOURCE_BYTES || !is_file($path)) {
+        if (!in_array($mime, self::READABLE_MIME, true) || $size <= 0 || $size > self::MAX_SOURCE_BYTES || $path === null) {
             return null;
         }
         if ($mime === self::DOCX_MIME) {

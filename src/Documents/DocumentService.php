@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'RecordsRetention' . DIRECTORY_SEPARATOR . 'RetentionService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Support' . DIRECTORY_SEPARATOR . 'StoragePath.php';
 
 final class DocumentPolicy
 {
@@ -174,7 +175,7 @@ final class DocumentService
                 'fileSize' => (int) ($row['file_size'] ?? 0),
                 'fileHash' => (string) ($row['file_hash'] ?? ''),
                 'uploadedAt' => (string) $row['uploaded_at'],
-                'absolutePath' => $this->storageRoot() . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $storagePath),
+                'absolutePath' => StoragePath::resolveWithin('documents', $storagePath),
             ];
         }, $statement->fetchAll());
     }
@@ -528,7 +529,7 @@ final class DocumentService
     private function storeUploadedFile(array $upload, int $documentId, int $version): array
     {
         $relativeDir = 'documents/' . $documentId . '/v' . $version;
-        $absoluteDir = $this->storageRoot() . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativeDir);
+        $absoluteDir = StoragePath::resolveWithin('documents', $relativeDir);
         if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0775, true) && !is_dir($absoluteDir)) {
             throw new RuntimeException('Unable to prepare document storage.');
         }
@@ -986,26 +987,9 @@ final class DocumentService
         return mb_substr(trim((string) $value), 0, $max);
     }
 
-    private function storageRoot(): string
-    {
-        return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage';
-    }
-
     private function resolveDocumentStoragePath(string $storagePath): ?string
     {
-        $normalized = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $storagePath);
-        if ($normalized === '' || str_contains($normalized, '..')) {
-            return null;
-        }
-
-        $base = realpath($this->storageRoot() . DIRECTORY_SEPARATOR . 'documents');
-        $absolute = realpath($this->storageRoot() . DIRECTORY_SEPARATOR . $normalized);
-        if ($base === false || $absolute === false) {
-            return null;
-        }
-
-        $prefix = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-        return str_starts_with($absolute, $prefix) ? $absolute : null;
+        return StoragePath::resolveExistingWithin('documents', $storagePath);
     }
 
     private function scalar(string $sql, array $params = []): mixed

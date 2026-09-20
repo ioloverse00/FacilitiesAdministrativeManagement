@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Notifications' . DIRECTORY_SEPARATOR . 'NotificationService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Support' . DIRECTORY_SEPARATOR . 'StoragePath.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'ReservationRequestSummaryService.php';
 
 final class ReservationPolicy
@@ -108,8 +109,8 @@ final class ReservationService
         if ($item === null || !$this->canView($item, $user)) return null;
         $letter = $this->requestLetterRow((int)$item['id']);
         if ($letter === null) return null;
-        $absolute = $this->storageRoot() . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string)$letter['storage_path']);
-        if (!is_file($absolute)) return null;
+        $absolute = StoragePath::resolveExistingWithin('reservations', (string)$letter['storage_path']);
+        if ($absolute === null) return null;
         return ['absolute_path'=>$absolute,'download_name'=>(string)$letter['original_file_name'],'mime_type'=>(string)$letter['mime_type'],'file_size'=>(int)$letter['file_size']];
     }
 
@@ -413,7 +414,7 @@ final class ReservationService
     private function storeRequestLetter(array $upload, int $reservationId): array
     {
         $relativeDir = 'reservations/' . $reservationId . '/request-letter';
-        $absoluteDir = $this->storageRoot() . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativeDir);
+        $absoluteDir = StoragePath::resolveWithin('reservations', $relativeDir);
         if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0775, true) && !is_dir($absoluteDir)) {
             throw new RuntimeException('Unable to prepare reservation letter storage.');
         }
@@ -463,11 +464,6 @@ final class ReservationService
         $name = preg_replace('/[^A-Za-z0-9._ -]+/', '_', $name) ?? 'request-letter';
         $name = trim($name, " .\t\n\r\0\x0B");
         return mb_substr($name === '' ? 'request-letter' : $name, 0, 180);
-    }
-
-    private function storageRoot(): string
-    {
-        return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage';
     }
 
     private function assertTransition(string $current, string $next): void

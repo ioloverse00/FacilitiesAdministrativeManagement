@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Support' . DIRECTORY_SEPARATOR . 'StoragePath.php';
+
 final class ReservationRequestSummaryService
 {
     private const PROVIDER = 'GEMINI';
@@ -96,8 +98,8 @@ final class ReservationRequestSummaryService
     {
         $mime = (string) ($letter['mime_type'] ?? '');
         $size = (int) ($letter['file_size'] ?? 0);
-        $path = $this->storageRoot() . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string) $letter['storage_path']);
-        if (!in_array($mime, self::READABLE_MIME, true) || $size <= 0 || $size > self::MAX_SOURCE_BYTES || !is_file($path)) {
+        $path = StoragePath::resolveExistingWithin('reservations', (string) $letter['storage_path']);
+        if (!in_array($mime, self::READABLE_MIME, true) || $size <= 0 || $size > self::MAX_SOURCE_BYTES || $path === null) {
             return null;
         }
         $bytes = file_get_contents($path);
@@ -315,8 +317,4 @@ final class ReservationRequestSummaryService
         };
     }
 
-    private function storageRoot(): string
-    {
-        return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage';
-    }
 }

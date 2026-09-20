@@ -26,7 +26,7 @@ Document numbers are generated server-side in `DOC-YYYY-NNNN` format. The fronte
 
 ## File Storage
 
-Uploaded files are stored under `storage/documents/{document_id}/v{version}/`. Stored filenames are random. Original filenames are retained as metadata only. Files are served through authorized API endpoints instead of direct storage URLs.
+Uploaded files are stored under the configured storage root as `documents/{document_id}/v{version}/`. If `FAM_STORAGE_PATH` is unset, the storage root defaults to project-local `storage/`; HostForge deployments should set `FAM_STORAGE_PATH=/data`. Stored filenames are random. Original filenames are retained as metadata only. Files are served through authorized API endpoints instead of direct storage URLs.
 
 ## Versioning
 

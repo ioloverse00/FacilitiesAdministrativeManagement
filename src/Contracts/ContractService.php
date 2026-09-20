@@ -6,6 +6,7 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Organization' . DIRECTORY
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Documents' . DIRECTORY_SEPARATOR . 'DocumentService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Documents' . DIRECTORY_SEPARATOR . 'ContractMetadataExtractionService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'RecordsRetention' . DIRECTORY_SEPARATOR . 'RetentionService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Support' . DIRECTORY_SEPARATOR . 'StoragePath.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Integrations' . DIRECTORY_SEPARATOR . 'Google' . DIRECTORY_SEPARATOR . 'GoogleIntegrationException.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Integrations' . DIRECTORY_SEPARATOR . 'Google' . DIRECTORY_SEPARATOR . 'GoogleTokenCrypto.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Integrations' . DIRECTORY_SEPARATOR . 'Google' . DIRECTORY_SEPARATOR . 'GoogleOAuthService.php';
@@ -388,20 +389,16 @@ final class ContractService
 
     private function deleteRolledBackDocumentFiles(array $storagePaths): void
     {
-        $base = realpath(dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'documents');
+        $base = realpath(StoragePath::resolveWithin('documents', 'documents'));
         if ($base === false) {
             return;
         }
-        $basePrefix = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
         foreach ($storagePaths as $storagePath) {
-            $normalized = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, (string) $storagePath);
-            if ($normalized === '' || str_contains($normalized, '..')) {
+            $absolute = StoragePath::resolveExistingWithin('documents', (string) $storagePath);
+            if ($absolute === null) {
                 continue;
             }
-            $absolute = realpath(dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . $normalized);
-            if ($absolute !== false && str_starts_with($absolute, $basePrefix) && is_file($absolute)) {
-                @unlink($absolute);
-            }
+            @unlink($absolute);
         }
     }
 

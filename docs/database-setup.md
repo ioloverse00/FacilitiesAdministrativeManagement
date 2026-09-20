@@ -87,4 +87,4 @@ The health endpoint currently sends `Access-Control-Allow-Origin: *` for local d
 
 ## Document Storage Synchronization
 
-Database exports contain document and template metadata, but not the physical files referenced by `document_version.storage_path`. When moving or resetting an environment, keep the database rows and the corresponding files under `storage/documents/` synchronized. A database import without its matching files leaves downloads and Google template authoring unavailable; copied files without matching metadata are not application documents.
+Database exports contain document and template metadata, but not the physical files referenced by `document_version.storage_path`. When moving or resetting an environment, keep the database rows and the corresponding files under the configured storage root synchronized. Locally, the default root is `storage/`; HostForge deployments should set `FAM_STORAGE_PATH=/data`. A database import without its matching files leaves downloads and Google template authoring unavailable; copied files without matching metadata are not application documents.
