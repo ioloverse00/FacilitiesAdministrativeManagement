@@ -4,7 +4,6 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . '_live_bootstrap.php';
 requireMethod('POST');
 $user = currentApiUser();
 LegalPolicy::requirePermission($user, 'legal.manage');
-DocumentPolicy::requirePermission($user, 'records.view');
 requireCsrfToken();
 try {
     $item = legalMatterSummaryService()->generate(idParam(), $user, false);

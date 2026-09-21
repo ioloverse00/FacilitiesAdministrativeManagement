@@ -13,52 +13,99 @@ final class LiveDataService
 {
     public function __construct(private readonly PDO $pdo) {}
 
-    public function dashboard(): array
+    public function dashboard(array $user = []): array
     {
-        $reservations = new ReservationService($this->pdo);
-        $visitors = new VisitorService($this->pdo);
-        $documents = new DocumentService($this->pdo);
-        $retention = new RetentionService($this->pdo);
-        $contracts = new ContractService($this->pdo);
-        $legal = new LegalMatterService($this->pdo);
-        $reservationSummary = $reservations->dashboardSummary();
-        $visitorSummary = $visitors->dashboardSummary();
-        $documentSummary = $documents->dashboardSummary();
-        $retentionAttentionCount = RetentionService::countRecordsRequiringReview($this->pdo);
-        $contractSummary = $contracts->dashboardSummary();
-        $legalSummary = $legal->dashboardSummary();
-        return [
+        $canReservations = $this->can($user, 'reservations.view');
+        $canVisitors = $this->can($user, 'visitors.view');
+        $canDocuments = $this->can($user, 'records.view');
+        $canRetention = $this->can($user, 'retention.view');
+        $canContracts = $this->can($user, 'contract.view');
+        $canLegal = $this->can($user, 'legal.view');
+
+        $dashboard = [
             'generatedAt' => date('c'),
-            'kpis' => [
-                'reservationsToday' => $reservationSummary['today'] ?? 0,
-                'reservationsPendingApproval' => $reservationSummary['pending_approval'] ?? 0,
-                'visitorsCheckedIn' => $visitorSummary['checked_in'] ?? 0,
-                'visitorsToday' => $visitorSummary['today'] ?? 0,
-                'activeDocuments' => $documentSummary['active'] ?? 0,
-                'recentDocuments' => $documentSummary['recent'] ?? 0,
-                'recordsDispositionDue' => $retentionAttentionCount,
-                'contractsPendingReviewApproval' => $contractSummary['pendingReviewApproval'] ?? 0,
-                'contractsActive' => $contractSummary['active'] ?? 0,
-                'contractsExpiringSoon' => $contractSummary['expiringSoon'] ?? 0,
-                'legalOpen' => $legalSummary['open'] ?? 0,
-                'legalCritical' => $legalSummary['critical'] ?? 0,
-            ],
-            'charts' => [
-                'reservation_activity' => $reservations->lastSevenDaysActivity(),
-                'operational_overview' => [
-                    'labels' => ['Pending Reservations', 'Visitors Currently Inside', 'Retention Attention', 'Open Legal Matters'],
-                    'values' => [
-                        $reservationSummary['pending_approval'] ?? 0,
-                        $visitorSummary['checked_in'] ?? 0,
-                        $retentionAttentionCount,
-                        $legalSummary['open'] ?? 0,
-                    ],
-                ],
-            ],
-            'todaySchedule' => $reservations->todayOperationalSchedule(),
-            'retentionAttention' => $retention->attentionQueue(),
-            'recentActivities' => $this->recentActivities(),
+            'kpis' => [],
+            'charts' => [],
+            'recentActivities' => [],
         ];
+
+        if ($canReservations) {
+            $reservations = new ReservationService($this->pdo);
+            $reservationSummary = $reservations->dashboardSummary();
+            $dashboard['kpis']['reservationsToday'] = $reservationSummary['today'] ?? 0;
+            $dashboard['kpis']['reservationsPendingApproval'] = $reservationSummary['pending_approval'] ?? 0;
+            $dashboard['charts']['reservation_activity'] = $reservations->lastSevenDaysActivity();
+            $dashboard['todaySchedule'] = $reservations->todayOperationalSchedule();
+        }
+
+        if ($canVisitors) {
+            $visitorSummary = (new VisitorService($this->pdo))->dashboardSummary();
+            $dashboard['kpis']['visitorsCheckedIn'] = $visitorSummary['checked_in'] ?? 0;
+            $dashboard['kpis']['visitorsToday'] = $visitorSummary['today'] ?? 0;
+        }
+
+        if ($canDocuments) {
+            $documentSummary = (new DocumentService($this->pdo))->dashboardSummary();
+            $dashboard['kpis']['activeDocuments'] = $documentSummary['active'] ?? 0;
+            $dashboard['kpis']['recentDocuments'] = $documentSummary['recent'] ?? 0;
+        }
+
+        if ($canRetention) {
+            $retention = new RetentionService($this->pdo);
+            $dashboard['kpis']['recordsDispositionDue'] = RetentionService::countRecordsRequiringReview($this->pdo);
+            $dashboard['retentionAttention'] = $retention->attentionQueue();
+        }
+
+        if ($canContracts) {
+            $contractSummary = (new ContractService($this->pdo))->dashboardSummary();
+            $dashboard['kpis']['contractsPendingReviewApproval'] = $contractSummary['pendingReviewApproval'] ?? 0;
+            $dashboard['kpis']['contractsActive'] = $contractSummary['active'] ?? 0;
+            $dashboard['kpis']['contractsExpiringSoon'] = $contractSummary['expiringSoon'] ?? 0;
+        }
+
+        if ($canLegal) {
+            $legalSummary = (new LegalMatterService($this->pdo))->dashboardSummary();
+            $dashboard['kpis']['legalOpen'] = $legalSummary['open'] ?? 0;
+            $dashboard['kpis']['legalCritical'] = $legalSummary['critical'] ?? 0;
+        }
+
+        $overviewLabels = [];
+        $overviewValues = [];
+        if ($canReservations) {
+            $overviewLabels[] = 'Pending Reservations';
+            $overviewValues[] = $dashboard['kpis']['reservationsPendingApproval'] ?? 0;
+        }
+        if ($canVisitors) {
+            $overviewLabels[] = 'Visitors Currently Inside';
+            $overviewValues[] = $dashboard['kpis']['visitorsCheckedIn'] ?? 0;
+        }
+        if ($canRetention) {
+            $overviewLabels[] = 'Retention Attention';
+            $overviewValues[] = $dashboard['kpis']['recordsDispositionDue'] ?? 0;
+        }
+        if ($canLegal) {
+            $overviewLabels[] = 'Open Legal Matters';
+            $overviewValues[] = $dashboard['kpis']['legalOpen'] ?? 0;
+        }
+        if ($overviewLabels !== []) {
+            $dashboard['charts']['operational_overview'] = ['labels' => $overviewLabels, 'values' => $overviewValues];
+        }
+
+        $activityModules = [];
+        if ($canReservations) $activityModules[] = 'RESERVATIONS';
+        if ($canVisitors) $activityModules[] = 'VISITORS';
+        if ($canDocuments) $activityModules[] = 'documents';
+        if ($canRetention) $activityModules[] = 'retention';
+        if ($canContracts) $activityModules[] = 'contract_management';
+        if ($canLegal) $activityModules[] = 'LEGAL_MANAGEMENT';
+        $dashboard['recentActivities'] = $this->recentActivities($activityModules);
+
+        return $dashboard;
+    }
+
+    private function can(array $user, string $permission): bool
+    {
+        return in_array($permission, $user['permissions'] ?? [], true);
     }
 
     public function reportsOverview(): array
@@ -258,8 +305,20 @@ final class LiveDataService
     private function procurementSummary(): array { return ['open'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND status NOT IN ('COMPLETED','CANCELLED','REJECTED')"),'pending_approval'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND approval_status='PENDING'"),'integration_issues'=>(int)$this->scalar("SELECT COUNT(*) FROM procurement_request WHERE deleted_at IS NULL AND integration_status IN ('FAILED','ERROR')"),'estimated_total'=>(float)$this->scalar("SELECT COALESCE(SUM(estimated_total),0) FROM procurement_request WHERE deleted_at IS NULL")]; }
     private function recordSummary(): array { return ['total'=>$this->count('record'),'active'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND record_status='ACTIVE'"),'disposition_due'=>RetentionService::countRecordsDueForReview($this->pdo),'restricted'=>(int)$this->scalar("SELECT COUNT(*) FROM record WHERE deleted_at IS NULL AND confidentiality_level = 'CONFIDENTIAL'")]; }
 
-    private function recentActivities(): array
+    private function recentActivities(array $modules): array
     {
+        if ($modules === []) {
+            return [];
+        }
+
+        $placeholders = [];
+        $params = [];
+        foreach ($modules as $index => $module) {
+            $key = 'module_' . $index;
+            $placeholders[] = ':' . $key;
+            $params[$key] = $module;
+        }
+
         return $this->rows("SELECT ae.event_title activity,
                 ae.module_code module,
                 ae.entity_reference reference,
@@ -271,9 +330,9 @@ final class LiveDataService
             LEFT JOIN user_account ua ON ua.user_account_id = ae.actor_user_id
             LEFT JOIN employee_reference account_actor ON account_actor.employee_reference_id = ua.employee_reference_id
             LEFT JOIN employee_reference direct_actor ON direct_actor.employee_reference_id = ae.actor_employee_reference_id
-            WHERE ae.module_code IN ('RESERVATIONS','VISITORS','documents','retention','contract_management','LEGAL_MANAGEMENT')
+            WHERE ae.module_code IN (" . implode(',', $placeholders) . ")
             ORDER BY ae.occurred_at DESC
-            LIMIT 10");
+            LIMIT 10", $params);
     }
 
     private function shapeMaintenance(array $r): array { return ['id'=>(int)$r['maintenance_work_order_id'],'workOrderNo'=>$r['work_order_number'],'title'=>$r['problem_description'],'asset'=>$r['asset_name'] ?: null,'space'=>$r['space_name'],'building'=>$r['building_name'],'priority'=>$r['priority'],'status'=>$r['status'],'maintenanceType'=>$r['maintenance_type'],'assignedTo'=>$r['assigned_to_name'],'scheduledStart'=>$r['scheduled_start_at'],'scheduledEnd'=>$r['scheduled_end_at'],'createdAt'=>$r['created_at'],'facilityRequest'=>$r['facility_request_number']]; }

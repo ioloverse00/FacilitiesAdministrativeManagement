@@ -5,9 +5,20 @@ final class DocumentTemplatePolicy
 {
     public static function requirePermission(array $user, string $permission): void
     {
-        if (!in_array($permission, $user['permissions'] ?? [], true)) {
+        if (!self::isSuperAdmin($user) || !in_array($permission, $user['permissions'] ?? [], true)) {
             jsonResponse(false, 'You do not have permission to perform this action.', [], 403);
         }
+    }
+
+    private static function isSuperAdmin(array $user): bool
+    {
+        foreach (($user['roles'] ?? []) as $role) {
+            if (($role['code'] ?? null) === 'FAM_SUPER_ADMIN') {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 

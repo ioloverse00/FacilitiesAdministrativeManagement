@@ -704,7 +704,7 @@ final class ReservationService
 
     private function reservationAdminRecipients(int $excludeUserId = 0, int $excludeEmployeeId = 0): array
     {
-        $rows = $this->query("SELECT DISTINCT ua.user_account_id FROM user_account ua INNER JOIN user_role ur ON ur.user_account_id=ua.user_account_id INNER JOIN role r ON r.role_id=ur.role_id LEFT JOIN role_permission rp ON rp.role_id=r.role_id LEFT JOIN permission p ON p.permission_id=rp.permission_id WHERE ua.account_status='ACTIVE' AND ua.deleted_at IS NULL AND (ur.expires_at IS NULL OR ur.expires_at>NOW()) AND (p.permission_code IN ('reservations.manage','reservations.approve') OR r.role_code IN ('FAM_ADMIN','FAM_SUPER_ADMIN')) AND (:exclude_user_id_zero=0 OR ua.user_account_id<>:exclude_user_id_value) AND (:exclude_employee_id_zero=0 OR ua.employee_reference_id IS NULL OR ua.employee_reference_id<>:exclude_employee_id_value) ORDER BY ua.user_account_id", ['exclude_user_id_zero'=>$excludeUserId,'exclude_user_id_value'=>$excludeUserId,'exclude_employee_id_zero'=>$excludeEmployeeId,'exclude_employee_id_value'=>$excludeEmployeeId]);
+        $rows = $this->query("SELECT DISTINCT ua.user_account_id FROM user_account ua INNER JOIN user_role ur ON ur.user_account_id=ua.user_account_id INNER JOIN role r ON r.role_id=ur.role_id WHERE ua.account_status='ACTIVE' AND ua.deleted_at IS NULL AND (ur.expires_at IS NULL OR ur.expires_at>NOW()) AND (r.role_code IN ('FAM_ADMIN','FAM_SUPER_ADMIN') OR " . $this->effectivePermissionInSql(['reservations.manage','reservations.approve']) . ") AND (:exclude_user_id_zero=0 OR ua.user_account_id<>:exclude_user_id_value) AND (:exclude_employee_id_zero=0 OR ua.employee_reference_id IS NULL OR ua.employee_reference_id<>:exclude_employee_id_value) ORDER BY ua.user_account_id", ['exclude_user_id_zero'=>$excludeUserId,'exclude_user_id_value'=>$excludeUserId,'exclude_employee_id_zero'=>$excludeEmployeeId,'exclude_employee_id_value'=>$excludeEmployeeId]);
         return array_map(static fn(array $row): int => (int)$row['user_account_id'], $rows);
     }
 
@@ -735,5 +735,6 @@ final class ReservationService
     private function distinct(string $table, string $column): array { return array_values(array_filter(array_map(fn($r)=>$r[$column], $this->query("SELECT DISTINCT `$column` FROM `$table` WHERE `$column` IS NOT NULL ORDER BY `$column`")))); }
     private function dateTime(string $value): string { return (new DateTimeImmutable($value, new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s'); }
     private function nullableDateTime(mixed $value): ?string { return $value === null || $value === '' ? null : $this->dateTime((string)$value); }
+    private function effectivePermissionInSql(array $permissions): string { return EffectivePermissionService::inSql($permissions, 'ua'); }
     private function uuid(): string { $d=random_bytes(16); $d[6]=chr((ord($d[6])&0x0f)|0x40); $d[8]=chr((ord($d[8])&0x3f)|0x80); return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($d), 4)); }
 }

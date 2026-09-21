@@ -609,7 +609,7 @@
         if (documentId < 1) return '';
         const versionId = Number(doc?.syncedDocumentVersionId || doc?.documentVersionId || 0);
         const suffix = versionId > 0 ? `&version_id=${encodeURIComponent(versionId)}` : '';
-        return api(`documents/view.php?id=${encodeURIComponent(documentId)}${suffix}`);
+        return api(`documents/view.php?id=${encodeURIComponent(documentId)}&contract_id=${encodeURIComponent(state.activeItem?.id || '')}${suffix}`);
     }
 
     function finalizedContractDocumentAction(doc) {
@@ -623,7 +623,7 @@
         const documentId = Number(signed.documentId || 0);
         const versionId = Number(signed.approvalDocumentVersionId || signed.documentVersionId || 0);
         if (documentId < 1 || versionId < 1) return '';
-        return api(`documents/view.php?id=${encodeURIComponent(documentId)}&version_id=${encodeURIComponent(versionId)}`);
+        return api(`documents/view.php?id=${encodeURIComponent(documentId)}&contract_id=${encodeURIComponent(state.activeItem?.id || '')}&version_id=${encodeURIComponent(versionId)}`);
     }
 
     function signedContractWorkflowHtml(item = {}) {
@@ -686,7 +686,7 @@
         const icon = complete ? 'check_box' : 'check_box_outline_blank';
         const state = requirement.verificationStatus === 'VERIFIED' ? 'Verified' : (requirement.document ? title(requirement.status || 'UPLOADED') : 'Missing');
         const doc = requirement.document;
-        const actions = doc ? `<div class="document-file-actions"><a href="${esc(api(`documents/view.php?id=${doc.id}`))}" target="_blank" rel="noopener">View</a></div>` : '';
+        const actions = doc ? `<div class="document-file-actions"><a href="${esc(api(`documents/view.php?id=${doc.id}&contract_id=${state.activeItem?.id || ''}`))}" target="_blank" rel="noopener">View</a></div>` : '';
         return `<article class="document-file-row">
             <div><span class="material-symbols-outlined document-file-icon" aria-hidden="true">${icon}</span><div><strong>${esc(requirement.name)}</strong><small>${requirement.required ? 'Required' : 'Optional'} · ${esc(state)}</small>${doc ? `<small>${esc(doc.fileName || doc.documentNo)} · ${esc(doc.version)}</small>` : ''}${requirement.description ? `<small>${esc(requirement.description)}</small>` : ''}</div></div>
             ${actions}
@@ -695,7 +695,7 @@
 
     function clientRequirementRow(requirement, contractId = '') {
         const contractStatus = String(state.activeItem?.status || '').toUpperCase();
-        const canPrepareRequirement = can('records.create') && (can('contract.edit') || can('contract.manage')) && contractStatus === 'DRAFT';
+        const canPrepareRequirement = (can('contract.edit') || can('contract.manage')) && contractStatus === 'DRAFT';
         const canReviewRequirement = (can('contract.review') || can('contract.manage')) && contractStatus === 'FOR_REVIEW';
         const status = String(requirement.status || 'MISSING').toUpperCase();
         const verification = String(requirement.verificationStatus || 'PENDING').toUpperCase();
@@ -723,7 +723,7 @@
                 || (contractStatus === 'FOR_APPROVAL' && status === 'VERIFIED' && verification === 'VERIFIED')
             );
         const guardedViewAttrs = doc && !workflowReviewEvidence ? ` data-document-file-action="view" data-document-id="${esc(doc.id)}"` : '';
-        const actions = doc || attach || verify || reject || notApplicable ? `<div class="document-file-actions">${doc ? `<a class="btn-secondary dashboard-action-button" href="${esc(api(`documents/view.php?id=${doc.id}`))}" target="_blank" rel="noopener"${guardedViewAttrs}>View</a>` : ''}${attach}${verify}${reject}${notApplicable}</div>` : '';
+        const actions = doc || attach || verify || reject || notApplicable ? `<div class="document-file-actions">${doc ? `<a class="btn-secondary dashboard-action-button" href="${esc(api(`documents/view.php?id=${doc.id}&contract_id=${contractId}`))}" target="_blank" rel="noopener"${guardedViewAttrs}>View</a>` : ''}${attach}${verify}${reject}${notApplicable}</div>` : '';
         return `<article class="contract-requirement-row">
             <div><span class="material-symbols-outlined contract-requirement-icon" aria-hidden="true">${icon}</span><div class="contract-requirement-copy"><div class="contract-requirement-line"><strong>${esc(requirement.name)}</strong><small>${esc(classification)} - ${esc(stateText)}</small></div>${requirement.description ? `<p>${esc(requirement.description)}</p>` : ''}${busy ? '<small>Uploading evidence...</small>' : ''}</div></div>
             ${actions}

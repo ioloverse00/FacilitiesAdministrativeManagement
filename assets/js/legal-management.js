@@ -503,7 +503,7 @@
         const status = item.aiSummaryStatus || 'NOT_REQUESTED';
         const failureReason = item.aiSummaryFailureReason || '';
         const docs = item.supportingDocuments || [];
-        const canRegenerate = docs.length > 0 && !isMatterReadOnly(item) && can('records.view') && (can('legal.edit') || can('legal.manage'));
+        const canRegenerate = docs.length > 0 && !isMatterReadOnly(item) && (can('legal.edit') || can('legal.manage'));
         const button = canRegenerate ? `<button class="btn-secondary dashboard-action-button legal-ai-summary-action" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Re-analyze AI</button>` : '';
         let content = '';
         if (status === 'READY') {
@@ -543,7 +543,7 @@
 
     function supportingDocumentsHtml(item) {
         const docs = item.supportingDocuments || [];
-        const canAttach = !isMatterReadOnly(item) && can('records.create') && (can('legal.edit') || can('legal.manage'));
+        const canAttach = !isMatterReadOnly(item) && (can('legal.edit') || can('legal.manage'));
         const attachButton = canAttach ? `<button class="btn-secondary dashboard-action-button legal-attach-button" type="button" data-legal-action="attach-document" data-legal-id="${esc(item.id)}">Add Supporting Document</button>` : '';
         const contractMatter = item.matterType === 'CONTRACT_RELATED';
         if (!docs.length) {
@@ -562,8 +562,8 @@
                             ${contractMatter ? contractMetadataStateHtml(doc) : ''}
                         </div>
                         <div class="document-file-actions">
-                            <a href="${api(`documents/view.php?id=${doc.id}`)}" target="_blank" rel="noopener">View</a>
-                            <a href="${api(`documents/download.php?id=${doc.id}`)}">Download</a>
+                            <a href="${api(`documents/view.php?id=${doc.id}&legal_matter_id=${item.id}`)}" target="_blank" rel="noopener">View</a>
+                            <a href="${api(`documents/download.php?id=${doc.id}&legal_matter_id=${item.id}`)}">Download</a>
                             ${contractMatter && can('legal.manage') ? `<button type="button" data-legal-action="${metadataAction}" data-legal-id="${esc(item.id)}" data-document-id="${esc(doc.id)}">${metadataLabel}</button>` : ''}
                         </div>
                     </article>`;
@@ -652,7 +652,7 @@
                 </div>
                 <label class="facility-field document-full-field"><span>Initial Note / Description</span><textarea name="initial_note" rows="5" placeholder="Optional">${esc(item?.initialNote || item?.summary || '')}</textarea></label>
             </section>
-            ${!editing && can('records.create') ? `<section class="document-form-section legal-supporting-upload-section">
+            ${!editing && can('legal.create') ? `<section class="document-form-section legal-supporting-upload-section">
                 <h3>Supporting Documents / Evidence *</h3>
                 <p class="document-form-note">Attach at least one supporting document or evidence file to create this legal matter.</p>
                 <label class="facility-field document-file-field document-full-field"><span>Files *</span><input name="supporting_documents[]" type="file" multiple required accept=".pdf,.png,.jpg,.jpeg"><small>Allowed: PDF, PNG, JPG up to 10 MB each.</small></label>

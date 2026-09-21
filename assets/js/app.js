@@ -203,6 +203,7 @@ function initComponentInteractions() {
     const forms = document.querySelectorAll('form');
     forms.forEach(form => {
         if (form.matches('[data-auth-form]')) return;
+        if (form.matches('[data-account-setup-form]')) return;
         form.addEventListener('submit', (e) => {
             e.preventDefault(); // Prevent page reload on static prototype
             const submitBtn = form.querySelector('button[type="submit"], input[type="submit"], .btn-primary');

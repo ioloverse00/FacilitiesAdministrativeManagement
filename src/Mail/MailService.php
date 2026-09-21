@@ -25,6 +25,15 @@ final class MailService
         );
     }
 
+    public function sendAccountSetupLink(string $email, string $setupUrl, DateTimeImmutable $expiresAt): void
+    {
+        $this->sendOtpMessage(
+            $email,
+            'Set up your FAM account password',
+            "A FAM account has been prepared for you.\n\nSet your password using this one-time link:\n\n{$setupUrl}\n\nThis link expires at {$expiresAt->format('Y-m-d H:i:s')}.\nIf you did not expect this message, contact the administrator."
+        );
+    }
+
     public function sendOtp(string $email, string $otp, DateTimeImmutable $expiresAt): void
     {
         $this->sendLoginOtp($email, $otp, $expiresAt);

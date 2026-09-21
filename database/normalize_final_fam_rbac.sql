@@ -31,8 +31,8 @@ DEALLOCATE PREPARE abort_statement;
 -- 2. Canonical final roles.
 INSERT INTO role (role_code, role_name, description, status)
 VALUES
-('FAM_SUPER_ADMIN','FAM Super Administrator','Highest FAM application authority.','ACTIVE'),
-('FAM_ADMIN','FAM Department Head','Department head of the FAM department with broad operational oversight.','ACTIVE'),
+('FAM_SUPER_ADMIN','Super Admin','Highest FAM application authority.','ACTIVE'),
+('FAM_ADMIN','Admin','Cross-module operational administrator with broad oversight.','ACTIVE'),
 ('FAM_STAFF','FAM Staff','Ordinary FAM operational employee.','ACTIVE'),
 ('DEPARTMENT_HEAD','Department Head','Head of a non-FAM department with department-scoped workflow access.','ACTIVE'),
 ('EMPLOYEE','Employee','Ordinary employee self-service access.','ACTIVE')
@@ -90,7 +90,6 @@ WHERE (
     OR (p.module_code IN ('facility_requests','maintenance','assets','reservations','procurement','records')
       AND SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','create','edit','assign','approve','complete','verify','export','manage'))
     OR p.permission_code LIKE 'contract.%'
-    OR p.permission_code IN ('document_templates.view','document_templates.create','document_templates.edit','document_templates.retire')
     OR p.permission_code LIKE 'legal.%'
     OR p.permission_code LIKE 'retention.%'
     OR p.permission_code LIKE 'visitors.%'
@@ -101,39 +100,6 @@ WHERE (
 INSERT IGNORE INTO final_role_permission (role_code, permission_code)
 VALUES
 ('FAM_STAFF','dashboard.view'),
-('FAM_STAFF','reports.view'),
-('FAM_STAFF','facility_requests.view'),
-('FAM_STAFF','facility_requests.create'),
-('FAM_STAFF','facility_requests.edit'),
-('FAM_STAFF','facility_requests.assign'),
-('FAM_STAFF','facility_requests.complete'),
-('FAM_STAFF','facility_requests.verify'),
-('FAM_STAFF','maintenance.view'),
-('FAM_STAFF','maintenance.edit'),
-('FAM_STAFF','maintenance.complete'),
-('FAM_STAFF','assets.view'),
-('FAM_STAFF','assets.create'),
-('FAM_STAFF','assets.edit'),
-('FAM_STAFF','reservations.view'),
-('FAM_STAFF','reservations.create'),
-('FAM_STAFF','reservations.edit'),
-('FAM_STAFF','visitors.view'),
-('FAM_STAFF','visitors.review'),
-('FAM_STAFF','visitors.create_walkin'),
-('FAM_STAFF','visitors.checkin'),
-('FAM_STAFF','visitors.checkout'),
-('FAM_STAFF','procurement.view'),
-('FAM_STAFF','procurement.create'),
-('FAM_STAFF','procurement.edit'),
-('FAM_STAFF','records.view'),
-('FAM_STAFF','records.create'),
-('FAM_STAFF','records.edit'),
-('FAM_STAFF','contract.view'),
-('FAM_STAFF','contract.create'),
-('FAM_STAFF','contract.edit'),
-('FAM_STAFF','contract.review'),
-('FAM_STAFF','retention.view'),
-('FAM_STAFF','retention.review'),
 ('DEPARTMENT_HEAD','employee_portal.view'),
 ('DEPARTMENT_HEAD','facility_requests.create'),
 ('DEPARTMENT_HEAD','facility_requests.view_own'),

@@ -273,7 +273,6 @@ final class ContractService
     public function uploadClientRequirement(int $id, array $data, array $file, array $user): ?array
     {
         ContractPolicy::requirePermission($user, 'contract.edit');
-        DocumentPolicy::requirePermission($user, 'records.create');
         $this->assertClientRequirementInfrastructure();
         $contract = $this->row('SELECT contract_id, contract_number, contract_title, contract_status FROM contract WHERE contract_id = :id AND deleted_at IS NULL LIMIT 1', ['id' => $id]);
         if ($contract === null) {
@@ -1132,7 +1131,7 @@ final class ContractService
 
     private function roleStep(string $name, string $permission, string $message): array
     {
-        $row = $this->row("SELECT ua.user_account_id user_id, e.employee_reference_id employee_id, e.full_name approver_name, r.role_id role_id FROM user_account ua INNER JOIN employee_reference e ON e.employee_reference_id = ua.employee_reference_id AND e.employment_status = 'ACTIVE' AND e.deleted_at IS NULL INNER JOIN user_role ur ON ur.user_account_id = ua.user_account_id AND (ur.expires_at IS NULL OR ur.expires_at > NOW()) INNER JOIN role r ON r.role_id = ur.role_id AND r.status = 'ACTIVE' INNER JOIN role_permission rp ON rp.role_id = r.role_id INNER JOIN permission p ON p.permission_id = rp.permission_id AND p.permission_code = :permission WHERE ua.account_status = 'ACTIVE' AND ua.deleted_at IS NULL ORDER BY r.role_code = 'FAM_SUPER_ADMIN' DESC, e.full_name LIMIT 1", ['permission' => $permission]);
+        $row = $this->row("SELECT ua.user_account_id user_id, e.employee_reference_id employee_id, e.full_name approver_name, MIN(r.role_id) role_id FROM user_account ua INNER JOIN employee_reference e ON e.employee_reference_id = ua.employee_reference_id AND e.employment_status = 'ACTIVE' AND e.deleted_at IS NULL INNER JOIN user_role ur ON ur.user_account_id = ua.user_account_id AND (ur.expires_at IS NULL OR ur.expires_at > NOW()) INNER JOIN role r ON r.role_id = ur.role_id AND r.status = 'ACTIVE' WHERE ua.account_status = 'ACTIVE' AND ua.deleted_at IS NULL AND (" . $this->effectivePermissionSql([$permission]) . ") GROUP BY ua.user_account_id, e.employee_reference_id, e.full_name ORDER BY SUM(r.role_code = 'FAM_SUPER_ADMIN') DESC, e.full_name LIMIT 1");
         if ($row === null) {
             throw new DomainException($message);
         }
@@ -1591,7 +1590,7 @@ SQL);
 
     private function approverHasContractApprovalPermission(int $userId): bool
     {
-        return (int) $this->scalar("SELECT COUNT(*) FROM user_account ua INNER JOIN user_role ur ON ur.user_account_id = ua.user_account_id AND (ur.expires_at IS NULL OR ur.expires_at > NOW()) INNER JOIN role r ON r.role_id = ur.role_id AND r.status = 'ACTIVE' INNER JOIN role_permission rp ON rp.role_id = r.role_id INNER JOIN permission p ON p.permission_id = rp.permission_id WHERE ua.user_account_id = :user_id AND ua.account_status = 'ACTIVE' AND ua.deleted_at IS NULL AND p.permission_code IN ('contract.approve','contract.manage')", ['user_id' => $userId]) > 0;
+        return (int) $this->scalar("SELECT COUNT(*) FROM user_account ua WHERE ua.user_account_id = :user_id AND ua.account_status = 'ACTIVE' AND ua.deleted_at IS NULL AND (" . $this->effectivePermissionSql(['contract.approve','contract.manage']) . ")", ['user_id' => $userId]) > 0;
     }
 
     private function auditApproval(array $user, string $action, array $contract, int $requestId, int $stepId, string $status, ?string $comment): void
@@ -3115,5 +3114,10 @@ SQL);
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
         return $statement->fetchColumn();
+    }
+
+    private function effectivePermissionSql(array $permissions): string
+    {
+        return EffectivePermissionService::inSql($permissions, 'ua');
     }
 }

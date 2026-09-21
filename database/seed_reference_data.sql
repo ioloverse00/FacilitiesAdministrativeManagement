@@ -104,8 +104,8 @@ ON DUPLICATE KEY UPDATE employee_reference_id=VALUES(employee_reference_id), acc
 -- 5. Roles
 INSERT INTO role (role_code, role_name, description, status)
 VALUES
-('FAM_SUPER_ADMIN','FAM Super Administrator','Highest FAM application authority.','ACTIVE'),
-('FAM_ADMIN','FAM Department Head','Department head of the FAM department with broad operational oversight.','ACTIVE'),
+('FAM_SUPER_ADMIN','Super Admin','Highest FAM application authority.','ACTIVE'),
+('FAM_ADMIN','Admin','Cross-module operational administrator with broad oversight.','ACTIVE'),
 ('FAM_STAFF','FAM Staff','Ordinary FAM operational employee.','ACTIVE'),
 ('DEPARTMENT_HEAD','Department Head','Head of a non-FAM department with department-scoped workflow access.','ACTIVE'),
 ('EMPLOYEE','Employee','Ordinary employee self-service access.','ACTIVE')
@@ -217,7 +217,6 @@ WHERE r.role_code='FAM_ADMIN'
     p.permission_code IN ('dashboard.view','reports.view','reports.export')
     OR (p.module_code IN ('facility_requests','maintenance','assets','reservations','procurement','records') AND SUBSTRING_INDEX(p.permission_code,'.',-1) IN ('view','create','edit','assign','approve','complete','verify','export','manage'))
     OR p.permission_code LIKE 'contract.%'
-    OR p.permission_code IN ('document_templates.view','document_templates.create','document_templates.edit','document_templates.retire')
     OR p.permission_code LIKE 'legal.%'
     OR p.permission_code LIKE 'retention.%'
     OR p.permission_code LIKE 'visitors.%'
@@ -231,6 +230,13 @@ JOIN role r ON r.role_id = rp.role_id
 JOIN permission p ON p.permission_id = rp.permission_id
 WHERE r.role_code = 'FAM_ADMIN'
   AND (p.module_code = 'administration' OR p.permission_code LIKE 'administration.%');
+
+DELETE rp
+FROM role_permission rp
+JOIN role r ON r.role_id = rp.role_id
+JOIN permission p ON p.permission_id = rp.permission_id
+WHERE r.role_code = 'FAM_ADMIN'
+  AND p.permission_code LIKE 'document_templates.%';
 
 DELETE rp
 FROM role_permission rp
@@ -250,40 +256,7 @@ INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM role r JOIN permission p
 WHERE r.role_code='FAM_STAFF'
   AND p.permission_code IN (
-    'dashboard.view',
-    'reports.view',
-    'facility_requests.view',
-    'facility_requests.create',
-    'facility_requests.edit',
-    'facility_requests.assign',
-    'facility_requests.complete',
-    'facility_requests.verify',
-    'maintenance.view',
-    'maintenance.edit',
-    'maintenance.complete',
-    'assets.view',
-    'assets.create',
-    'assets.edit',
-    'reservations.view',
-    'reservations.create',
-    'reservations.edit',
-    'visitors.view',
-    'visitors.review',
-    'visitors.create_walkin',
-    'visitors.checkin',
-    'visitors.checkout',
-    'procurement.view',
-    'procurement.create',
-    'procurement.edit',
-    'records.view',
-    'records.create',
-    'records.edit',
-    'contract.view',
-    'contract.create',
-    'contract.edit',
-    'contract.review',
-    'retention.view',
-    'retention.review'
+    'dashboard.view'
   );
 
 INSERT IGNORE INTO role_permission (role_id, permission_id)

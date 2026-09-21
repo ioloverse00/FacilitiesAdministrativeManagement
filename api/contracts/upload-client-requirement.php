@@ -4,7 +4,6 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . '_live_bootstrap.php';
 requireMethod('POST');
 $user = currentApiUser();
 ContractPolicy::requirePermission($user, 'contract.edit');
-DocumentPolicy::requirePermission($user, 'records.create');
 requireCsrfToken();
 try {
     $file = $_FILES['file'] ?? [];

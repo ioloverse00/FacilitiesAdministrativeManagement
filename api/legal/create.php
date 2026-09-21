@@ -15,7 +15,6 @@ try {
     if (!$files) {
         jsonResponse(false, 'Validation failed.', ['errors' => ['supporting_documents' => 'Attach at least one supporting document or evidence file to create this legal matter.']], 422);
     }
-    DocumentPolicy::requirePermission($user, 'records.create');
     $validationErrors = [];
     foreach ($files as $index => $file) {
         try {

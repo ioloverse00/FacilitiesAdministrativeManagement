@@ -22,13 +22,11 @@ final class FamEmployeeEligibilityService
             INNER JOIN role r ON r.role_id = ur.role_id
                 AND r.status = 'ACTIVE'
                 AND r.role_code NOT IN ('" . implode("','", self::EXCLUDED_HANDLER_ROLES) . "')
-            INNER JOIN role_permission rp ON rp.role_id = r.role_id
-            INNER JOIN permission p ON p.permission_id = rp.permission_id
-                AND p.permission_code IN ('" . implode("','", self::FAM_HANDLER_PERMISSIONS) . "')
             WHERE " . $this->activeEmployeeWhere() . "
+              AND (" . $this->effectivePermissionPredicate() . ")
             GROUP BY e.employee_reference_id
             ORDER BY d.department_name, e.full_name
-        ");
+        ", $this->handlerPermissionParams());
     }
 
     public function crossDepartmentContacts(): array
@@ -60,11 +58,9 @@ final class FamEmployeeEligibilityService
             INNER JOIN role r ON r.role_id = ur.role_id
                 AND r.status = 'ACTIVE'
                 AND r.role_code NOT IN ('" . implode("','", self::EXCLUDED_HANDLER_ROLES) . "')
-            INNER JOIN role_permission rp ON rp.role_id = r.role_id
-            INNER JOIN permission p ON p.permission_id = rp.permission_id
-                AND p.permission_code IN ('" . implode("','", self::FAM_HANDLER_PERMISSIONS) . "')
             WHERE " . $this->activeEmployeeWhere() . "
-                AND e.employee_reference_id = :id", ['id' => $employeeId]) > 0;
+                AND e.employee_reference_id = :id
+                AND (" . $this->effectivePermissionPredicate() . ")", ['id' => $employeeId] + $this->handlerPermissionParams()) > 0;
     }
 
     public function isCrossDepartmentContact(?int $employeeId): bool
@@ -137,6 +133,16 @@ final class FamEmployeeEligibilityService
     private function activeEmployeeWhere(): string
     {
         return "e.employment_status = 'ACTIVE' AND e.deleted_at IS NULL";
+    }
+
+    private function effectivePermissionPredicate(): string
+    {
+        return EffectivePermissionService::inSql(self::FAM_HANDLER_PERMISSIONS, 'ua');
+    }
+
+    private function handlerPermissionParams(): array
+    {
+        return [];
     }
 
     private function rows(string $sql, array $params = []): array

@@ -73,22 +73,20 @@ SQL);
 
     public function facilityAdminRecipients(): array
     {
-        $rows = $this->pdo->query(<<<'SQL'
+        $rows = $this->pdo->query("
 SELECT DISTINCT ua.user_account_id
 FROM user_account ua
 INNER JOIN user_role ur ON ur.user_account_id = ua.user_account_id
 INNER JOIN role r ON r.role_id = ur.role_id
-LEFT JOIN role_permission rp ON rp.role_id = r.role_id
-LEFT JOIN permission p ON p.permission_id = rp.permission_id
 WHERE ua.account_status = 'ACTIVE'
   AND ua.deleted_at IS NULL
   AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
   AND (
-    p.permission_code IN ('facility_requests.manage','facility_requests.assign','facility_requests.approve')
-    OR r.role_code IN ('FAM_ADMIN','FAM_SUPER_ADMIN')
+    r.role_code IN ('FAM_ADMIN','FAM_SUPER_ADMIN')
+    OR " . EffectivePermissionService::inSql(['facility_requests.manage','facility_requests.assign','facility_requests.approve'], 'ua') . "
   )
 ORDER BY ua.user_account_id
-SQL)->fetchAll();
+")->fetchAll();
 
         return array_map(static fn (array $row): int => (int) $row['user_account_id'], $rows);
     }

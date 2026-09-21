@@ -513,17 +513,31 @@ SQL);
     private function loadPermissions(int $userId): array
     {
         $statement = $this->pdo->prepare(<<<'SQL'
-SELECT DISTINCT p.permission_code
-FROM user_role ur
-INNER JOIN role r ON r.role_id = ur.role_id
-INNER JOIN role_permission rp ON rp.role_id = r.role_id
-INNER JOIN permission p ON p.permission_id = rp.permission_id
-WHERE ur.user_account_id = :user_account_id
-  AND r.status = 'ACTIVE'
-  AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
-ORDER BY p.permission_code
+SELECT DISTINCT permission_code
+FROM (
+    SELECT p.permission_code
+    FROM user_role ur
+    INNER JOIN role r ON r.role_id = ur.role_id
+    INNER JOIN role_permission rp ON rp.role_id = r.role_id
+    INNER JOIN permission p ON p.permission_id = rp.permission_id
+    WHERE ur.user_account_id = :role_user_account_id
+      AND r.status = 'ACTIVE'
+      AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+
+    UNION
+
+    SELECT p.permission_code
+    FROM user_permission up
+    INNER JOIN permission p ON p.permission_id = up.permission_id
+    WHERE up.user_account_id = :direct_user_account_id
+      AND (up.expires_at IS NULL OR up.expires_at > NOW())
+) effective_permissions
+ORDER BY permission_code
 SQL);
-        $statement->execute(['user_account_id' => $userId]);
+        $statement->execute([
+            'role_user_account_id' => $userId,
+            'direct_user_account_id' => $userId,
+        ]);
 
         return array_map(static fn (array $row): string => (string) $row['permission_code'], $statement->fetchAll());
     }

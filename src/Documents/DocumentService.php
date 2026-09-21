@@ -29,6 +29,22 @@ final class DocumentPolicy
 
         jsonResponse(false, 'You do not have permission to perform this action.', [], 403);
     }
+
+    public static function hasWorkflowDocumentAccess(DocumentService $service, int $documentId, array $user, ?int $contractId = null, ?int $legalMatterId = null): bool
+    {
+        if ($contractId !== null
+            && (in_array('contract.view', $user['permissions'] ?? [], true)
+                || in_array('contract.manage', $user['permissions'] ?? [], true))) {
+            return $service->documentLinkedToContract($documentId, $contractId);
+        }
+
+        if ($legalMatterId !== null
+            && in_array('legal.manage', $user['permissions'] ?? [], true)) {
+            return $service->documentLinkedToLegalMatter($documentId, $legalMatterId);
+        }
+
+        return false;
+    }
 }
 
 final class DocumentService
@@ -283,6 +299,44 @@ final class DocumentService
         $statement->execute(['id' => $documentId]);
         $reference = $statement->fetchColumn();
         return is_string($reference) && $reference !== '' ? $reference : null;
+    }
+
+    public function workflowScopesForDocument(int $documentId): array
+    {
+        $statement = $this->pdo->prepare("SELECT DISTINCT rec.source_module module, rec.source_entity_type reference, rec.source_entity_id entity_id FROM record_document rd INNER JOIN record rec ON rec.record_id = rd.record_id AND rec.deleted_at IS NULL WHERE rd.document_id = :id AND rec.source_module IN ('contract_management','legal_management')");
+        $statement->execute(['id' => $documentId]);
+
+        return $statement->fetchAll();
+    }
+
+    public function documentLinkedToContract(int $documentId, int $contractId): bool
+    {
+        return (int) $this->scalar("SELECT COUNT(*)
+            FROM record_document rd
+            INNER JOIN record rec ON rec.record_id = rd.record_id AND rec.deleted_at IS NULL
+            INNER JOIN contract c ON c.deleted_at IS NULL
+                AND c.contract_id = :contract_id
+                AND (rec.source_entity_id = c.contract_id OR rec.source_entity_type = c.contract_number)
+            WHERE rd.document_id = :document_id
+              AND rec.source_module = 'contract_management'", [
+            'document_id' => $documentId,
+            'contract_id' => $contractId,
+        ]) > 0;
+    }
+
+    public function documentLinkedToLegalMatter(int $documentId, int $legalMatterId): bool
+    {
+        return (int) $this->scalar("SELECT COUNT(*)
+            FROM record_document rd
+            INNER JOIN record rec ON rec.record_id = rd.record_id AND rec.deleted_at IS NULL
+            INNER JOIN legal_matter lm ON lm.deleted_at IS NULL
+                AND lm.legal_matter_id = :legal_matter_id
+                AND (rec.source_entity_id = lm.legal_matter_id OR rec.source_entity_type = lm.matter_number)
+            WHERE rd.document_id = :document_id
+              AND rec.source_module = 'legal_management'", [
+            'document_id' => $documentId,
+            'legal_matter_id' => $legalMatterId,
+        ]) > 0;
     }
 
     public function storeContractMetadataCandidate(int $documentId, array $candidate, int $userId): void

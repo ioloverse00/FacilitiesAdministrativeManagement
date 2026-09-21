@@ -8,7 +8,7 @@
         contracts: route('contract-management', '../pages/contract-management.html'),
         legal: route('legal-management', '../pages/legal-management.html')
     };
-    const modulePermissions = { reservations: 'reservations.view', visitors: 'visitors.view', documents: 'records.view', retention: 'records.view', contracts: 'contract.view', legal: 'legal.view' };
+    const modulePermissions = { reservations: 'reservations.view', visitors: 'visitors.view', documents: 'records.view', retention: 'retention.view', contracts: 'contract.view', legal: 'legal.view' };
     const moduleLabels = { RESERVATIONS: 'Room Reservations', VISITORS: 'Visitor Management', documents: 'Document Management', retention: 'Records Retention', contract_management: 'Contract Management', LEGAL_MANAGEMENT: 'Legal Management' };
     function plural(value, singular, pluralText = `${singular}s`) { return `${Number(value || 0)} ${Number(value || 0) === 1 ? singular : pluralText}`; }
     function status(value, warningLabel, okLabel = 'On Track') { return Number(value || 0) > 0 ? warningLabel : okLabel; }
