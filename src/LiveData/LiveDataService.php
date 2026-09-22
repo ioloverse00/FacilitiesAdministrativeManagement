@@ -69,12 +69,14 @@ final class LiveDataService
             $dashboard['kpis']['contractsPendingReviewApproval'] = $contractSummary['pendingReviewApproval'] ?? 0;
             $dashboard['kpis']['contractsActive'] = $contractSummary['active'] ?? 0;
             $dashboard['kpis']['contractsExpiringSoon'] = $contractSummary['expiringSoon'] ?? 0;
+            $dashboard['charts']['contract_workload'] = $this->contractWorkloadByStatus();
         }
 
         if ($canLegal) {
             $legalSummary = (new LegalMatterService($this->pdo))->dashboardSummary();
             $dashboard['kpis']['legalOpen'] = $legalSummary['open'] ?? 0;
             $dashboard['kpis']['legalCritical'] = $legalSummary['critical'] ?? 0;
+            $dashboard['charts']['legal_category_distribution'] = $this->openLegalMattersByCategory();
         }
 
         $overviewLabels = [];
@@ -345,6 +347,52 @@ final class LiveDataService
             WHERE ae.module_code IN (" . implode(',', $placeholders) . ")
             ORDER BY ae.occurred_at DESC
             LIMIT 10", $params);
+    }
+
+    private function contractWorkloadByStatus(): array
+    {
+        $row = $this->row("
+            SELECT
+                SUM(contract_status = 'FOR_REVIEW') for_review,
+                SUM(contract_status = 'FOR_APPROVAL') for_approval,
+                SUM(contract_status = 'ACTIVE') active,
+                SUM(contract_status = 'ACTIVE'
+                    AND end_date >= CURRENT_DATE()
+                    AND DATEDIFF(end_date, CURRENT_DATE()) <= COALESCE(notice_period_days, 0)) expiring_soon,
+                SUM(contract_status = 'ACTIVE'
+                    AND renewal_decision_date IS NOT NULL
+                    AND renewal_decision_date <= CURRENT_DATE()) renewal_due
+            FROM contract
+            WHERE deleted_at IS NULL
+        ") ?? [];
+
+        return [
+            'labels' => ['For Review', 'For Approval', 'Active', 'Expiring Soon', 'Renewal Due'],
+            'values' => [
+                (int) ($row['for_review'] ?? 0),
+                (int) ($row['for_approval'] ?? 0),
+                (int) ($row['active'] ?? 0),
+                (int) ($row['expiring_soon'] ?? 0),
+                (int) ($row['renewal_due'] ?? 0),
+            ],
+        ];
+    }
+
+    private function openLegalMattersByCategory(): array
+    {
+        $rows = $this->rows("
+            SELECT matter_type label, COUNT(*) value
+            FROM legal_matter
+            WHERE deleted_at IS NULL
+              AND status IN ('OPEN','UNDER_REVIEW','IN_PROGRESS')
+            GROUP BY matter_type
+            ORDER BY value DESC, matter_type
+        ");
+
+        return [
+            'labels' => array_map(static fn (array $row): string => (string) $row['label'], $rows),
+            'values' => array_map(static fn (array $row): int => (int) $row['value'], $rows),
+        ];
     }
 
     private function shapeMaintenance(array $r): array { return ['id'=>(int)$r['maintenance_work_order_id'],'workOrderNo'=>$r['work_order_number'],'title'=>$r['problem_description'],'asset'=>$r['asset_name'] ?: null,'space'=>$r['space_name'],'building'=>$r['building_name'],'priority'=>$r['priority'],'status'=>$r['status'],'maintenanceType'=>$r['maintenance_type'],'assignedTo'=>$r['assigned_to_name'],'scheduledStart'=>$r['scheduled_start_at'],'scheduledEnd'=>$r['scheduled_end_at'],'createdAt'=>$r['created_at'],'facilityRequest'=>$r['facility_request_number']]; }

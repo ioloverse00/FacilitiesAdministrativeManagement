@@ -44,7 +44,14 @@
         }));
     }
     function chartSeries(series = {}) { return { labels: Array.isArray(series.labels) ? series.labels : [], values: Array.isArray(series.values) ? series.values.map(value => Number(value || 0)) : [] }; }
-    function charts(data = {}) { return { reservationActivity: chartSeries(data.reservation_activity), operationalOverview: chartSeries(data.operational_overview) }; }
+    function charts(data = {}) {
+        return {
+            reservationActivity: chartSeries(data.reservation_activity),
+            operationalOverview: chartSeries(data.operational_overview),
+            contractWorkload: chartSeries(data.contract_workload),
+            legalCategoryDistribution: chartSeries(data.legal_category_distribution)
+        };
+    }
     function moduleMap(modules = {}) {
         return ['reservations', 'visitors', 'documents', 'retention', 'contracts', 'legal'].reduce((result, key) => {
             result[key] = modules[key] === true || modules[key] === 1 || modules[key] === '1';

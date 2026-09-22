@@ -6,7 +6,7 @@
     <title>Facilities & Administrative Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
     <script src="../assets/js/theme.js"></script>
-    <link href="../assets/css/app.css?v=20260919-requester-postfix" rel="stylesheet">
+    <link href="../assets/css/app.css?v=20260922-dashboard-analytics" rel="stylesheet">
     <script src="../assets/js/subsystems.js" defer></script>
     <script src="../assets/js/navigation.js" defer></script>
     <script src="../assets/js/sidebar.js" defer></script>
@@ -15,7 +15,7 @@
     <script src="../assets/js/layout.js?v=20260919-clock-subtext-format" defer></script>
     <script src="../assets/js/table-audit.js" defer></script>
     <script src="../assets/vendor/chartjs/chart.umd.min.js" defer></script>
-    <script src="../assets/js/dashboard-charts.js" defer></script>
+    <script src="../assets/js/dashboard-charts.js?v=20260922-dashboard-analytics" defer></script>
     <script src="../assets/js/dashboard-service.js?v=20260922-dashboard-composition" defer></script>
     <script src="../assets/js/dashboard.js?v=20260922-dashboard-composition" defer></script>
 </head>
@@ -49,6 +49,38 @@
                                 <h2 id="kpi-title">Key Performance Indicators</h2>
                             </div>
                             <div id="dashboard-kpis" class="fam-kpi-grid" data-state-container aria-live="polite"></div>
+                        </section>
+
+                        <section class="fam-section" aria-labelledby="analytics-title" data-dashboard-section="contract-legal-analytics">
+                            <div class="fam-section-heading">
+                                <h2 id="analytics-title">Contract &amp; Legal Analytics</h2>
+                            </div>
+                            <div class="fam-analytics-grid">
+                                <article class="fam-card fam-chart-card fam-chart-card-wide" aria-labelledby="contract-workload-title" data-dashboard-card="contract-workload" data-dashboard-module="contracts">
+                                    <div class="fam-card-header">
+                                        <div>
+                                            <h3 id="contract-workload-title">Contract Workload by Status</h3>
+                                            <p>Current contract workload across workflow and lifecycle stages.</p>
+                                        </div>
+                                    </div>
+                                    <div id="contract-workload-state" class="fam-chart-state" aria-live="polite"></div>
+                                    <div class="fam-chart-box">
+                                        <canvas id="contract-workload-chart" aria-label="Contract Workload by Status" role="img">Contract workload by status chart.</canvas>
+                                    </div>
+                                </article>
+                                <article class="fam-card fam-chart-card fam-chart-card-compact" aria-labelledby="legal-category-title" data-dashboard-card="legal-category" data-dashboard-module="legal">
+                                    <div class="fam-card-header">
+                                        <div>
+                                            <h3 id="legal-category-title">Open Legal Matters by Category</h3>
+                                            <p>Current open legal matters grouped by category.</p>
+                                        </div>
+                                    </div>
+                                    <div id="legal-category-state" class="fam-chart-state" aria-live="polite"></div>
+                                    <div class="fam-chart-box">
+                                        <canvas id="legal-category-chart" aria-label="Open Legal Matters by Category" role="img">Open legal matters by category chart.</canvas>
+                                    </div>
+                                </article>
+                            </div>
                         </section>
 
                         <section class="fam-section" aria-labelledby="insights-title" data-dashboard-section="insights">

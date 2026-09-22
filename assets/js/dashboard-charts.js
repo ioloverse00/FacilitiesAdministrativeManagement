@@ -113,6 +113,78 @@
         return chartInstances.operationalOverview;
     }
 
+    function createContractWorkloadChart(canvas, data) {
+        if (!canvas || !window.Chart || !data) return null;
+        destroyChart('contractWorkload');
+        const colors = palette();
+        const options = baseOptions();
+        options.plugins.legend.display = false;
+        options.scales.y.title = { display: true, text: 'Contracts', color: colors.text };
+        options.plugins.tooltip.callbacks = {
+            label: context => `${context.parsed.y} ${Number(context.parsed.y) === 1 ? 'contract' : 'contracts'}`
+        };
+        chartInstances.contractWorkload = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: data.labels || [],
+                datasets: [{
+                    label: 'Contracts',
+                    data: data.values || [],
+                    backgroundColor: [
+                        colors.primaryFill,
+                        cssVar('--color-warning-bg', 'rgba(217, 119, 6, 0.10)'),
+                        cssVar('--color-success-bg', 'rgba(22, 163, 74, 0.10)'),
+                        cssVar('--color-danger-bg', 'rgba(220, 38, 38, 0.08)'),
+                        cssVar('--color-info-bg', 'rgba(15, 118, 110, 0.10)')
+                    ],
+                    borderColor: [colors.primary, colors.amber, colors.green, colors.rose, colors.teal],
+                    borderWidth: 1,
+                    borderRadius: 8,
+                    maxBarThickness: 48
+                }]
+            },
+            options
+        });
+        return chartInstances.contractWorkload;
+    }
+
+    function createLegalCategoryChart(canvas, data) {
+        if (!canvas || !window.Chart || !data) return null;
+        destroyChart('legalCategory');
+        const colors = palette();
+        const options = baseOptions();
+        delete options.scales;
+        options.cutout = '62%';
+        options.plugins.legend.position = 'bottom';
+        options.plugins.tooltip.callbacks = {
+            label: context => `${context.label}: ${context.parsed} ${Number(context.parsed) === 1 ? 'matter' : 'matters'}`
+        };
+        chartInstances.legalCategory = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: data.labels || [],
+                datasets: [{
+                    label: 'Open matters',
+                    data: data.values || [],
+                    backgroundColor: [
+                        colors.primary,
+                        colors.teal,
+                        colors.amber,
+                        colors.rose,
+                        colors.green,
+                        colors.slate,
+                        cssVar('--color-primary-soft', 'rgba(79, 70, 229, 0.38)'),
+                        cssVar('--color-info-bg', 'rgba(15, 118, 110, 0.55)')
+                    ],
+                    borderColor: colors.surface,
+                    borderWidth: 2
+                }]
+            },
+            options
+        });
+        return chartInstances.legalCategory;
+    }
+
     function destroyAllCharts() {
         Object.keys(chartInstances).forEach(destroyChart);
     }
@@ -122,6 +194,8 @@
         hasValues,
         createReservationActivityChart,
         createOperationalOverviewChart,
+        createContractWorkloadChart,
+        createLegalCategoryChart,
         destroyAllCharts
     };
 })();

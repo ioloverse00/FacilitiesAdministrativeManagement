@@ -81,13 +81,19 @@
         dashboardState.modules = modules || {};
         const canReservations = hasModule('reservations');
         const canRetention = hasModule('retention');
-        const canOperationalOverview = hasAnyModule(['reservations', 'visitors', 'retention', 'contracts', 'legal']);
+        const canContracts = hasModule('contracts');
+        const canLegal = hasModule('legal');
+        const canOperationalOverview = hasAnyModule(['reservations', 'visitors', 'retention']);
         const overviewHasValues = window.FAMDashboardCharts?.hasValues?.(charts?.operationalOverview?.values) === true;
-        const showOperationalOverview = canOperationalOverview && (overviewHasValues || hasAnyModule(['reservations', 'visitors', 'retention']));
+        const showOperationalOverview = canOperationalOverview && overviewHasValues;
+        const showAnalytics = canContracts || canLegal;
 
         setElementHidden(dashboardCard('reservation-activity'), !canReservations);
         setElementHidden(dashboardCard('operational-overview'), !showOperationalOverview);
         setElementHidden(dashboardSection('insights'), !canReservations && !showOperationalOverview);
+        setElementHidden(dashboardCard('contract-workload'), !canContracts);
+        setElementHidden(dashboardCard('legal-category'), !canLegal);
+        setElementHidden(dashboardSection('contract-legal-analytics'), !showAnalytics);
         setElementHidden(dashboardCard('today-schedule'), !canReservations);
         setElementHidden(dashboardCard('retention-attention'), !canRetention);
         setElementHidden(dashboardSection('operations'), !canReservations && !canRetention);
@@ -126,13 +132,23 @@
         if (!hasModule('retention')) {
             setElementHidden(dashboardCard('retention-attention'), true);
         }
-        ['reservation-activity-state', 'operational-overview-state'].forEach(id => {
+        if (!hasModule('contracts')) {
+            setElementHidden(dashboardCard('contract-workload'), true);
+        }
+        if (!hasModule('legal')) {
+            setElementHidden(dashboardCard('legal-category'), true);
+        }
+        ['reservation-activity-state', 'operational-overview-state', 'contract-workload-state', 'legal-category-state'].forEach(id => {
             const target = document.getElementById(id);
             if (id === 'reservation-activity-state' && !hasModule('reservations')) return;
+            if (id === 'contract-workload-state' && !hasModule('contracts')) return;
+            if (id === 'legal-category-state' && !hasModule('legal')) return;
             if (target) target.innerHTML = `<div class="fam-dashboard-skeleton-chart" aria-hidden="true"><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-lg"></span><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-md"></span><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-sm"></span></div>`;
         });
         setChartVisibility('reservation-activity-chart', false);
         setChartVisibility('operational-overview-chart', false);
+        setChartVisibility('contract-workload-chart', false);
+        setChartVisibility('legal-category-chart', false);
         ['today-schedule', 'retention-attention', 'recent-activity'].forEach(id => {
             const target = document.getElementById(id);
             if (!target) return;
@@ -218,6 +234,34 @@
             setChartVisibility('operational-overview-chart', true);
             renderChartState('operational-overview-state', '');
             chartTools.createOperationalOverviewChart(overviewCanvas, operationalOverview);
+        }
+
+        const contractWorkload = charts?.contractWorkload || {};
+        const contractCanvas = document.getElementById('contract-workload-chart');
+        if (!hasModule('contracts')) {
+            setChartVisibility('contract-workload-chart', false);
+            renderChartState('contract-workload-state', '');
+        } else if (!chartTools.hasValues(contractWorkload.values)) {
+            setChartVisibility('contract-workload-chart', false);
+            renderChartState('contract-workload-state', 'No contract workload data available.', 'contract');
+        } else {
+            setChartVisibility('contract-workload-chart', true);
+            renderChartState('contract-workload-state', '');
+            chartTools.createContractWorkloadChart(contractCanvas, contractWorkload);
+        }
+
+        const legalCategory = charts?.legalCategoryDistribution || {};
+        const legalCanvas = document.getElementById('legal-category-chart');
+        if (!hasModule('legal')) {
+            setChartVisibility('legal-category-chart', false);
+            renderChartState('legal-category-state', '');
+        } else if (!chartTools.hasValues(legalCategory.values)) {
+            setChartVisibility('legal-category-chart', false);
+            renderChartState('legal-category-state', 'No open legal matters to display.', 'gavel');
+        } else {
+            setChartVisibility('legal-category-chart', true);
+            renderChartState('legal-category-state', '');
+            chartTools.createLegalCategoryChart(legalCanvas, legalCategory);
         }
     }
 

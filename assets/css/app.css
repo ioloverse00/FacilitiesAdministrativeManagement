@@ -3895,7 +3895,8 @@ div[role="group"] button:active {
 
 .fam-alert-grid,
 .fam-kpi-grid,
-.fam-chart-grid {
+.fam-chart-grid,
+.fam-analytics-grid {
   display: grid;
   gap: 1.5rem;
 }
@@ -3944,7 +3945,8 @@ div[role="group"] button:active {
 }
 
 .fam-kpi-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+  align-items: stretch;
 }
 
 .fam-card {
@@ -4011,6 +4013,11 @@ div[role="group"] button:active {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.fam-analytics-grid {
+  grid-template-columns: minmax(0, 3fr) minmax(16rem, 1fr);
+  align-items: stretch;
+}
+
 .fam-card-header {
   justify-content: space-between;
   gap: 1.5rem;
@@ -4022,6 +4029,12 @@ div[role="group"] button:active {
   letter-spacing: 0;
 }
 
+.fam-card-header p {
+  margin-top: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.825rem;
+}
+
 .fam-chart-box {
   position: relative;
   width: 100%;
@@ -4031,6 +4044,11 @@ div[role="group"] button:active {
 
 .fam-chart-card:not(.fam-chart-card-wide) .fam-chart-box {
   height: 18rem;
+}
+
+.fam-chart-card-compact .fam-chart-box {
+  height: 16rem;
+  min-height: 15rem;
 }
 
 .fam-chart-state:empty {
@@ -6713,7 +6731,8 @@ button.reservation-more-events {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .fam-chart-grid {
+  .fam-chart-grid,
+  .fam-analytics-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -6761,7 +6780,8 @@ button.reservation-more-events {
     grid-template-columns: 1fr;
   }
 
-  .fam-operations-grid {
+  .fam-operations-grid,
+  .fam-analytics-grid {
     grid-template-columns: 1fr;
   }
 
