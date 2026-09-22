@@ -45,10 +45,16 @@
     }
     function chartSeries(series = {}) { return { labels: Array.isArray(series.labels) ? series.labels : [], values: Array.isArray(series.values) ? series.values.map(value => Number(value || 0)) : [] }; }
     function charts(data = {}) { return { reservationActivity: chartSeries(data.reservation_activity), operationalOverview: chartSeries(data.operational_overview) }; }
+    function moduleMap(modules = {}) {
+        return ['reservations', 'visitors', 'documents', 'retention', 'contracts', 'legal'].reduce((result, key) => {
+            result[key] = modules[key] === true || modules[key] === 1 || modules[key] === '1';
+            return result;
+        }, {});
+    }
     function normalizeDashboardPayload(data) {
         return {
             generatedAt: data.generatedAt || new Date().toISOString(),
-            modules: data.modules || {},
+            modules: moduleMap(data.modules || {}),
             kpis: kpiArray(data.kpis || {}),
             charts: charts(data.charts || {}),
             todaySchedule: schedule(data.todaySchedule || []),

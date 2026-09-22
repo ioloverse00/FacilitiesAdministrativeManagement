@@ -16,8 +16,8 @@
     <script src="../assets/js/table-audit.js" defer></script>
     <script src="../assets/vendor/chartjs/chart.umd.min.js" defer></script>
     <script src="../assets/js/dashboard-charts.js" defer></script>
-    <script src="../assets/js/dashboard-service.js" defer></script>
-    <script src="../assets/js/dashboard.js" defer></script>
+    <script src="../assets/js/dashboard-service.js?v=20260922-dashboard-composition" defer></script>
+    <script src="../assets/js/dashboard.js?v=20260922-dashboard-composition" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body"
     data-page-title="Facilities & Administrative Dashboard"
@@ -51,12 +51,12 @@
                             <div id="dashboard-kpis" class="fam-kpi-grid" data-state-container aria-live="polite"></div>
                         </section>
 
-                        <section class="fam-section" aria-labelledby="insights-title">
+                        <section class="fam-section" aria-labelledby="insights-title" data-dashboard-section="insights">
                             <div class="fam-section-heading">
                                 <h2 id="insights-title">Operational Insights</h2>
                             </div>
                             <div class="fam-chart-grid">
-                                <article class="fam-card fam-chart-card" aria-labelledby="reservation-activity-title">
+                                <article class="fam-card fam-chart-card" aria-labelledby="reservation-activity-title" data-dashboard-card="reservation-activity" data-dashboard-module="reservations">
                                     <div class="fam-card-header">
                                         <h3 id="reservation-activity-title">Scheduled Reservations &mdash; Last 7 Days</h3>
                                     </div>
@@ -65,7 +65,7 @@
                                         <canvas id="reservation-activity-chart" aria-label="Scheduled Reservations - Last 7 Days" role="img">Scheduled reservations chart for the last 7 days.</canvas>
                                     </div>
                                 </article>
-                                <article class="fam-card fam-chart-card" aria-labelledby="operational-overview-title">
+                                <article class="fam-card fam-chart-card" aria-labelledby="operational-overview-title" data-dashboard-card="operational-overview">
                                     <div class="fam-card-header">
                                         <h3 id="operational-overview-title">Current Operational Overview</h3>
                                     </div>
@@ -77,19 +77,19 @@
                             </div>
                         </section>
 
-                        <section class="fam-section" aria-labelledby="operations-title">
+                        <section class="fam-section" aria-labelledby="operations-title" data-dashboard-section="operations">
                             <div class="fam-section-heading">
                                 <h2 id="operations-title">Operations</h2>
                             </div>
                             <div class="fam-operations-grid">
-                            <section class="fam-section" aria-labelledby="schedule-title">
+                            <section class="fam-section" aria-labelledby="schedule-title" data-dashboard-card="today-schedule" data-dashboard-module="reservations">
                                 <div class="fam-section-heading">
                                     <h2 id="schedule-title">Today's Facilities Schedule</h2>
                                     <a class="fam-link" href="../pages/room-reservations.html" data-clean-route="room-reservations" data-requires-permission="reservations.view">View Facilities Schedule</a>
                                 </div>
                                 <div id="today-schedule" class="fam-card fam-timeline" data-state-container aria-live="polite"></div>
                             </section>
-                            <section class="fam-section" aria-labelledby="retention-attention-title">
+                            <section class="fam-section" aria-labelledby="retention-attention-title" data-dashboard-card="retention-attention" data-dashboard-module="retention">
                                 <div class="fam-section-heading">
                                     <h2 id="retention-attention-title">Retention Attention Queue</h2>
                                     <a class="fam-link" href="../pages/records-retention.html" data-clean-route="records-retention" data-requires-permission="retention.view">Open Records Retention</a>

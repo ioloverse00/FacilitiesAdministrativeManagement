@@ -36,6 +36,10 @@
         'Legal Management': 'gavel'
     };
 
+    const dashboardState = {
+        modules: {}
+    };
+
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     }
@@ -50,31 +54,43 @@
         return `<div class="fam-state" role="status"><span class="material-symbols-outlined${spinner}" aria-hidden="true">${icon}</span><span>${escapeHtml(message)}</span></div>`;
     }
 
-    function sectionByHeading(headingId) {
-        return document.getElementById(headingId)?.closest('.fam-section') || null;
+    function hasModule(module) {
+        return dashboardState.modules?.[module] === true;
     }
 
-    function chartCardByCanvas(canvasId) {
-        return document.getElementById(canvasId)?.closest('.fam-chart-card') || null;
+    function hasAnyModule(modules) {
+        return modules.some(hasModule);
     }
 
     function setElementHidden(element, hidden) {
         if (!element) return;
         element.hidden = hidden;
+        element.classList.toggle('hidden', hidden);
         element.setAttribute('aria-hidden', String(hidden));
     }
 
-    function applyDashboardComposition(modules = {}) {
-        const hasReservations = modules.reservations === true;
-        const hasRetention = modules.retention === true;
-        const hasOperationalOverview = ['reservations', 'visitors', 'retention', 'contracts', 'legal'].some(key => modules[key] === true);
+    function dashboardCard(name) {
+        return document.querySelector(`[data-dashboard-card="${name}"]`);
+    }
 
-        setElementHidden(chartCardByCanvas('reservation-activity-chart'), !hasReservations);
-        setElementHidden(chartCardByCanvas('operational-overview-chart'), !hasOperationalOverview);
-        setElementHidden(sectionByHeading('insights-title'), !hasReservations && !hasOperationalOverview);
-        setElementHidden(sectionByHeading('schedule-title'), !hasReservations);
-        setElementHidden(sectionByHeading('retention-attention-title'), !hasRetention);
-        setElementHidden(sectionByHeading('operations-title'), !hasReservations && !hasRetention);
+    function dashboardSection(name) {
+        return document.querySelector(`[data-dashboard-section="${name}"]`);
+    }
+
+    function applyDashboardComposition(modules = dashboardState.modules, charts = {}) {
+        dashboardState.modules = modules || {};
+        const canReservations = hasModule('reservations');
+        const canRetention = hasModule('retention');
+        const canOperationalOverview = hasAnyModule(['reservations', 'visitors', 'retention', 'contracts', 'legal']);
+        const overviewHasValues = window.FAMDashboardCharts?.hasValues?.(charts?.operationalOverview?.values) === true;
+        const showOperationalOverview = canOperationalOverview && (overviewHasValues || hasAnyModule(['reservations', 'visitors', 'retention']));
+
+        setElementHidden(dashboardCard('reservation-activity'), !canReservations);
+        setElementHidden(dashboardCard('operational-overview'), !showOperationalOverview);
+        setElementHidden(dashboardSection('insights'), !canReservations && !showOperationalOverview);
+        setElementHidden(dashboardCard('today-schedule'), !canReservations);
+        setElementHidden(dashboardCard('retention-attention'), !canRetention);
+        setElementHidden(dashboardSection('operations'), !canReservations && !canRetention);
     }
 
     function setLoading() {
@@ -103,8 +119,16 @@
                 </article>
             `).join('');
         }
+        if (!hasModule('reservations')) {
+            setElementHidden(dashboardCard('reservation-activity'), true);
+            setElementHidden(dashboardCard('today-schedule'), true);
+        }
+        if (!hasModule('retention')) {
+            setElementHidden(dashboardCard('retention-attention'), true);
+        }
         ['reservation-activity-state', 'operational-overview-state'].forEach(id => {
             const target = document.getElementById(id);
+            if (id === 'reservation-activity-state' && !hasModule('reservations')) return;
             if (target) target.innerHTML = `<div class="fam-dashboard-skeleton-chart" aria-hidden="true"><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-lg"></span><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-md"></span><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-sm"></span></div>`;
         });
         setChartVisibility('reservation-activity-chart', false);
@@ -112,9 +136,12 @@
         ['today-schedule', 'retention-attention', 'recent-activity'].forEach(id => {
             const target = document.getElementById(id);
             if (!target) return;
+            if (id === 'today-schedule' && !hasModule('reservations')) return;
+            if (id === 'retention-attention' && !hasModule('retention')) return;
             target.setAttribute('aria-busy', 'true');
             target.innerHTML = `<div class="fam-dashboard-skeleton-list" aria-hidden="true">${Array.from({ length: id === 'recent-activity' ? 4 : 3 }, () => `<div class="fam-dashboard-skeleton-row"><div><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-lg"></span><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-md"></span></div><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-sm"></span></div>`).join('')}</div><span class="sr-only">Loading dashboard content...</span>`;
         });
+        applyDashboardComposition();
     }
 
     function formatUpdatedAt(value) {
@@ -166,7 +193,10 @@
 
         const reservationActivity = charts?.reservationActivity || {};
         const reservationCanvas = document.getElementById('reservation-activity-chart');
-        if (!chartTools.hasValues(reservationActivity.values)) {
+        if (!hasModule('reservations')) {
+            setChartVisibility('reservation-activity-chart', false);
+            renderChartState('reservation-activity-state', '');
+        } else if (!chartTools.hasValues(reservationActivity.values)) {
             setChartVisibility('reservation-activity-chart', false);
             renderChartState('reservation-activity-state', 'No reservation activity in the last 7 days.', 'event_busy');
         } else {
@@ -177,7 +207,11 @@
 
         const operationalOverview = charts?.operationalOverview || {};
         const overviewCanvas = document.getElementById('operational-overview-chart');
-        if (!chartTools.hasValues(operationalOverview.values)) {
+        const showEmptyOverview = hasAnyModule(['reservations', 'visitors', 'retention']);
+        if (!chartTools.hasValues(operationalOverview.values) && !showEmptyOverview) {
+            setChartVisibility('operational-overview-chart', false);
+            renderChartState('operational-overview-state', '');
+        } else if (!chartTools.hasValues(operationalOverview.values)) {
             setChartVisibility('operational-overview-chart', false);
             renderChartState('operational-overview-state', 'No active operational items require attention.', 'check_circle');
         } else {
@@ -190,6 +224,11 @@
     function renderTodaySchedule(items) {
         const target = document.getElementById('today-schedule');
         if (!target) return;
+        if (!hasModule('reservations')) {
+            target.removeAttribute('aria-busy');
+            target.innerHTML = '';
+            return;
+        }
         target.removeAttribute('aria-busy');
         if (!items?.length) {
             target.innerHTML = stateMessage('No scheduled facility activities today.', 'event_available');
@@ -210,6 +249,11 @@
     function renderRetentionAttention(items) {
         const target = document.getElementById('retention-attention');
         if (!target) return;
+        if (!hasModule('retention')) {
+            target.removeAttribute('aria-busy');
+            target.innerHTML = '';
+            return;
+        }
         target.removeAttribute('aria-busy');
         if (!items?.length) {
             target.innerHTML = stateMessage('No retention records are due for review.', 'fact_check');
@@ -256,7 +300,7 @@
         if (initial) setLoading();
         try {
             const data = await service.getDashboardPayload();
-            applyDashboardComposition(data.modules);
+            applyDashboardComposition(data.modules, data.charts);
             const updated = document.getElementById('dashboard-last-updated');
             if (updated) {
                 updated.textContent = formatUpdatedAt(data.generatedAt);
@@ -267,6 +311,7 @@
             renderTodaySchedule(data.todaySchedule);
             renderRetentionAttention(data.retentionAttention);
             renderRecentActivity(data.recentActivities);
+            applyDashboardComposition(data.modules, data.charts);
         } catch (error) {
             console.error(error);
             window.FAMDashboardCharts?.destroyAllCharts();
