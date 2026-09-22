@@ -351,20 +351,21 @@ final class LiveDataService
 
     private function contractWorkloadByStatus(): array
     {
-        $row = $this->row("
+        $rows = $this->rows("
             SELECT
-                SUM(contract_status = 'FOR_REVIEW') for_review,
-                SUM(contract_status = 'FOR_APPROVAL') for_approval,
-                SUM(contract_status = 'ACTIVE') active,
-                SUM(contract_status = 'ACTIVE'
+                COALESCE(SUM(contract_status = 'FOR_REVIEW'), 0) for_review,
+                COALESCE(SUM(contract_status = 'FOR_APPROVAL'), 0) for_approval,
+                COALESCE(SUM(contract_status = 'ACTIVE'), 0) active,
+                COALESCE(SUM(contract_status = 'ACTIVE'
                     AND end_date >= CURRENT_DATE()
-                    AND DATEDIFF(end_date, CURRENT_DATE()) <= COALESCE(notice_period_days, 0)) expiring_soon,
-                SUM(contract_status = 'ACTIVE'
+                    AND DATEDIFF(end_date, CURRENT_DATE()) <= COALESCE(notice_period_days, 0)), 0) expiring_soon,
+                COALESCE(SUM(contract_status = 'ACTIVE'
                     AND renewal_decision_date IS NOT NULL
-                    AND renewal_decision_date <= CURRENT_DATE()) renewal_due
+                    AND renewal_decision_date <= CURRENT_DATE()), 0) renewal_due
             FROM contract
             WHERE deleted_at IS NULL
-        ") ?? [];
+        ");
+        $row = $rows[0] ?? [];
 
         return [
             'labels' => ['For Review', 'For Approval', 'Active', 'Expiring Soon', 'Renewal Due'],
