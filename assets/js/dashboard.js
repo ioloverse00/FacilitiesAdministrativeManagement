@@ -62,6 +62,21 @@
         return modules.some(hasModule);
     }
 
+    function roleCodes() {
+        const roles = window.FAMApi?.currentUser?.roles || [];
+        return roles.map(role => String(role?.code || '').toUpperCase()).filter(Boolean);
+    }
+
+    function isStaffAnalyticsDashboard() {
+        const codes = roleCodes();
+        const persona = String(window.FAMApi?.currentUser?.persona?.code || '').toUpperCase();
+        return (codes.includes('FAM_STAFF') || persona === 'FAM_STAFF')
+            && !codes.includes('FAM_SUPER_ADMIN')
+            && !codes.includes('FAM_ADMIN')
+            && persona !== 'FAM_SUPER_ADMIN'
+            && persona !== 'FAM_ADMIN';
+    }
+
     function setElementHidden(element, hidden) {
         if (!element) return;
         element.hidden = hidden;
@@ -86,13 +101,13 @@
         const canOperationalOverview = hasAnyModule(['reservations', 'visitors', 'retention']);
         const overviewHasValues = window.FAMDashboardCharts?.hasValues?.(charts?.operationalOverview?.values) === true;
         const showOperationalOverview = canOperationalOverview && overviewHasValues;
-        const showAnalytics = canContracts || canLegal;
+        const showAnalytics = isStaffAnalyticsDashboard() && (canContracts || canLegal);
 
         setElementHidden(dashboardCard('reservation-activity'), !canReservations);
         setElementHidden(dashboardCard('operational-overview'), !showOperationalOverview);
         setElementHidden(dashboardSection('insights'), !canReservations && !showOperationalOverview);
-        setElementHidden(dashboardCard('contract-workload'), !canContracts);
-        setElementHidden(dashboardCard('legal-category'), !canLegal);
+        setElementHidden(dashboardCard('contract-workload'), !showAnalytics || !canContracts);
+        setElementHidden(dashboardCard('legal-category'), !showAnalytics || !canLegal);
         setElementHidden(dashboardSection('contract-legal-analytics'), !showAnalytics);
         setElementHidden(dashboardCard('today-schedule'), !canReservations);
         setElementHidden(dashboardCard('retention-attention'), !canRetention);
@@ -169,6 +184,7 @@
         const target = document.getElementById('dashboard-kpis');
         if (!target) return;
         target.removeAttribute('aria-busy');
+        target.classList.toggle('fam-kpi-grid-compact', isStaffAnalyticsDashboard() && (kpis?.length || 0) <= 2);
         if (!kpis?.length) {
             target.innerHTML = stateMessage('No KPI data available.', 'query_stats');
             return;
@@ -238,7 +254,7 @@
 
         const contractWorkload = charts?.contractWorkload || {};
         const contractCanvas = document.getElementById('contract-workload-chart');
-        if (!hasModule('contracts')) {
+        if (!isStaffAnalyticsDashboard() || !hasModule('contracts')) {
             setChartVisibility('contract-workload-chart', false);
             renderChartState('contract-workload-state', '');
         } else if (!chartTools.hasValues(contractWorkload.values)) {
@@ -252,7 +268,7 @@
 
         const legalCategory = charts?.legalCategoryDistribution || {};
         const legalCanvas = document.getElementById('legal-category-chart');
-        if (!hasModule('legal')) {
+        if (!isStaffAnalyticsDashboard() || !hasModule('legal')) {
             setChartVisibility('legal-category-chart', false);
             renderChartState('legal-category-state', '');
         } else if (!chartTools.hasValues(legalCategory.values)) {

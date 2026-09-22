@@ -3945,8 +3945,12 @@ div[role="group"] button:active {
 }
 
 .fam-kpi-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
+}
+
+.fam-kpi-grid.fam-kpi-grid-compact {
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
 }
 
 .fam-card {
