@@ -100,7 +100,7 @@
         const canLegal = hasModule('legal');
         const canOperationalOverview = hasAnyModule(['reservations', 'visitors', 'retention']);
         const overviewHasValues = window.FAMDashboardCharts?.hasValues?.(charts?.operationalOverview?.values) === true;
-        const showOperationalOverview = canOperationalOverview && overviewHasValues;
+        const showOperationalOverview = canOperationalOverview && (overviewHasValues || !isStaffAnalyticsDashboard());
         const showAnalytics = isStaffAnalyticsDashboard() && (canContracts || canLegal);
 
         setElementHidden(dashboardCard('reservation-activity'), !canReservations);
