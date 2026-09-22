@@ -24,6 +24,14 @@ final class LiveDataService
 
         $dashboard = [
             'generatedAt' => date('c'),
+            'modules' => [
+                'reservations' => $canReservations,
+                'visitors' => $canVisitors,
+                'documents' => $canDocuments,
+                'retention' => $canRetention,
+                'contracts' => $canContracts,
+                'legal' => $canLegal,
+            ],
             'kpis' => [],
             'charts' => [],
             'recentActivities' => [],
@@ -82,6 +90,10 @@ final class LiveDataService
         if ($canRetention) {
             $overviewLabels[] = 'Retention Attention';
             $overviewValues[] = $dashboard['kpis']['recordsDispositionDue'] ?? 0;
+        }
+        if ($canContracts) {
+            $overviewLabels[] = 'Contract Review Workload';
+            $overviewValues[] = $dashboard['kpis']['contractsPendingReviewApproval'] ?? 0;
         }
         if ($canLegal) {
             $overviewLabels[] = 'Open Legal Matters';

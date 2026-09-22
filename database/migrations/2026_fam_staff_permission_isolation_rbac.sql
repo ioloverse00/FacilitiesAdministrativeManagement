@@ -265,8 +265,6 @@ WHERE ua.username IN ('facility.manager','maintenance.supervisor','technician.on
   AND e.deleted_at IS NULL
   AND e.employment_status <> 'INACTIVE';
 
-COMMIT;
-
 SELECT 'fam_staff_role_baseline' AS verification_name, r.role_code,
   GROUP_CONCAT(p.permission_code ORDER BY p.permission_code SEPARATOR ',') AS permissions
 FROM role r
@@ -285,3 +283,5 @@ LEFT JOIN permission p ON p.permission_id = up.permission_id
 WHERE ua.username IN ('reservation.officer','legal.manager','records.officer','facility.manager','maintenance.supervisor','technician.one','asset.custodian')
 GROUP BY ua.user_account_id, ua.username, ua.account_status, e.employee_reference_id, e.full_name, e.position_title
 ORDER BY FIELD(ua.username,'reservation.officer','legal.manager','records.officer','facility.manager','maintenance.supervisor','technician.one','asset.custodian');
+
+COMMIT;

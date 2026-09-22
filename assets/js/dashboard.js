@@ -50,6 +50,33 @@
         return `<div class="fam-state" role="status"><span class="material-symbols-outlined${spinner}" aria-hidden="true">${icon}</span><span>${escapeHtml(message)}</span></div>`;
     }
 
+    function sectionByHeading(headingId) {
+        return document.getElementById(headingId)?.closest('.fam-section') || null;
+    }
+
+    function chartCardByCanvas(canvasId) {
+        return document.getElementById(canvasId)?.closest('.fam-chart-card') || null;
+    }
+
+    function setElementHidden(element, hidden) {
+        if (!element) return;
+        element.hidden = hidden;
+        element.setAttribute('aria-hidden', String(hidden));
+    }
+
+    function applyDashboardComposition(modules = {}) {
+        const hasReservations = modules.reservations === true;
+        const hasRetention = modules.retention === true;
+        const hasOperationalOverview = ['reservations', 'visitors', 'retention', 'contracts', 'legal'].some(key => modules[key] === true);
+
+        setElementHidden(chartCardByCanvas('reservation-activity-chart'), !hasReservations);
+        setElementHidden(chartCardByCanvas('operational-overview-chart'), !hasOperationalOverview);
+        setElementHidden(sectionByHeading('insights-title'), !hasReservations && !hasOperationalOverview);
+        setElementHidden(sectionByHeading('schedule-title'), !hasReservations);
+        setElementHidden(sectionByHeading('retention-attention-title'), !hasRetention);
+        setElementHidden(sectionByHeading('operations-title'), !hasReservations && !hasRetention);
+    }
+
     function setLoading() {
         const updated = document.getElementById('dashboard-last-updated');
         if (updated) {
@@ -229,6 +256,7 @@
         if (initial) setLoading();
         try {
             const data = await service.getDashboardPayload();
+            applyDashboardComposition(data.modules);
             const updated = document.getElementById('dashboard-last-updated');
             if (updated) {
                 updated.textContent = formatUpdatedAt(data.generatedAt);

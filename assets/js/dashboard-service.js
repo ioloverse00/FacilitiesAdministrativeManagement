@@ -45,7 +45,17 @@
     }
     function chartSeries(series = {}) { return { labels: Array.isArray(series.labels) ? series.labels : [], values: Array.isArray(series.values) ? series.values.map(value => Number(value || 0)) : [] }; }
     function charts(data = {}) { return { reservationActivity: chartSeries(data.reservation_activity), operationalOverview: chartSeries(data.operational_overview) }; }
-    function normalizeDashboardPayload(data) { return { generatedAt: data.generatedAt || new Date().toISOString(), kpis: kpiArray(data.kpis || {}), charts: charts(data.charts || {}), todaySchedule: schedule(data.todaySchedule || []), retentionAttention: retentionAttention(data.retentionAttention || []), recentActivities: activity(data.recentActivities || []) }; }
+    function normalizeDashboardPayload(data) {
+        return {
+            generatedAt: data.generatedAt || new Date().toISOString(),
+            modules: data.modules || {},
+            kpis: kpiArray(data.kpis || {}),
+            charts: charts(data.charts || {}),
+            todaySchedule: schedule(data.todaySchedule || []),
+            retentionAttention: retentionAttention(data.retentionAttention || []),
+            recentActivities: activity(data.recentActivities || [])
+        };
+    }
     async function getDashboardPayload() { const payload = await window.FAMApi.request('../api/dashboard/index.php'); return normalizeDashboardPayload(payload.data?.dashboard || {}); }
     window.FAMDashboardService = { getDashboardPayload, normalizeDashboardPayload };
 })();
