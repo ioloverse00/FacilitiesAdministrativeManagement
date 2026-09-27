@@ -59,14 +59,54 @@ final class GoogleOAuthService
         $userId = (int) ($_SESSION['google_oauth_user_id'] ?? 0);
         $return = (string) ($_SESSION['google_oauth_return'] ?? $this->defaultReturnUrl());
         unset($_SESSION['google_oauth_state'], $_SESSION['google_oauth_user_id'], $_SESSION['google_oauth_return']);
-        if ($state === '' || !hash_equals($expectedState, $state)) {
+        $callbackStatePresent = $state !== '';
+        $expectedStatePresent = $expectedState !== '';
+        $oauthUserIdPresent = $userId > 0;
+        $stateMatch = $callbackStatePresent && $expectedStatePresent && hash_equals($expectedState, $state);
+        if (!$callbackStatePresent || !$expectedStatePresent || !$stateMatch) {
+            $this->logOAuthDiagnostic(
+                !$callbackStatePresent
+                    ? 'GOOGLE_OAUTH_STATE_MISSING'
+                    : (!$expectedStatePresent ? 'GOOGLE_OAUTH_SESSION_STATE_MISSING' : 'GOOGLE_OAUTH_STATE_MISMATCH'),
+                [
+                    'callback_state_present' => $callbackStatePresent,
+                    'expected_state_present' => $expectedStatePresent,
+                    'oauth_user_id_present' => $oauthUserIdPresent,
+                    'state_match' => $stateMatch,
+                ]
+            );
             throw new GoogleIntegrationException('google_oauth_state', 'Google authorization state could not be verified.');
         }
         if (($query['error'] ?? '') !== '') {
+            $this->logOAuthDiagnostic('GOOGLE_OAUTH_PROVIDER_ERROR', [
+                'google_error' => $this->sanitizeGoogleError((string) $query['error']),
+                'google_error_description' => $this->sanitizeGoogleError((string) ($query['error_description'] ?? '')),
+                'callback_state_present' => $callbackStatePresent,
+                'expected_state_present' => $expectedStatePresent,
+                'oauth_user_id_present' => $oauthUserIdPresent,
+                'state_match' => $stateMatch,
+            ]);
             throw new GoogleIntegrationException('google_oauth', 'Google authorization was not completed.');
         }
         $code = (string) ($query['code'] ?? '');
-        if ($userId < 1 || $code === '') {
+        if (!$oauthUserIdPresent) {
+            $this->logOAuthDiagnostic('GOOGLE_OAUTH_SESSION_USER_MISSING', [
+                'callback_state_present' => $callbackStatePresent,
+                'expected_state_present' => $expectedStatePresent,
+                'oauth_user_id_present' => false,
+                'state_match' => $stateMatch,
+                'authorization_code_present' => $code !== '',
+            ]);
+            throw new GoogleIntegrationException('google_oauth', 'Google authorization response was incomplete.');
+        }
+        if ($code === '') {
+            $this->logOAuthDiagnostic('GOOGLE_OAUTH_CODE_MISSING', [
+                'callback_state_present' => $callbackStatePresent,
+                'expected_state_present' => $expectedStatePresent,
+                'oauth_user_id_present' => $oauthUserIdPresent,
+                'state_match' => $stateMatch,
+                'authorization_code_present' => false,
+            ]);
             throw new GoogleIntegrationException('google_oauth', 'Google authorization response was incomplete.');
         }
         $token = $this->tokenRequest('https://oauth2.googleapis.com/token', [
@@ -78,6 +118,11 @@ final class GoogleOAuthService
         ]);
         $refreshToken = (string) ($token['refresh_token'] ?? '');
         if ($refreshToken === '') {
+            $this->logOAuthDiagnostic('GOOGLE_OAUTH_REFRESH_TOKEN_MISSING', [
+                'operation' => 'token_exchange',
+                'access_token_present' => !empty($token['access_token']),
+                'refresh_token_present' => false,
+            ]);
             throw new GoogleIntegrationException('google_oauth', 'Google did not return a refresh token. Revoke access and connect again.');
         }
         $profile = $this->userInfo((string) ($token['access_token'] ?? ''));
@@ -126,9 +171,20 @@ final class GoogleOAuthService
     {
         $config = $this->configuration();
         if (!$config['enabled']) {
+            $this->logOAuthDiagnostic('GOOGLE_OAUTH_DISABLED', [
+                'integration_enabled' => false,
+            ]);
             throw new GoogleIntegrationException('google_configuration', 'Google Docs authoring is disabled.');
         }
         if (!$config['configured']) {
+            $this->logOAuthDiagnostic('GOOGLE_OAUTH_CONFIG_INCOMPLETE', [
+                'integration_enabled' => $config['enabled'],
+                'client_id_present' => $config['client_id'] !== '',
+                'client_secret_present' => $config['client_secret'] !== '',
+                'redirect_uri_present' => $config['redirect_uri'] !== '',
+                'redirect_uri_valid' => $config['valid_redirect_uri'],
+                'token_encryption_configured' => $this->crypto->configured(),
+            ]);
             throw new GoogleIntegrationException('google_configuration', 'Google Docs authoring is not fully configured.');
         }
         return $config;
@@ -137,33 +193,54 @@ final class GoogleOAuthService
     private function storeConnection(int $userId, array $profile, string $refreshToken): void
     {
         if (!$this->tableExists('google_account_connection')) {
+            $this->logOAuthDiagnostic('GOOGLE_OAUTH_STORAGE_UNAVAILABLE', [
+                'table' => 'google_account_connection',
+            ]);
             throw new GoogleIntegrationException('google_schema', 'Google integration tables have not been installed.');
         }
-        $this->pdo->prepare("INSERT INTO google_account_connection (user_account_id, google_subject_id, google_email, encrypted_refresh_token, scopes, status, connected_at, updated_at) VALUES (:user_id, :subject, :email, :token, :scopes, 'ACTIVE', NOW(), NOW()) ON DUPLICATE KEY UPDATE google_subject_id = VALUES(google_subject_id), google_email = VALUES(google_email), encrypted_refresh_token = VALUES(encrypted_refresh_token), scopes = VALUES(scopes), status = 'ACTIVE', revoked_at = NULL, updated_at = NOW()")->execute([
-            'user_id' => $userId,
-            'subject' => (string) ($profile['sub'] ?? ''),
-            'email' => (string) ($profile['email'] ?? ''),
-            'token' => $this->crypto->encrypt($refreshToken),
-            'scopes' => implode(' ', self::SCOPES),
-        ]);
+        try {
+            $encryptedRefreshToken = $this->crypto->encrypt($refreshToken);
+            $this->pdo->prepare("INSERT INTO google_account_connection (user_account_id, google_subject_id, google_email, encrypted_refresh_token, scopes, status, connected_at, updated_at) VALUES (:user_id, :subject, :email, :token, :scopes, 'ACTIVE', NOW(), NOW()) ON DUPLICATE KEY UPDATE google_subject_id = VALUES(google_subject_id), google_email = VALUES(google_email), encrypted_refresh_token = VALUES(encrypted_refresh_token), scopes = VALUES(scopes), status = 'ACTIVE', revoked_at = NULL, updated_at = NOW()")->execute([
+                'user_id' => $userId,
+                'subject' => (string) ($profile['sub'] ?? ''),
+                'email' => (string) ($profile['email'] ?? ''),
+                'token' => $encryptedRefreshToken,
+                'scopes' => implode(' ', self::SCOPES),
+            ]);
+        } catch (Throwable $exception) {
+            $this->logOAuthDiagnostic('GOOGLE_OAUTH_TOKEN_PERSIST_FAILED', [
+                'exception_class' => $exception::class,
+                'google_subject_present' => trim((string) ($profile['sub'] ?? '')) !== '',
+                'google_email_present' => trim((string) ($profile['email'] ?? '')) !== '',
+            ]);
+            throw $exception;
+        }
     }
 
     private function userInfo(string $accessToken): array
     {
         if ($accessToken === '') {
+            $this->logOAuthDiagnostic('GOOGLE_OAUTH_ACCESS_TOKEN_MISSING', [
+                'operation' => 'token_exchange',
+                'access_token_present' => false,
+            ]);
             throw new GoogleIntegrationException('google_oauth', 'Google authorization response did not include an access token.');
         }
-        return $this->jsonRequest('GET', 'https://openidconnect.googleapis.com/v1/userinfo', [], $accessToken);
+        return $this->jsonRequest('GET', 'https://openidconnect.googleapis.com/v1/userinfo', [], $accessToken, 'userinfo');
     }
 
     private function tokenRequest(string $url, array $fields): array
     {
-        return $this->jsonRequest('POST', $url, $fields);
+        return $this->jsonRequest('POST', $url, $fields, null, 'token_exchange');
     }
 
-    private function jsonRequest(string $method, string $url, array $fields = [], ?string $bearer = null): array
+    private function jsonRequest(string $method, string $url, array $fields = [], ?string $bearer = null, string $operation = 'google_api'): array
     {
         if (!function_exists('curl_init')) {
+            $this->logOAuthDiagnostic($operation === 'userinfo' ? 'GOOGLE_OAUTH_USERINFO_FAILED' : 'GOOGLE_OAUTH_TOKEN_EXCHANGE_FAILED', [
+                'operation' => $operation,
+                'http_support_available' => false,
+            ]);
             throw new GoogleIntegrationException('google_api', 'Google API HTTP support is not available on this server.');
         }
         $curl = curl_init($url);
@@ -184,10 +261,60 @@ final class GoogleOAuthService
         $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
         curl_close($curl);
         $decoded = is_string($body) ? json_decode($body, true) : null;
-        if ($status < 200 || $status >= 300 || !is_array($decoded)) {
+        if ($status < 200 || $status >= 300) {
+            $this->logOAuthDiagnostic($operation === 'userinfo' ? 'GOOGLE_OAUTH_USERINFO_FAILED' : 'GOOGLE_OAUTH_TOKEN_EXCHANGE_FAILED', [
+                'operation' => $operation,
+                'http_status' => $status,
+                'google_error' => is_array($decoded) ? $this->googleErrorName($decoded) : '',
+                'google_error_description' => is_array($decoded) ? $this->googleErrorDescription($decoded) : '',
+            ]);
+            throw new GoogleIntegrationException('google_api', 'Google authorization service returned an error.');
+        }
+        if (!is_array($decoded)) {
+            $this->logOAuthDiagnostic($operation === 'userinfo' ? 'GOOGLE_OAUTH_USERINFO_FAILED' : 'GOOGLE_OAUTH_TOKEN_EXCHANGE_INVALID_JSON', [
+                'operation' => $operation,
+                'http_status' => $status,
+                'valid_json' => false,
+            ]);
             throw new GoogleIntegrationException('google_api', 'Google authorization service returned an error.');
         }
         return $decoded;
+    }
+
+    private function logOAuthDiagnostic(string $reason, array $metadata = []): void
+    {
+        error_log('Google OAuth diagnostic: ' . json_encode([
+            'reason' => $reason,
+            'metadata' => $metadata,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    }
+
+    private function sanitizeGoogleError(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+        $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+        return substr($value, 0, 240);
+    }
+
+    private function googleErrorName(array $decoded): string
+    {
+        $error = $decoded['error'] ?? '';
+        if (is_array($error)) {
+            $error = $error['status'] ?? $error['code'] ?? '';
+        }
+        return $this->sanitizeGoogleError(is_scalar($error) ? (string) $error : '');
+    }
+
+    private function googleErrorDescription(array $decoded): string
+    {
+        $description = $decoded['error_description'] ?? '';
+        if ($description === '' && isset($decoded['error']) && is_array($decoded['error'])) {
+            $description = $decoded['error']['message'] ?? '';
+        }
+        return $this->sanitizeGoogleError(is_scalar($description) ? (string) $description : '');
     }
 
     private function safeReturnUrl(string $url): string
