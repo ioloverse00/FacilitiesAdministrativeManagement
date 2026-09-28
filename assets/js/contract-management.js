@@ -717,34 +717,31 @@
     function clientRequirementRow(requirement, contractId = '') {
         const contractStatus = String(state.activeItem?.status || '').toUpperCase();
         const canPrepareRequirement = (can('contract.edit') || can('contract.manage')) && contractStatus === 'DRAFT';
-        const canReviewRequirement = (can('contract.review') || can('contract.manage')) && contractStatus === 'FOR_REVIEW';
         const status = String(requirement.status || 'MISSING').toUpperCase();
-        const verification = String(requirement.verificationStatus || 'PENDING').toUpperCase();
         const applicability = String(requirement.applicabilityStatus || 'APPLICABLE').toUpperCase();
         const classificationRaw = String(requirement.classification || (requirement.required ? 'REQUIRED' : 'OPTIONAL')).toUpperCase();
-        const complete = (classificationRaw === 'REQUIRED' && status === 'VERIFIED' && verification === 'VERIFIED')
-            || (classificationRaw === 'CONDITIONAL' && (applicability === 'NOT_APPLICABLE' || (applicability === 'APPLICABLE' && status === 'VERIFIED' && verification === 'VERIFIED')));
+        const doc = requirement.document;
+        const hasEvidence = Boolean(doc);
+        const complete = (classificationRaw === 'REQUIRED' && hasEvidence)
+            || (classificationRaw === 'CONDITIONAL' && (applicability === 'NOT_APPLICABLE' || hasEvidence));
         const icon = complete ? 'check_box' : 'check_box_outline_blank';
         const stateText = classificationRaw === 'CONDITIONAL' && applicability === 'PENDING'
             ? 'Applicability pending'
-            : (applicability === 'NOT_APPLICABLE' ? 'Not applicable' : title(status || 'MISSING'));
+            : (applicability === 'NOT_APPLICABLE' ? 'Not applicable' : (hasEvidence && status === 'SUBMITTED' ? 'Evidence attached' : title(status || 'MISSING')));
         const classification = title(classificationRaw);
-        const doc = requirement.document;
         const busy = requirementUploadsInProgress.has(Number(requirement.id));
-        const canAttachOrReplace = canPrepareRequirement && applicability !== 'NOT_APPLICABLE' && status !== 'VERIFIED';
+        const canAttachOrReplace = canPrepareRequirement && applicability !== 'NOT_APPLICABLE';
         const attach = canAttachOrReplace ? `<button class="btn-secondary dashboard-action-button" type="button" data-client-requirement-upload="${esc(contractId)}" data-requirement-id="${esc(requirement.id)}" ${busy ? 'disabled aria-busy="true"' : ''}><span class="material-symbols-outlined" aria-hidden="true">${busy ? 'progress_activity' : 'attach_file'}</span>${busy ? 'Uploading' : (doc ? 'Replace' : 'Attach')}</button>` : '';
-        const verify = doc && canReviewRequirement && status === 'SUBMITTED' ? `<button class="btn-secondary dashboard-action-button" type="button" data-client-requirement-action="verify" data-contract-id="${esc(contractId)}" data-requirement-id="${esc(requirement.id)}">Verify</button>` : '';
-        const reject = doc && canReviewRequirement && status === 'SUBMITTED' ? `<button class="btn-secondary dashboard-action-button" type="button" data-client-requirement-action="reject" data-contract-id="${esc(contractId)}" data-requirement-id="${esc(requirement.id)}">Reject</button>` : '';
         const notApplicable = classificationRaw === 'CONDITIONAL' && applicability === 'PENDING' && canPrepareRequirement ? `<button class="btn-secondary dashboard-action-button" type="button" data-client-requirement-action="mark_not_applicable" data-contract-id="${esc(contractId)}" data-requirement-id="${esc(requirement.id)}">Not Applicable</button>` : '';
         const workflowReviewEvidence = doc
             && applicability !== 'NOT_APPLICABLE'
             && (
                 (contractStatus === 'DRAFT' && ['SUBMITTED','VERIFIED','REJECTED'].includes(status))
-                || (contractStatus === 'FOR_REVIEW' && ['SUBMITTED','VERIFIED'].includes(status) && ['PENDING','VERIFIED'].includes(verification))
-                || (contractStatus === 'FOR_APPROVAL' && status === 'VERIFIED' && verification === 'VERIFIED')
+                || (contractStatus === 'FOR_REVIEW' && ['SUBMITTED','VERIFIED','REJECTED'].includes(status))
+                || (contractStatus === 'FOR_APPROVAL' && ['SUBMITTED','VERIFIED','REJECTED'].includes(status))
             );
         const guardedViewAttrs = doc && !workflowReviewEvidence ? ` data-document-file-action="view" data-document-id="${esc(doc.id)}"` : '';
-        const actions = doc || attach || verify || reject || notApplicable ? `<div class="document-file-actions">${doc ? `<a class="btn-secondary dashboard-action-button" href="${esc(api(`documents/view.php?id=${doc.id}&contract_id=${contractId}`))}" target="_blank" rel="noopener"${guardedViewAttrs}>View</a>` : ''}${attach}${verify}${reject}${notApplicable}</div>` : '';
+        const actions = doc || attach || notApplicable ? `<div class="document-file-actions">${doc ? `<a class="btn-secondary dashboard-action-button" href="${esc(api(`documents/view.php?id=${doc.id}&contract_id=${contractId}`))}" target="_blank" rel="noopener"${guardedViewAttrs}>View</a>` : ''}${attach}${notApplicable}</div>` : '';
         return `<article class="contract-requirement-row">
             <div><span class="material-symbols-outlined contract-requirement-icon" aria-hidden="true">${icon}</span><div class="contract-requirement-copy"><div class="contract-requirement-line"><strong>${esc(requirement.name)}</strong><small>${esc(classification)} - ${esc(stateText)}</small></div>${requirement.description ? `<p>${esc(requirement.description)}</p>` : ''}${busy ? '<small>Uploading evidence...</small>' : ''}</div></div>
             ${actions}
@@ -1195,8 +1192,6 @@
 
     async function handleClientRequirementAction(contractId, requirementId, action) {
         const actionMap = {
-            verify: { action: 'VERIFY', title: 'Verify Requirement', confirm: 'Verify this submitted client requirement?', label: 'Verify' },
-            reject: { action: 'REJECT', title: 'Reject Requirement', label: 'Reject', reason: 'Enter the rejection reason.' },
             mark_not_applicable: { action: 'MARK_NOT_APPLICABLE', title: 'Mark Not Applicable', confirm: 'Mark this conditional client requirement not applicable?', label: 'Not Applicable' },
         };
         const config = actionMap[action];

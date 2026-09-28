@@ -36,6 +36,11 @@ SQL;
     $orderBy = $includeHistory
         ? "CASE WHEN wt.task_status IN ('PENDING','IN_PROGRESS') AND ar.approval_status = 'PENDING' AND ar.current_step_number = s.step_number AND s.step_status = 'PENDING' AND s.decision = 'PENDING' AND c.contract_status = 'FOR_APPROVAL' THEN 0 ELSE 1 END ASC, COALESCE(wt.completed_at, s.decided_at, s.assigned_at, wt.updated_at, wt.created_at) DESC, wt.workflow_task_id DESC"
         : 'COALESCE(s.assigned_at, wt.created_at) ASC, wt.workflow_task_id ASC';
+    $canApproveContracts = in_array('contract.approve', $user['permissions'] ?? [], true)
+        || in_array('contract.manage', $user['permissions'] ?? [], true);
+    $permissionAssignedContractApprovalSql = $canApproveContracts
+        ? "OR s.step_name = 'FAM Contract Approval'"
+        : '';
     $statement = $pdo->prepare(<<<SQL
 SELECT
     wt.workflow_task_id,
@@ -85,6 +90,7 @@ WHERE wt.module_code = 'contract_management'
       OR wt.assigned_to_employee_reference_id = :task_employee_id
       OR s.approver_user_id = :step_user_id
       OR s.approver_employee_reference_id = :step_employee_id
+      {$permissionAssignedContractApprovalSql}
   )
 ORDER BY {$orderBy}
 LIMIT 50

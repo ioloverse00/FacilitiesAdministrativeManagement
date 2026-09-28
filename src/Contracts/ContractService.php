@@ -408,17 +408,15 @@ final class ContractService
         if (!in_array($action, ['VERIFY','REJECT','MARK_APPLICABLE','MARK_NOT_APPLICABLE'], true)) {
             throw new InvalidArgumentException(json_encode(['action' => 'Choose a supported requirement action.'], JSON_THROW_ON_ERROR));
         }
+        if (in_array($action, ['VERIFY','REJECT'], true)) {
+            throw new DomainException('Requirement-level Verify and Reject are no longer part of the Contract Management workflow. Approval readiness is based on attached evidence and conditional applicability.');
+        }
         $requirementId = isset($data['requirement_id']) && ctype_digit((string) $data['requirement_id']) ? (int) $data['requirement_id'] : 0;
         if ($requirementId < 1) {
             throw new InvalidArgumentException(json_encode(['requirement_id' => 'A valid client requirement is required.'], JSON_THROW_ON_ERROR));
         }
         $comment = $this->nullableText($data['comment'] ?? $data['reason'] ?? '', 1000);
-        if ($action === 'REJECT' && $comment === null) {
-            throw new InvalidArgumentException(json_encode(['reason' => 'Reason is required.'], JSON_THROW_ON_ERROR));
-        }
-
-        $permission = in_array($action, ['VERIFY','REJECT'], true) ? 'contract.review' : 'contract.edit';
-        ContractPolicy::requirePermission($user, $permission);
+        ContractPolicy::requirePermission($user, 'contract.edit');
 
         $this->pdo->beginTransaction();
         try {
@@ -430,9 +428,6 @@ final class ContractService
             $contractStatus = (string) $contract['contract_status'];
             if (in_array($action, ['MARK_APPLICABLE','MARK_NOT_APPLICABLE'], true) && !in_array($contractStatus, self::EDITABLE_STATUSES, true)) {
                 throw new DomainException('Conditional requirement applicability can only be changed while the contract is a draft.');
-            }
-            if (in_array($action, ['VERIFY','REJECT'], true) && $contractStatus !== 'FOR_REVIEW') {
-                throw new DomainException('Client requirements can only be verified while the contract is for review.');
             }
             $requirement = $this->row('SELECT * FROM contract_client_requirement WHERE contract_client_requirement_id = :requirement_id AND contract_id = :contract_id FOR UPDATE', ['requirement_id' => $requirementId, 'contract_id' => $id]);
             if ($requirement === null) {
@@ -452,21 +447,6 @@ final class ContractService
                 $status = empty($requirement['uploaded_document_id']) ? 'MISSING' : 'SUBMITTED';
                 $this->pdo->prepare("UPDATE contract_client_requirement SET applicability_status = 'APPLICABLE', requirement_status = :status, verification_status = IF(uploaded_document_id IS NULL, 'PENDING', verification_status), updated_at = NOW() WHERE contract_client_requirement_id = :id")->execute(['status' => $status, 'id' => $requirementId]);
                 $this->historyEvent($id, 'CLIENT_REQUIREMENT_MARKED_APPLICABLE', 'Conditional client requirement marked applicable: ' . (string) $requirement['requirement_name'] . '.', null, null, (int) $user['id'], ['requirement_id' => $requirementId, 'reason' => $comment]);
-            } elseif ($action === 'VERIFY') {
-                if ((string) $requirement['applicability_status'] === 'NOT_APPLICABLE') {
-                    throw new DomainException('Not applicable client requirements do not need verification.');
-                }
-                if (empty($requirement['uploaded_document_id']) || (string) $requirement['requirement_status'] !== 'SUBMITTED') {
-                    throw new DomainException('Evidence must be submitted before this client requirement can be verified.');
-                }
-                $this->pdo->prepare("UPDATE contract_client_requirement SET requirement_status = 'VERIFIED', verification_status = 'VERIFIED', verified_by_user_id = :user_id, verified_at = NOW(), rejected_by_user_id = NULL, rejected_at = NULL, rejection_reason = NULL, updated_at = NOW() WHERE contract_client_requirement_id = :id")->execute(['user_id' => (int) $user['id'], 'id' => $requirementId]);
-                $this->historyEvent($id, 'CLIENT_REQUIREMENT_VERIFIED', 'Client requirement verified: ' . (string) $requirement['requirement_name'] . '.', null, null, (int) $user['id'], ['requirement_id' => $requirementId, 'document_id' => (int) $requirement['uploaded_document_id']]);
-            } else {
-                if (empty($requirement['uploaded_document_id']) || (string) $requirement['requirement_status'] !== 'SUBMITTED') {
-                    throw new DomainException('Evidence must be submitted before this client requirement can be rejected.');
-                }
-                $this->pdo->prepare("UPDATE contract_client_requirement SET requirement_status = 'REJECTED', verification_status = 'REJECTED', verified_by_user_id = NULL, verified_at = NULL, rejected_by_user_id = :user_id, rejected_at = NOW(), rejection_reason = :reason, updated_at = NOW() WHERE contract_client_requirement_id = :id")->execute(['user_id' => (int) $user['id'], 'reason' => $comment, 'id' => $requirementId]);
-                $this->historyEvent($id, 'CLIENT_REQUIREMENT_REJECTED', 'Client requirement rejected: ' . (string) $requirement['requirement_name'] . '.', null, null, (int) $user['id'], ['requirement_id' => $requirementId, 'document_id' => (int) $requirement['uploaded_document_id'], 'reason' => $comment]);
             }
 
             $this->pdo->commit();
@@ -841,7 +821,7 @@ final class ContractService
                 'contract_id' => $contractId,
             ]);
             return $task !== null
-                && $this->taskBelongsToUser($task, $user)
+                && $this->taskBelongsToUser($task, $user, $step)
                 && $this->taskBelongsToStep($task, $step)
                 && $this->userHasStepAuthority($user, $contract, $step);
         } catch (Throwable) {
@@ -1136,6 +1116,19 @@ final class ContractService
 
     private function roleStep(string $name, string $permission, string $message): array
     {
+        if ($name === 'FAM Contract Approval' && $permission === 'contract.approve') {
+            $authorized = (int) $this->scalar("SELECT COUNT(*) FROM user_account ua WHERE ua.account_status = 'ACTIVE' AND ua.deleted_at IS NULL AND (" . $this->effectivePermissionSql([$permission]) . ")");
+            if ($authorized < 1) {
+                throw new DomainException($message);
+            }
+            return [
+                'name' => $name,
+                'employee_id' => null,
+                'user_id' => null,
+                'role_id' => null,
+                'display' => 'Authorized contract approver',
+            ];
+        }
         $row = $this->row("SELECT ua.user_account_id user_id, e.employee_reference_id employee_id, e.full_name approver_name, MIN(r.role_id) role_id FROM user_account ua INNER JOIN employee_reference e ON e.employee_reference_id = ua.employee_reference_id AND e.employment_status = 'ACTIVE' AND e.deleted_at IS NULL INNER JOIN user_role ur ON ur.user_account_id = ua.user_account_id AND (ur.expires_at IS NULL OR ur.expires_at > NOW()) INNER JOIN role r ON r.role_id = ur.role_id AND r.status = 'ACTIVE' WHERE ua.account_status = 'ACTIVE' AND ua.deleted_at IS NULL AND (" . $this->effectivePermissionSql([$permission]) . ") GROUP BY ua.user_account_id, e.employee_reference_id, e.full_name ORDER BY SUM(r.role_code = 'FAM_SUPER_ADMIN') DESC, e.full_name LIMIT 1");
         if ($row === null) {
             throw new DomainException($message);
@@ -1261,6 +1254,9 @@ SQL);
         if (!ContractPolicy::hasPermission($user, 'contract.approve')) {
             return false;
         }
+        if ((string) ($step['step_name'] ?? '') === 'FAM Contract Approval') {
+            return true;
+        }
         if (!empty($step['approver_user_id']) && (int) $step['approver_user_id'] === (int) $user['id']) {
             return true;
         }
@@ -1287,7 +1283,7 @@ SQL);
     {
         $lock = $forUpdate ? ' FOR UPDATE' : '';
         $task = $this->row("SELECT * FROM workflow_task WHERE workflow_task_id = :id AND module_code = 'contract_management' AND entity_type = 'contract' AND task_type = 'CONTRACT_APPROVAL' AND task_status IN ('PENDING','IN_PROGRESS')$lock", ['id' => $taskId]);
-        if ($task === null || !$this->taskBelongsToUser($task, $user)) {
+        if ($task === null) {
             throw new DomainException('Approval task not found.');
         }
 
@@ -1302,6 +1298,9 @@ SQL);
         ]);
         if ($step === null || (int) $step['step_number'] !== (int) $request['current_step_number'] || (string) $step['step_status'] !== 'PENDING' || (string) $step['decision'] !== 'PENDING') {
             throw new DomainException('This approval step is no longer actionable.');
+        }
+        if (!$this->taskBelongsToUser($task, $user, $step)) {
+            throw new DomainException('Approval task not found.');
         }
         if (!$this->taskBelongsToStep($task, $step)) {
             throw new DomainException('Approval task is not assigned to the current approval step.');
@@ -1321,7 +1320,7 @@ SQL);
     private function employeeApprovalViewContext(int $taskId, array $user): array
     {
         $task = $this->row("SELECT * FROM workflow_task WHERE workflow_task_id = :id AND module_code = 'contract_management' AND entity_type = 'contract' AND task_type = 'CONTRACT_APPROVAL'", ['id' => $taskId]);
-        if ($task === null || !$this->taskBelongsToUser($task, $user)) {
+        if ($task === null) {
             throw new DomainException('Approval task not found.');
         }
 
@@ -1337,6 +1336,9 @@ SQL);
         if ($step === null || !$this->taskBelongsToStep($task, $step)) {
             throw new DomainException('Approval task assignment is invalid.');
         }
+        if (!$this->taskBelongsToUser($task, $user, $step)) {
+            throw new DomainException('Approval task not found.');
+        }
 
         $contract = $this->row('SELECT * FROM contract WHERE contract_id = :id AND deleted_at IS NULL', ['id' => (int) $request['entity_id']]);
         if ($contract === null || (int) $contract['contract_id'] !== (int) $task['entity_id']) {
@@ -1346,20 +1348,40 @@ SQL);
         return ['task' => $task, 'request' => $request, 'step' => $step, 'contract' => $contract];
     }
 
-    private function taskBelongsToUser(array $task, array $user): bool
+    private function taskBelongsToUser(array $task, array $user, ?array $step = null): bool
     {
+        if ($step !== null && $this->isSharedFamContractApprovalTask($task, $step, $user)) {
+            return true;
+        }
         return (!empty($task['assigned_to_user_id']) && (int) $task['assigned_to_user_id'] === (int) $user['id'])
             || (!empty($task['assigned_to_employee_reference_id']) && (int) $task['assigned_to_employee_reference_id'] === (int) ($user['employee_id'] ?? 0));
     }
 
     private function taskBelongsToStep(array $task, array $step): bool
     {
+        if ((string) ($step['step_name'] ?? '') === 'FAM Contract Approval'
+            && (int) ($task['approval_step_id'] ?? 0) === (int) ($step['approval_step_id'] ?? 0)
+            && (int) ($task['approval_request_id'] ?? 0) === (int) ($step['approval_request_id'] ?? 0)) {
+            return true;
+        }
         return (!empty($step['approver_user_id']) && (int) $step['approver_user_id'] === (int) $task['assigned_to_user_id'])
             || (!empty($step['approver_employee_reference_id']) && (int) $step['approver_employee_reference_id'] === (int) $task['assigned_to_employee_reference_id']);
     }
 
+    private function isSharedFamContractApprovalTask(array $task, array $step, array $user): bool
+    {
+        return (string) ($task['task_type'] ?? '') === 'CONTRACT_APPROVAL'
+            && (string) ($step['step_name'] ?? '') === 'FAM Contract Approval'
+            && (int) ($task['approval_step_id'] ?? 0) === (int) ($step['approval_step_id'] ?? 0)
+            && (int) ($task['approval_request_id'] ?? 0) === (int) ($step['approval_request_id'] ?? 0)
+            && ContractPolicy::hasPermission($user, 'contract.approve');
+    }
+
     private function userHasStepAuthority(array $user, array $contract, array $step): bool
     {
+        if ((string) ($step['step_name'] ?? '') === 'FAM Contract Approval') {
+            return ContractPolicy::hasPermission($user, 'contract.approve');
+        }
         if (!empty($step['approver_user_id']) && (int) $step['approver_user_id'] !== (int) $user['id']) {
             return false;
         }
@@ -1476,6 +1498,7 @@ SQL);
             }
         }
         $canAct = $current !== null && (string) $request['approval_status'] === 'PENDING' && $this->userCanActOnStep($user, [
+            'step_name' => $current['name'],
             'approver_user_id' => $current['approverUserId'],
             'approver_employee_reference_id' => $current['approverEmployeeId'],
         ]);
@@ -2931,10 +2954,9 @@ SQL);
             $classification = strtoupper((string) ($item['classification'] ?? ''));
             $applicability = strtoupper((string) ($item['applicabilityStatus'] ?? 'APPLICABLE'));
             $status = strtoupper((string) ($item['status'] ?? 'MISSING'));
-            $verification = strtoupper((string) ($item['verificationStatus'] ?? 'PENDING'));
-            $verified = $status === 'VERIFIED' && $verification === 'VERIFIED';
+            $hasEvidence = !empty($item['document']);
             if ($classification === 'REQUIRED') {
-                if ($verified) {
+                if ($hasEvidence) {
                     $complete++;
                 } else {
                     $requiredIncomplete[] = (string) $item['name'];
@@ -2946,7 +2968,7 @@ SQL);
                     $complete++;
                 } elseif ($applicability === 'PENDING') {
                     $conditionalPending[] = (string) $item['name'];
-                } elseif ($verified) {
+                } elseif ($hasEvidence) {
                     $complete++;
                 } else {
                     $conditionalIncomplete[] = (string) $item['name'];
