@@ -144,7 +144,6 @@
                 modal.id = 'fam-document-step-up-modal';
                 modal.className = 'facility-details-modal';
                 modal.hidden = true;
-                modal.style.zIndex = '10050';
                 document.body.appendChild(modal);
             }
             let remaining = 0;
@@ -184,6 +183,7 @@
                     </div>
                     ${body}
                 </form>`;
+                window.FAMModal?.bringToFront?.(modal);
                 document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
                 modal.querySelectorAll('[data-document-otp-close]').forEach(button => button.addEventListener('click', close));
             };

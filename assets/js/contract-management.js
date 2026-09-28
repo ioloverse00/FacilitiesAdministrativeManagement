@@ -418,7 +418,7 @@
         try {
             const item = known || (await window.FAMApi.request(api(`contracts/show.php?id=${id}`))).data?.item;
             state.activeItem = item;
-            modal.innerHTML = detailsHtml(item);
+            renderContractDetails(item);
             modal.querySelector('[data-contract-details-close]')?.focus();
             loadGoogleAuthoringStatus(item.id).catch(error => {
                 const panel = googleAuthoringPanel(item.id);
@@ -437,7 +437,28 @@
         </div>`;
     }
 
-    function detailsHtml(item) {
+    function captureOpenContractSections() {
+        const modal = qs('#contract-details-modal');
+        if (!modal || modal.hidden) return null;
+        const keys = qsa('#contract-details-modal [data-contract-details-section][open]')
+            .map(section => section.dataset.contractDetailsSection)
+            .filter(Boolean);
+        return keys.length ? new Set(keys) : null;
+    }
+
+    function sectionOpenAttr(key, defaultOpen, openSections = null) {
+        const open = openSections instanceof Set ? openSections.has(key) : defaultOpen;
+        return open ? ' open' : '';
+    }
+
+    function renderContractDetails(item, options = {}) {
+        const modal = qs('#contract-details-modal');
+        if (!modal) return;
+        const openSections = options.preserveSections ? captureOpenContractSections() : null;
+        modal.innerHTML = detailsHtml(item, openSections);
+    }
+
+    function detailsHtml(item, openSections = null) {
         const d = item.dates || {};
         const status = String(item.status || '').toUpperCase();
         const cancelled = isCancelled(item);
@@ -469,9 +490,9 @@
         }
         if (item.description) overviewRows.push(['Description', item.description, true]);
         const overview = detailGrid(overviewRows);
-        const contractDocument = contractDocumentHtml(item);
-        const clientRequirements = clientRequirementsHtml(item);
-        const approvalOpen = item.approval?.required ? ' open' : '';
+        const contractDocument = contractDocumentHtml(item, openSections);
+        const clientRequirements = clientRequirementsHtml(item, openSections);
+        const approvalOpen = sectionOpenAttr('approvals', Boolean(item.approval?.required), openSections);
         const approvalState = approvalSummary(item.approval, item);
         return `<div class="facility-details-modal-panel visitor-details-panel contract-details-panel">
             <div class="facility-details-modal-header visitor-details-header">
@@ -480,11 +501,11 @@
             </div>
             <div class="facility-details-modal-body visitor-details-body">
                 <div class="contract-workspace">
-                    <details class="visitor-detail-disclosure contract-detail-disclosure" open><summary><span>Overview</span></summary>${overview}</details>
+                    <details class="visitor-detail-disclosure contract-detail-disclosure" data-contract-details-section="overview"${sectionOpenAttr('overview', true, openSections)}><summary><span>Overview</span></summary>${overview}</details>
                     ${contractDocument}
                     ${clientRequirements}
-                    <details class="visitor-detail-disclosure contract-detail-disclosure"${approvalOpen}><summary><span>Approvals</span><small>${esc(approvalState)}</small></summary>${approvalHtml(item.approval, item)}</details>
-                    <details class="visitor-detail-disclosure contract-detail-disclosure"><summary><span>History</span></summary>${historyHtml(item.history || [])}</details>
+                    <details class="visitor-detail-disclosure contract-detail-disclosure" data-contract-details-section="approvals"${approvalOpen}><summary><span>Approvals</span><small>${esc(approvalState)}</small></summary>${approvalHtml(item.approval, item)}</details>
+                    <details class="visitor-detail-disclosure contract-detail-disclosure" data-contract-details-section="history"${sectionOpenAttr('history', false, openSections)}><summary><span>History</span></summary>${historyHtml(item.history || [])}</details>
                 </div>
             </div>
             <div class="facility-dialog-actions contract-details-footer"><div class="legal-details-workflow-actions contract-details-actions">${detailsActions(item)}</div><button class="btn-secondary dashboard-action-button contract-details-done" type="button" data-contract-details-close>Done</button></div>
@@ -558,10 +579,10 @@
         return detailGrid(rows);
     }
 
-    function contractDocumentHtml(item) {
+    function contractDocumentHtml(item, openSections = null) {
         const template = item.template;
-        const open = String(item.status || '').toUpperCase() === 'DRAFT' ? ' open' : '';
-        return `<details class="visitor-detail-disclosure contract-detail-disclosure contract-document-workspace"${open}><summary><span>Contract Document</span></summary>
+        const open = sectionOpenAttr('contract-document', String(item.status || '').toUpperCase() === 'DRAFT', openSections);
+        return `<details class="visitor-detail-disclosure contract-detail-disclosure contract-document-workspace" data-contract-details-section="contract-document"${open}><summary><span>Contract Document</span></summary>
             ${template ? `<div class="contract-google-authoring" data-contract-google-authoring-panel="${esc(item.id)}" data-contract-status="${esc(item.status || '')}">${googleAuthoringLoadingHtml()}</div>` : ''}
             ${!template ? contractDocumentMetadataGrid(item, {}, '') : ''}
         </details>`;
@@ -650,7 +671,7 @@
             </div>`;
     }
 
-    function clientRequirementsHtml(item) {
+    function clientRequirementsHtml(item, openSections = null) {
         const data = item.clientRequirements || { installed: false, items: [], complete: 0, total: 0, requiredMissing: 0 };
         const titleText = 'Client Requirements';
         const cancelled = isCancelled(item);
@@ -659,7 +680,7 @@
             : '0 requirements';
         if (!data.installed) {
             if (isLocalDebug()) console.warn('Client requirement tracking table is unavailable.');
-        return `<details class="visitor-detail-disclosure contract-detail-disclosure" data-client-requirements-section>
+        return `<details class="visitor-detail-disclosure contract-detail-disclosure" data-client-requirements-section data-contract-details-section="client-requirements"${sectionOpenAttr('client-requirements', false, openSections)}>
             <summary><span>${esc(titleText)}</span><small>${esc(summary)}</small></summary>
             <p class="document-form-note">${cancelled ? 'Requirements are retained for reference. No further action is required because this contract was cancelled.' : 'Documents required from the client or counterparty before contract approval.'}</p>
             <p class="legal-empty-note">No client requirements added yet.</p>
@@ -673,7 +694,7 @@
             ...(readiness.conditionalPending || []),
             ...(readiness.conditionalIncomplete || []),
         ];
-        return `<details class="visitor-detail-disclosure contract-detail-disclosure" data-client-requirements-section>
+        return `<details class="visitor-detail-disclosure contract-detail-disclosure" data-client-requirements-section data-contract-details-section="client-requirements"${sectionOpenAttr('client-requirements', false, openSections)}>
             <summary><span>${esc(titleText)}</span><small>${esc(summary)}</small></summary>
             <p class="document-form-note">${cancelled ? 'Requirements are retained for reference. No further action is required because this contract was cancelled.' : 'Documents required from the client or counterparty before contract approval.'}</p>
             ${!cancelled && blocking.length ? `<p class="legal-empty-note">${esc(blocking.length)} client requirement${blocking.length === 1 ? '' : 's'} blocking approval.</p>` : ''}
@@ -1087,7 +1108,7 @@
         window.FAMModal?.showToast?.('Contract lifecycle updated.');
         if (payload.data?.item) {
             state.activeItem = payload.data.item;
-            qs('#contract-details-modal').innerHTML = detailsHtml(payload.data.item);
+            renderContractDetails(payload.data.item, { preserveSections: true });
             loadGoogleAuthoringStatus(payload.data.item.id).catch(() => {});
         }
         await load();
@@ -1126,19 +1147,29 @@
     }
 
     async function submitContractDates(form) {
+        if (form.dataset.pending === 'true') return;
         const id = Number(form.dataset.contractId);
         const payload = Object.fromEntries(new FormData(form).entries());
-        const response = await window.FAMApi.request(api(`contracts/confirm-dates.php?id=${encodeURIComponent(id)}`), { method: 'POST', body: payload });
-        window.FAMModal?.showToast?.('Contract dates confirmed.');
-        closeDialog();
-        if (response.data?.item) {
-            state.activeItem = response.data.item;
-            qs('#contract-details-modal').innerHTML = detailsHtml(response.data.item);
-            loadGoogleAuthoringStatus(response.data.item.id).catch(() => {});
-        } else {
-            await openDetails(id);
+        const controls = Array.from(form.querySelectorAll('button, input, select, textarea'));
+        form.dataset.pending = 'true';
+        controls.forEach(control => { control.disabled = true; });
+        try {
+            const response = await window.FAMApi.request(api(`contracts/confirm-dates.php?id=${encodeURIComponent(id)}`), { method: 'POST', body: payload });
+            window.FAMModal?.showToast?.('Contract dates confirmed.');
+            closeDialog();
+            if (response.data?.item) {
+                state.activeItem = response.data.item;
+                renderContractDetails(response.data.item, { preserveSections: true });
+                loadGoogleAuthoringStatus(response.data.item.id).catch(() => {});
+            } else {
+                await openDetails(id);
+            }
+            await load();
+        } catch (error) {
+            form.dataset.pending = 'false';
+            controls.forEach(control => { control.disabled = false; });
+            throw error;
         }
-        await load();
     }
 
     async function handleApprovalAction(id, action) {
@@ -1154,7 +1185,7 @@
         window.FAMModal?.showToast?.('Contract approval updated.');
         if (payload.data?.item) {
             state.activeItem = payload.data.item;
-            qs('#contract-details-modal').innerHTML = detailsHtml(payload.data.item);
+            renderContractDetails(payload.data.item, { preserveSections: true });
             loadGoogleAuthoringStatus(payload.data.item.id).catch(() => {});
         } else {
             await openDetails(id);
@@ -1182,7 +1213,7 @@
         window.FAMModal?.showToast?.('Client requirement updated.');
         if (payload.data?.item) {
             state.activeItem = payload.data.item;
-            qs('#contract-details-modal').innerHTML = detailsHtml(payload.data.item);
+            renderContractDetails(payload.data.item, { preserveSections: true });
             loadGoogleAuthoringStatus(payload.data.item.id).catch(() => {});
         } else {
             await openDetails(contractId);
@@ -1246,7 +1277,7 @@
             window.FAMModal?.showToast?.('Client requirement evidence uploaded.');
             if (payload.data?.item) {
                 state.activeItem = payload.data.item;
-                qs('#contract-details-modal').innerHTML = detailsHtml(payload.data.item);
+                renderContractDetails(payload.data.item, { preserveSections: true });
                 loadGoogleAuthoringStatus(payload.data.item.id).catch(() => {});
             }
             await load();
@@ -1311,7 +1342,7 @@
             window.FAMModal?.showToast?.('Signed contract uploaded.');
             if (payload.data?.item) {
                 state.activeItem = payload.data.item;
-                qs('#contract-details-modal').innerHTML = detailsHtml(payload.data.item);
+                renderContractDetails(payload.data.item, { preserveSections: true });
                 loadGoogleAuthoringStatus(payload.data.item.id).catch(() => {});
             }
             await load();
@@ -1324,7 +1355,7 @@
         const modal = qs('#contract-details-modal');
         const item = state.activeItem;
         if (!modal || modal.hidden || !item) return;
-        modal.innerHTML = detailsHtml(item);
+        renderContractDetails(item, { preserveSections: true });
     }
 
     function bind() {

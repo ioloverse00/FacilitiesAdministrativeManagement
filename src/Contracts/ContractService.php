@@ -81,7 +81,7 @@ final class ContractService
         'DRAFT' => ['FOR_REVIEW', 'CANCELLED'],
         'FOR_REVIEW' => ['DRAFT', 'FOR_APPROVAL'],
         'FOR_APPROVAL' => [],
-        'APPROVED' => ['ACTIVE', 'DRAFT'],
+        'APPROVED' => ['ACTIVE'],
         'ACTIVE' => ['TERMINATED', 'EXPIRED'],
         'EXPIRED' => ['ARCHIVED'],
         'TERMINATED' => ['ARCHIVED'],
@@ -772,6 +772,11 @@ final class ContractService
             $source = $this->currentFinalizedContractDateSource($id);
             if ($source === null) {
                 throw new DomainException('Finalize the contract document before confirming contract dates.');
+            }
+            $sameConfirmation = $this->sameContractDateConfirmation($contract, $source, $startDate, $endDate);
+            if ($sameConfirmation) {
+                $this->pdo->commit();
+                return $this->show($id, $user);
             }
 
             $this->pdo->prepare("UPDATE document SET effective_date = :effective_date, expiration_date = :expiration_date, contract_metadata_status = 'CONFIRMED', contract_metadata_source = 'AI_EXTRACTED_CONFIRMED', contract_metadata_confirmed_by_user_id = :user_id, contract_metadata_confirmed_at = NOW(), updated_at = NOW() WHERE document_id = :document_id AND deleted_at IS NULL")->execute([
@@ -2185,7 +2190,7 @@ SQL);
             'DRAFT' => ['edit' => 'contract.edit', 'submit_review' => 'contract.edit', 'cancel' => 'contract.edit'],
             'FOR_REVIEW' => ['return_draft' => 'contract.review', 'submit_approval' => 'contract.review'],
             'FOR_APPROVAL' => [],
-            'APPROVED' => ['return_draft' => 'contract.review'],
+            'APPROVED' => [],
             'ACTIVE' => ['terminate' => 'contract.terminate'],
             'EXPIRED' => ['archive' => 'contract.archive'],
             'TERMINATED' => ['archive' => 'contract.archive'],
@@ -2878,6 +2883,15 @@ SQL);
     {
         $date = $this->date($candidate[$key] ?? null);
         return $date === null || in_array($date, [self::UNESTABLISHED_START_DATE, self::UNESTABLISHED_END_DATE], true) ? null : $date;
+    }
+
+    private function sameContractDateConfirmation(array $contract, array $source, string $startDate, string $endDate): bool
+    {
+        return (int) ($contract['contract_dates_source_document_id'] ?? 0) === (int) ($source['document_id'] ?? 0)
+            && (int) ($contract['contract_dates_source_document_version_id'] ?? 0) === (int) ($source['document_version_id'] ?? 0)
+            && (string) ($contract['contract_dates_confirmed_at'] ?? '') !== ''
+            && $this->contractDateValue($contract['start_date'] ?? null) === $startDate
+            && $this->contractDateValue($contract['end_date'] ?? null) === $endDate;
     }
 
     private function recalculateContractRetentionRecords(int $contractId, int $userId): void
