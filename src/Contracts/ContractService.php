@@ -59,7 +59,7 @@ final class ContractService
     private const CURRENCIES = ['PHP','USD','EUR'];
     private const UNESTABLISHED_START_DATE = '1000-01-01';
     private const UNESTABLISHED_END_DATE = '9999-12-31';
-    private const CANONICAL_CONTRACT_TYPES = ['CLIENT_CONTRACT','EMPLOYEE_CONTRACT','NDA','CONTRACT_AMENDMENT','OTHER'];
+    private const CANONICAL_CONTRACT_TYPES = ['CLIENT_CONTRACT','NDA','CONTRACT_AMENDMENT','OTHER'];
     private const LEGACY_CONTRACT_TYPES = ['SERVICE','SUPPLY','LEASE','MAINTENANCE'];
     private const DEFAULT_CLIENT_REQUIREMENTS = [
         ['BUSINESS_REGISTRATION', 'Business Registration', 'DTI / SEC / CDA registration depending on organization type.', 'REQUIRED'],
@@ -78,7 +78,7 @@ final class ContractService
         'SIGNING PLACE' => 'PLACE',
     ];
     private const TRANSITIONS = [
-        'DRAFT' => ['FOR_REVIEW', 'CANCELLED'],
+        'DRAFT' => ['FOR_REVIEW', 'FOR_APPROVAL', 'CANCELLED'],
         'FOR_REVIEW' => ['DRAFT', 'FOR_APPROVAL'],
         'FOR_APPROVAL' => [],
         'APPROVED' => ['ACTIVE'],
@@ -216,14 +216,14 @@ final class ContractService
 
     public function uploadSignedContract(int $id, array $data, array $file, array $user): ?array
     {
-        ContractPolicy::requirePermission($user, 'contract.review');
+        ContractPolicy::requirePermission($user, 'contract.edit');
         $this->assertSignedContractSchema();
         $contract = $this->row('SELECT c.*, cgd.synced_document_id, cgd.synced_document_version_id FROM contract c LEFT JOIN contract_google_document cgd ON cgd.contract_id = c.contract_id AND cgd.working_document_status = \'FINALIZED\' WHERE c.contract_id = :id AND c.deleted_at IS NULL LIMIT 1', ['id' => $id]);
         if ($contract === null) {
             return null;
         }
-        if ((string) $contract['contract_status'] !== 'FOR_REVIEW') {
-            throw new DomainException('Signed contract copies can only be uploaded while the contract is for review.');
+        if (!in_array((string) $contract['contract_status'], ['DRAFT','FOR_REVIEW'], true)) {
+            throw new DomainException('Signed contract copies can only be uploaded while the contract is being prepared.');
         }
         $documentId = (int) ($contract['synced_document_id'] ?? 0);
         if ($documentId < 1) {
@@ -266,7 +266,7 @@ final class ContractService
 
     public function verifySignedContract(int $id, array $user): ?array
     {
-        ContractPolicy::requirePermission($user, 'contract.review');
+        ContractPolicy::requirePermission($user, 'contract.edit');
         throw new DomainException('Separate signed-copy verification is no longer part of the active contract workflow.');
     }
 
@@ -556,8 +556,15 @@ final class ContractService
             }
             $approvalRequestId = null;
             if ($target === 'FOR_APPROVAL') {
-                $this->assertClientRequirementsReadyForApproval((int) $current['contract_id']);
-                $this->assertContractDatesReadyForApproval($current);
+                $this->assertFinalizedContractDocumentReady((int) $current['contract_id']);
+                $this->tryAnalyzeContractDates($id, $user);
+                $current = $this->row('SELECT * FROM contract WHERE contract_id = :id AND deleted_at IS NULL FOR UPDATE', ['id' => $id]);
+                if ($current === null) {
+                $this->pdo->rollBack();
+                return null;
+            }
+            $this->assertClientRequirementsReadyForApproval((int) $current['contract_id']);
+            $this->assertContractDatesReadyForApproval($current);
                 $this->assertSignedContractReadyForApproval($current);
                 $approvalRequestId = $this->createApprovalWorkflow($current, $user);
             }
@@ -731,7 +738,7 @@ final class ContractService
 
     public function confirmContractDates(int $id, array $data, array $user): ?array
     {
-        ContractPolicy::requirePermission($user, 'contract.review');
+        ContractPolicy::requirePermission($user, 'contract.edit');
         $this->assertContractDateAuthoritySchema();
         $startDate = $this->realContractDate($data['start_date'] ?? $data['effective_date'] ?? null, 'start_date');
         $endDate = $this->realContractDate($data['end_date'] ?? $data['expiration_date'] ?? null, 'end_date');
@@ -746,8 +753,8 @@ final class ContractService
                 $this->pdo->rollBack();
                 return null;
             }
-            if ((string) $contract['contract_status'] !== 'FOR_REVIEW') {
-                throw new DomainException('Contract dates can only be confirmed while the contract is for review.');
+            if (!in_array((string) $contract['contract_status'], ['DRAFT','FOR_REVIEW'], true)) {
+                throw new DomainException('Contract dates can only be confirmed while the contract is being prepared.');
             }
             $source = $this->currentFinalizedContractDateSource($id);
             if ($source === null) {
@@ -833,7 +840,7 @@ final class ContractService
     {
         ContractPolicy::requirePermission($user, 'contract.view');
         return [
-            'contract_types' => $this->rows("SELECT type_code id, type_code code, type_name name FROM contract_type WHERE status = 'ACTIVE' AND type_code IN ('CLIENT_CONTRACT','EMPLOYEE_CONTRACT','NDA','CONTRACT_AMENDMENT','OTHER') ORDER BY FIELD(type_code,'CLIENT_CONTRACT','EMPLOYEE_CONTRACT','NDA','CONTRACT_AMENDMENT','OTHER')"),
+            'contract_types' => $this->rows("SELECT type_code id, type_code code, type_name name FROM contract_type WHERE status = 'ACTIVE' AND type_code IN ('CLIENT_CONTRACT','NDA','CONTRACT_AMENDMENT','OTHER') ORDER BY FIELD(type_code,'CLIENT_CONTRACT','NDA','CONTRACT_AMENDMENT','OTHER')"),
             'statuses' => self::STATUSES,
             'renewal_types' => self::RENEWAL_TYPES,
             'risk_levels' => self::RISK_LEVELS,
@@ -996,7 +1003,7 @@ final class ContractService
         if ($from === 'FOR_APPROVAL' && $target === 'APPROVED') {
             throw new DomainException('Contracts awaiting approval must be approved through the approval workflow.');
         }
-        ContractPolicy::requirePermission($user, $this->permissionForTransition($target));
+        ContractPolicy::requirePermission($user, $this->permissionForTransition($target, $from));
         if (in_array($target, ['CANCELLED', 'REJECTED', 'DRAFT'], true) && $from !== 'APPROVED') {
             $this->requiredText($data['reason'] ?? '', 1000, 'reason');
         }
@@ -1024,11 +1031,12 @@ final class ContractService
         }
     }
 
-    private function permissionForTransition(string $target): string
+    private function permissionForTransition(string $target, string $from = ''): string
     {
         return match ($target) {
             'FOR_REVIEW', 'CANCELLED' => 'contract.edit',
-            'FOR_APPROVAL', 'DRAFT' => 'contract.review',
+            'DRAFT' => 'contract.review',
+            'FOR_APPROVAL' => $from === 'DRAFT' ? 'contract.edit' : 'contract.review',
             'REJECTED' => 'contract.approve',
             'ACTIVE' => 'contract.activate',
             'TERMINATED' => 'contract.terminate',
@@ -1594,15 +1602,29 @@ SQL);
 
     private function notifyApprover(array $contract, array $step, string $event, string $title, string $message, ?int $taskId = null): void
     {
+        if ((string) ($step['name'] ?? '') === 'FAM Contract Approval' && empty($step['user_id'])) {
+            foreach ($this->contractApprovalNotificationRecipients() as $userId) {
+                $this->insertApprovalNotification($userId, $contract, $step, $event, $title, $message, $taskId);
+            }
+            return;
+        }
         if (empty($step['user_id'])) {
             return;
         }
+        $this->insertApprovalNotification((int) $step['user_id'], $contract, $step, $event, $title, $message, $taskId);
+    }
+
+    private function insertApprovalNotification(int $userId, array $contract, array $step, string $event, string $title, string $message, ?int $taskId = null): void
+    {
         try {
-            $actionUrl = $this->approverHasContractApprovalPermission((int) $step['user_id'])
+            if ($this->approvalNotificationExists($userId, $event, (int) $contract['contract_id'], $taskId)) {
+                return;
+            }
+            $actionUrl = $this->approverHasContractApprovalPermission($userId)
                 ? 'pages/contract-management.html'
                 : 'pages/employee/tasks.html' . ($taskId !== null ? '?task=' . $taskId : '');
             $this->pdo->prepare("INSERT INTO notification (recipient_user_id, event_code, module_code, notification_type, title, message, priority, related_entity_type, related_entity_id, related_reference, action_url, metadata_json, created_at) VALUES (:user_id, :event, 'contract_management', 'IN_APP', :title, :message, 'HIGH', 'contract', :contract_id, :reference, :url, :metadata, NOW())")->execute([
-                'user_id' => (int) $step['user_id'],
+                'user_id' => $userId,
                 'event' => $event,
                 'title' => $title,
                 'message' => $message . ' ' . (string) $contract['contract_number'],
@@ -1614,6 +1636,34 @@ SQL);
         } catch (Throwable) {
             // Notifications are helpful, but approval evidence remains authoritative.
         }
+    }
+
+    private function contractApprovalNotificationRecipients(): array
+    {
+        return array_map(static fn (array $row): int => (int) $row['user_id'], $this->rows("SELECT DISTINCT ua.user_account_id user_id FROM user_account ua WHERE ua.account_status = 'ACTIVE' AND ua.deleted_at IS NULL AND (" . $this->effectivePermissionSql(['contract.approve','contract.manage']) . ") ORDER BY ua.user_account_id"));
+    }
+
+    private function approvalNotificationExists(int $userId, string $event, int $contractId, ?int $taskId): bool
+    {
+        if ($taskId === null) {
+            return (int) $this->scalar("SELECT COUNT(*) FROM notification WHERE recipient_user_id = :user_id AND event_code = :event AND module_code = 'contract_management' AND related_entity_type = 'contract' AND related_entity_id = :contract_id AND created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)", [
+                'user_id' => $userId,
+                'event' => $event,
+                'contract_id' => $contractId,
+            ]) > 0;
+        }
+
+        foreach ($this->rows("SELECT metadata_json FROM notification WHERE recipient_user_id = :user_id AND event_code = :event AND module_code = 'contract_management' AND related_entity_type = 'contract' AND related_entity_id = :contract_id AND created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY) ORDER BY notification_id DESC LIMIT 20", [
+            'user_id' => $userId,
+            'event' => $event,
+            'contract_id' => $contractId,
+        ]) as $row) {
+            $metadata = json_decode((string) ($row['metadata_json'] ?? ''), true);
+            if (is_array($metadata) && (int) ($metadata['workflow_task_id'] ?? 0) === $taskId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function approverHasContractApprovalPermission(int $userId): bool
@@ -1675,7 +1725,7 @@ SQL);
         $typeInput = $data['contract_type_id'] ?? $data['contract_type'] ?? null;
         $existingType = $existing === null ? null : $this->contractType((int) ($existing['contract_type_id'] ?? 0));
         $preservingLegacyType = $existingType !== null
-            && in_array((string) $existingType['type_code'], self::LEGACY_CONTRACT_TYPES, true)
+            && (in_array((string) $existingType['type_code'], self::LEGACY_CONTRACT_TYPES, true) || (string) $existingType['type_code'] === 'EMPLOYEE_CONTRACT')
             && ($typeInput === null || $typeInput === '' || (string) $typeInput === (string) $existingType['contract_type_id'] || strtoupper((string) $typeInput) === (string) $existingType['type_code']);
         $type = $preservingLegacyType ? $existingType : $this->contractTypeFromInput($typeInput, true);
         $typeId = $type === null ? null : (int) $type['contract_type_id'];
@@ -1854,7 +1904,7 @@ SQL);
         if ($value === null || $value === '' || $value === 'null') {
             return null;
         }
-        $canonicalFilter = $canonicalOnly ? " AND status = 'ACTIVE' AND type_code IN ('CLIENT_CONTRACT','EMPLOYEE_CONTRACT','NDA','CONTRACT_AMENDMENT','OTHER')" : '';
+        $canonicalFilter = $canonicalOnly ? " AND status = 'ACTIVE' AND type_code IN ('CLIENT_CONTRACT','NDA','CONTRACT_AMENDMENT','OTHER')" : '';
         if (ctype_digit((string) $value)) {
             return $this->row("SELECT contract_type_id, type_code, type_name FROM contract_type WHERE contract_type_id = :value$canonicalFilter LIMIT 1", ['value' => (int) $value]);
         }
@@ -2210,7 +2260,7 @@ SQL);
     {
         $status = (string) $row['contract_status'];
         $map = [
-            'DRAFT' => ['edit' => 'contract.edit', 'submit_review' => 'contract.edit', 'cancel' => 'contract.edit'],
+            'DRAFT' => ['edit' => 'contract.edit', 'submit_approval' => 'contract.edit', 'cancel' => 'contract.edit'],
             'FOR_REVIEW' => ['return_draft' => 'contract.review', 'submit_approval' => 'contract.review'],
             'FOR_APPROVAL' => [],
             'APPROVED' => [],
@@ -2309,7 +2359,7 @@ SQL);
             'schemaReady' => $schemaReady,
             'confirmed' => $confirmed,
             'stale' => $stale,
-            'canConfirm' => $schemaReady && $source !== null && (string) $row['contract_status'] === 'FOR_REVIEW' && ContractPolicy::hasPermission($user, 'contract.review'),
+            'canConfirm' => $schemaReady && $source !== null && in_array((string) $row['contract_status'], ['DRAFT','FOR_REVIEW'], true) && ContractPolicy::hasPermission($user, 'contract.edit'),
             'startDate' => $startDate,
             'endDate' => $endDate,
             'suggestedStartDate' => $this->candidateDate($candidate, 'effective_date'),
@@ -2340,6 +2390,8 @@ SQL);
         $status = (string) ($row['contract_status'] ?? '');
         $uploaded = $document !== null;
         $legacyVerified = $uploaded && (string) ($row['signed_document_verified_at'] ?? '') !== '';
+        $finalizedSourceReady = in_array($status, ['DRAFT','FOR_REVIEW'], true)
+            && $this->currentFinalizedContractDateSource((int) $row['contract_id']) !== null;
         $approvalVersionId = null;
         if ($status === 'FOR_APPROVAL') {
             $request = $this->currentApprovalRequest((int) $row['contract_id']);
@@ -2361,8 +2413,8 @@ SQL);
             'uploadedAt' => $document['uploaded_at'] ?? null,
             'verifiedAt' => $row['signed_document_verified_at'] ?? null,
             'verifiedByUserId' => empty($row['signed_document_verified_by_user_id']) ? null : (int) $row['signed_document_verified_by_user_id'],
-            'canUpload' => $status === 'FOR_REVIEW' && ContractPolicy::hasPermission($user, 'contract.review'),
-            'canReplace' => $status === 'FOR_REVIEW' && ContractPolicy::hasPermission($user, 'contract.review'),
+            'canUpload' => $finalizedSourceReady && ContractPolicy::hasPermission($user, 'contract.edit'),
+            'canReplace' => $finalizedSourceReady && ContractPolicy::hasPermission($user, 'contract.edit'),
             'canVerify' => false,
         ];
     }
@@ -2655,6 +2707,13 @@ SQL);
         ]);
     }
 
+    private function assertFinalizedContractDocumentReady(int $contractId): void
+    {
+        if ($this->currentFinalizedContractDateSource($contractId) === null) {
+            throw new DomainException('Finalize the contract document before submitting for approval.');
+        }
+    }
+
     private function automaticActivationCandidates(string $today): array
     {
         return $this->rows("SELECT contract_id FROM contract WHERE deleted_at IS NULL AND contract_status = 'APPROVED' AND COALESCE(effective_date, start_date) IS NOT NULL AND COALESCE(effective_date, start_date) NOT IN (:start_sentinel, :end_sentinel) AND COALESCE(effective_date, start_date) <= :today ORDER BY COALESCE(effective_date, start_date), contract_id", [
@@ -2887,7 +2946,7 @@ SQL);
             return;
         }
         try {
-            (new ContractMetadataExtractionService($this->pdo, new DocumentService($this->pdo)))->analyze((int) $source['document_id'], $user);
+            (new ContractMetadataExtractionService($this->pdo, new DocumentService($this->pdo)))->analyzeVersion((int) $source['document_id'], (int) $source['document_version_id'], $user);
         } catch (Throwable) {
             // Date extraction is advisory. A valid review transition must not depend on AI availability.
         }

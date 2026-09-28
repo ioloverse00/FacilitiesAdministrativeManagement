@@ -139,6 +139,22 @@ final class ContractGoogleDocumentService
         $this->syncWorkingDocument($contractId, $user);
         $this->pdo->prepare("UPDATE contract_google_document SET working_document_status = 'FINALIZED', finalized_at = NOW(), updated_at = NOW() WHERE contract_id = :id")->execute(['id' => $contractId]);
         $this->history($contractId, 'CONTRACT_GOOGLE_DOCUMENT_FINALIZED', 'Google working document frozen as a FAM review artifact.', $user, []);
+        $this->tryAnalyzeFinalizedContractDates($contractId, $user);
+    }
+
+    private function tryAnalyzeFinalizedContractDates(int $contractId, array $user): void
+    {
+        $link = $this->googleLink($contractId);
+        $documentId = (int) ($link['synced_document_id'] ?? 0);
+        $versionId = (int) ($link['synced_document_version_id'] ?? 0);
+        if ($documentId < 1 || $versionId < 1) {
+            return;
+        }
+        try {
+            (new ContractMetadataExtractionService($this->pdo, $this->documents ?? new DocumentService($this->pdo)))->analyzeVersion($documentId, $versionId, $user);
+        } catch (Throwable) {
+            // Advisory date extraction must not block document finalization.
+        }
     }
 
     private function storeArtifact(array $context, array $link, string $content, string $fileName, string $mime, array $user): array

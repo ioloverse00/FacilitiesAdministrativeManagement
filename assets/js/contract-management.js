@@ -337,18 +337,25 @@
             const payload = await window.FAMApi.request(api(`contracts/eligible-templates.php?contract_type_id=${encodeURIComponent(typeId)}`));
             const templates = payload.data?.items || [];
             select.disabled = false;
-            select.innerHTML = '<option value="">No template</option>' + templates.map(template => {
+            const autoSelected = templates.length === 1 ? templates[0].id : '';
+            const selectedValue = selected || autoSelected;
+            const emptyOption = templates.length > 1
+                ? '<option value="">Select compatible template</option>'
+                : (templates.length === 0 ? '<option value="">No active template available</option>' : '');
+            select.innerHTML = emptyOption + templates.map(template => {
                 const label = `${template.templateName} (${template.templateCode} - ${template.currentVersion})`;
-                return `<option value="${esc(template.id)}" ${String(template.id) === String(selected || '') ? 'selected' : ''}>${esc(label)}</option>`;
+                return `<option value="${esc(template.id)}" ${String(template.id) === String(selectedValue || '') ? 'selected' : ''}>${esc(label)}</option>`;
             }).join('');
             if (note) {
-                note.textContent = templates.length
-                    ? 'The selected active version will be linked to this contract draft.'
-                    : 'No compatible active templates are available for this contract type.';
+                note.textContent = templates.length === 1
+                    ? 'The only compatible active template was selected automatically.'
+                    : (templates.length > 1
+                        ? 'Choose one of the compatible active templates for this contract type.'
+                        : 'No compatible active template is available for this contract type.');
             }
         } catch (error) {
             select.disabled = false;
-            select.innerHTML = '<option value="">No template</option>';
+            select.innerHTML = '<option value="">No active template available</option>';
             if (note) note.textContent = error.message || 'Unable to load compatible templates.';
         }
     }
@@ -524,7 +531,7 @@
         const confirmedDate = field === 'start' ? (dates?.startDate || contractDate) : (dates?.endDate || contractDate);
         const showCandidate = dates && !dates.confirmed && candidateDate;
         const displayDate = showCandidate ? candidateDate : (dates?.confirmed ? confirmedDate : contractDate);
-        const needsDates = ['FOR_REVIEW','FOR_APPROVAL'].includes(status);
+        const needsDates = ['DRAFT','FOR_REVIEW','FOR_APPROVAL'].includes(status);
         const label = showCandidate ? 'AI extracted' : (dates?.confirmed ? confirmedDateState(dates, field) : '');
         const value = displayDate ? fmtDate(displayDate) : (needsDates ? 'Not yet set' : 'Not applicable');
         const edit = dates?.canConfirm
@@ -553,7 +560,7 @@
 
     function detailsActions(item) {
         const labels = { edit: 'Edit Contract', submit_review: 'Submit for Review', cancel: 'Cancel Contract', return_draft: 'Return to Draft', submit_approval: 'Submit for Approval', approve: 'Approve', reject: 'Reject', activate: 'Activate', terminate: 'Terminate', archive: 'Archive' };
-        const primaryActions = new Set(['submit_review', 'submit_approval', 'activate']);
+        const primaryActions = new Set(['submit_approval', 'activate']);
         const allowed = [...(item.allowedActions || [])].sort((a, b) => Number(primaryActions.has(a)) - Number(primaryActions.has(b)));
         const actions = allowed.map(action => `<button class="${primaryActions.has(action) ? 'btn-primary contract-details-submit' : 'btn-secondary'} dashboard-action-button" type="button" data-contract-action="${esc(action)}" data-contract-id="${esc(item.id)}">${esc(labels[action] || title(action))}</button>`);
         if (item.approval?.canApproveCurrentStep) actions.push(`<button class="btn-primary dashboard-action-button" type="button" data-contract-approval-action="approve" data-contract-id="${esc(item.id)}">Approve</button>`);
@@ -651,13 +658,13 @@
         const signed = item.signedContract || {};
         const status = String(item.status || '').toUpperCase();
         const url = signedContractDocumentUrl(signed);
-        const view = url ? `<a class="btn-secondary dashboard-action-button" href="${esc(url)}" target="_blank" rel="noopener" data-document-file-action="view" data-document-id="${esc(signed.documentId)}" data-document-version-id="${esc(signed.approvalDocumentVersionId || signed.documentVersionId || '')}"><span class="material-symbols-outlined" aria-hidden="true">visibility</span>View ${status === 'FOR_REVIEW' ? 'Signed Contract' : 'Contract'}</a>` : '';
+        const view = url ? `<a class="btn-secondary dashboard-action-button" href="${esc(url)}" target="_blank" rel="noopener" data-document-file-action="view" data-document-id="${esc(signed.documentId)}" data-document-version-id="${esc(signed.approvalDocumentVersionId || signed.documentVersionId || '')}"><span class="material-symbols-outlined" aria-hidden="true">visibility</span>View ${['DRAFT','FOR_REVIEW'].includes(status) ? 'Signed Contract' : 'Contract'}</a>` : '';
         const uploadLabel = signed.uploaded ? 'Replace' : 'Upload Signed Contract';
         const upload = signed.canUpload || signed.canReplace ? `<button class="btn-secondary dashboard-action-button" type="button" data-signed-contract-upload="${esc(item.id)}"><span class="material-symbols-outlined" aria-hidden="true">upload_file</span>${esc(uploadLabel)}</button>` : '';
         const stateText = signed.uploaded ? 'Uploaded' : 'Waiting for Signed Contract';
         const version = signed.version || (signed.documentVersionId ? `v${signed.documentVersionId}` : 'Not available');
         const documentNo = signed.documentNo || 'No signed copy uploaded yet.';
-        const rows = status === 'FOR_REVIEW'
+        const rows = ['DRAFT','FOR_REVIEW'].includes(status)
             ? `<div class="visitor-detail-item"><span>SIGNED CONTRACT</span><strong>${esc(documentNo)}</strong></div>
                <div class="visitor-detail-item"><span>SIGNED COPY</span><strong>${esc(stateText)}</strong></div>
                <div class="visitor-detail-item"><span>SIGNED VERSION</span><strong>${esc(signed.uploaded ? version : 'Not available')}</strong></div>
@@ -666,7 +673,7 @@
                <div class="visitor-detail-item"><span>SIGNED COPY</span><strong>${esc(stateText)}</strong></div>`;
         return `<div class="contract-document-grid">${rows}</div>
             <div class="contract-google-bottom">
-                <p class="contract-google-message">${esc(status === 'FOR_REVIEW' && !signed.verified ? stateText : 'Authoritative signed FAM contract record.')}</p>
+                <p class="contract-google-message">${esc(['DRAFT','FOR_REVIEW'].includes(status) && !signed.verified ? stateText : 'Authoritative signed FAM contract record.')}</p>
                 <div class="contract-google-actions">${view}${upload}</div>
             </div>`;
     }
@@ -818,8 +825,8 @@
         } else if (doc && !cancelled) {
             const open = doc.webViewUrl ? `<a class="btn-primary dashboard-action-button" href="${esc(doc.webViewUrl)}" target="_blank" rel="noopener noreferrer"><span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>Open in Google Docs</a>` : '';
             const canSyncDraftCopy = contractStatus === 'DRAFT' && status.canSync && ['WORKING','FINALIZED'].includes(String(doc.status || '').toUpperCase());
-            const sync = canSyncDraftCopy ? `<button class="btn-secondary dashboard-action-button" type="button" data-google-sync="${esc(contractId)}"><span class="material-symbols-outlined" aria-hidden="true">sync</span>Sync to FAM</button>` : '';
-            actions = contractStatus === 'DRAFT' ? `${open}${sync}` : '';
+            const finalize = canSyncDraftCopy ? `<button class="btn-secondary dashboard-action-button" type="button" data-google-finalize="${esc(contractId)}"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span>Finalize Contract Document</button>` : '';
+            actions = contractStatus === 'DRAFT' ? `${open}${finalize}` : '';
             if (contractStatus === 'FOR_REVIEW') {
                 message = 'Finalized contract ready for review.';
             } else if (contractStatus === 'FOR_APPROVAL') {
@@ -832,7 +839,7 @@
             message = cancelled ? 'This contract was cancelled before Google authoring was completed.' : 'No Google working document has been created yet.';
         }
         const metadataMode = contractStatus === 'DRAFT' || cancelled ? 'authoring' : 'artifact';
-        const signedWorkflow = ['FOR_REVIEW','FOR_APPROVAL','APPROVED','ACTIVE','EXPIRED','TERMINATED','ARCHIVED','REJECTED'].includes(contractStatus)
+        const signedWorkflow = ['DRAFT','FOR_REVIEW','FOR_APPROVAL','APPROVED','ACTIVE','EXPIRED','TERMINATED','ARCHIVED','REJECTED'].includes(contractStatus)
             ? signedContractWorkflowHtml(item)
             : '';
         return `<section class="contract-google-authoring-panel">
@@ -866,11 +873,11 @@
         await loadGoogleAuthoringStatus(contractId);
     }
 
-    async function syncGoogleDocument(contractId) {
+    async function finalizeGoogleDocument(contractId) {
         const panel = googleAuthoringPanel(contractId);
-        if (panel) panel.innerHTML = '<p class="legal-empty-note">Synchronizing latest Google copy...</p>';
-        await window.FAMApi.request(api(`contracts/google-document/sync.php?id=${encodeURIComponent(contractId)}`), { method: 'POST', body: { format: 'docx' } });
-        window.FAMModal?.showToast?.('Google working document synchronized.');
+        if (panel) panel.innerHTML = '<p class="legal-empty-note">Finalizing authoritative contract document...</p>';
+        await window.FAMApi.request(api(`contracts/google-document/finalize.php?id=${encodeURIComponent(contractId)}`), { method: 'POST', body: {} });
+        window.FAMModal?.showToast?.('Contract document finalized.');
         await openDetails(contractId);
         await load();
     }
@@ -1432,11 +1439,11 @@
                 event.stopPropagation();
                 return createGoogleDocument(Number(googleCreate.dataset.googleCreate)).catch(showError);
             }
-            const googleSync = event.target.closest('[data-google-sync]');
-            if (googleSync) {
+            const googleFinalize = event.target.closest('[data-google-finalize]');
+            if (googleFinalize) {
                 event.preventDefault();
                 event.stopPropagation();
-                return syncGoogleDocument(Number(googleSync.dataset.googleSync)).catch(showError);
+                return finalizeGoogleDocument(Number(googleFinalize.dataset.googleFinalize)).catch(showError);
             }
             const placeholder = event.target.closest('[data-placeholder-code]');
             if (placeholder) {

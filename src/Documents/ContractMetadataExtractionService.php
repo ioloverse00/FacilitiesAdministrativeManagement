@@ -19,12 +19,17 @@ final class ContractMetadataExtractionService
 
     public function analyze(int $documentId, array $user): ?array
     {
+        return $this->analyzeVersion($documentId, null, $user);
+    }
+
+    public function analyzeVersion(int $documentId, ?int $documentVersionId, array $user): ?array
+    {
         $document = ($this->documentService ?? new DocumentService($this->pdo))->show($documentId);
         if ($document === null) {
             return null;
         }
 
-        $source = $this->source($documentId);
+        $source = $this->source($documentId, $documentVersionId);
         if ($source === null) {
             $this->storeUnavailable($documentId, 'NO_READABLE_SOURCE', (int) $user['id']);
             return ($this->documentService ?? new DocumentService($this->pdo))->show($documentId);
@@ -41,10 +46,15 @@ final class ContractMetadataExtractionService
         return ($this->documentService ?? new DocumentService($this->pdo))->show($documentId);
     }
 
-    private function source(int $documentId): ?array
+    private function source(int $documentId, ?int $documentVersionId = null): ?array
     {
-        $statement = $this->pdo->prepare('SELECT dv.document_version_id, dv.file_name, dv.mime_type, dv.file_size, dv.storage_path, dv.file_hash FROM document_version dv INNER JOIN document d ON d.document_id = dv.document_id WHERE d.deleted_at IS NULL AND dv.deleted_at IS NULL AND dv.is_current = TRUE AND dv.document_id = :id LIMIT 1');
-        $statement->execute(['id' => $documentId]);
+        $versionFilter = $documentVersionId !== null ? 'AND dv.document_version_id = :version_id' : 'AND dv.is_current = TRUE';
+        $statement = $this->pdo->prepare("SELECT dv.document_version_id, dv.file_name, dv.mime_type, dv.file_size, dv.storage_path, dv.file_hash FROM document_version dv INNER JOIN document d ON d.document_id = dv.document_id WHERE d.deleted_at IS NULL AND dv.deleted_at IS NULL $versionFilter AND dv.document_id = :id LIMIT 1");
+        $params = ['id' => $documentId];
+        if ($documentVersionId !== null) {
+            $params['version_id'] = $documentVersionId;
+        }
+        $statement->execute($params);
         $row = $statement->fetch();
         if (!is_array($row)) {
             return null;
