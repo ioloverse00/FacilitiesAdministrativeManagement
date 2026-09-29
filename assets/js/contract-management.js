@@ -647,6 +647,12 @@
             : '';
     }
 
+    function contractDateReviewAction(item = {}) {
+        return item.contractDates?.canConfirm
+            ? `<button class="btn-secondary dashboard-action-button" type="button" data-contract-dates-review="${esc(item.id)}"><span class="material-symbols-outlined" aria-hidden="true">event_available</span>Review Contract Dates</button>`
+            : '';
+    }
+
     function signedContractDocumentUrl(signed = {}) {
         const documentId = Number(signed.documentId || 0);
         const versionId = Number(signed.approvalDocumentVersionId || signed.documentVersionId || 0);
@@ -826,7 +832,7 @@
             const open = doc.webViewUrl ? `<a class="btn-primary dashboard-action-button" href="${esc(doc.webViewUrl)}" target="_blank" rel="noopener noreferrer"><span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>Open in Google Docs</a>` : '';
             const canSyncDraftCopy = contractStatus === 'DRAFT' && status.canSync && ['WORKING','FINALIZED'].includes(String(doc.status || '').toUpperCase());
             const finalize = canSyncDraftCopy ? `<button class="btn-secondary dashboard-action-button" type="button" data-google-finalize="${esc(contractId)}"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span>Finalize Contract Document</button>` : '';
-            actions = contractStatus === 'DRAFT' ? `${open}${finalize}` : '';
+            actions = contractStatus === 'DRAFT' ? `${open}${finalize}${contractDateReviewAction(item)}` : '';
             if (contractStatus === 'FOR_REVIEW') {
                 message = 'Finalized contract ready for review.';
             } else if (contractStatus === 'FOR_APPROVAL') {
