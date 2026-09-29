@@ -56,6 +56,7 @@ SELECT
     wt.updated_at task_updated_at,
     wt.completed_at task_completed_at,
     ar.submitted_at,
+    ar.requested_by_user_id,
     ar.approval_status,
     ar.current_step_number,
     s.step_number,
@@ -118,13 +119,14 @@ SQL);
     $canViewFinancials = in_array('budget.approve', $user['permissions'] ?? [], true)
         || in_array('contract.manage', $user['permissions'] ?? [], true);
 
-    return array_map(static function (array $row) use ($canViewFinancials): array {
+    return array_map(static function (array $row) use ($canViewFinancials, $user): array {
         $actionable = in_array((string) $row['task_status'], ['PENDING','IN_PROGRESS'], true)
             && (string) $row['approval_status'] === 'PENDING'
             && (int) $row['current_step_number'] === (int) $row['step_number']
             && (string) $row['step_status'] === 'PENDING'
             && (string) $row['decision'] === 'PENDING'
-            && (string) $row['contract_status'] === 'FOR_APPROVAL';
+            && (string) $row['contract_status'] === 'FOR_APPROVAL'
+            && (int) ($row['requested_by_user_id'] ?? 0) !== (int) $user['id'];
 
         $contract = [
             'id' => (int) $row['entity_id'],

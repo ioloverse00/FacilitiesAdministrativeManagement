@@ -674,7 +674,7 @@ final class ContractService
             if ($step === null || (string) $step['step_status'] !== 'PENDING' || (string) $step['decision'] !== 'PENDING') {
                 throw new DomainException('This approval step is no longer actionable.');
             }
-            if (!$this->userCanActOnStep($user, $step)) {
+            if (!$this->userCanActOnContractApprovalRequest($user, $request, $step, $contract)) {
                 throw new DomainException('You are not authorized for the current approval step.');
             }
 
@@ -728,7 +728,7 @@ final class ContractService
         $this->pdo->beginTransaction();
         try {
             $context = $this->employeeApprovalContext($taskId, $user, true);
-            if (!$this->userHasStepAuthority($user, $context['contract'], $context['step'])) {
+            if (!$this->userCanActOnContractApprovalRequest($user, $context['request'], $context['step'], $context['contract'])) {
                 throw new DomainException('You are not authorized for the current approval step.');
             }
 
@@ -1113,7 +1113,7 @@ final class ContractService
             $stepId = (int) $this->pdo->lastInsertId();
             if ($stepNumber === 1) {
                 $taskId = $this->createWorkflowTask($contract, $requestId, $stepId, $step);
-                $this->notifyApprover($contract, $step, 'CONTRACT_APPROVAL_READY', 'Contract approval ready', 'A contract approval step is ready for your action.', $taskId);
+                $this->notifyApprover($contract, $step, 'CONTRACT_APPROVAL_READY', 'Contract approval ready', 'A contract approval step is ready for your action.', $taskId, ['requested_by_user_id' => (int) $user['id']]);
             }
         }
         return $requestId;
@@ -1239,7 +1239,7 @@ SQL);
         $this->pdo->prepare('UPDATE approval_step SET assigned_at = COALESCE(assigned_at, NOW()), updated_at = NOW() WHERE approval_step_id = :id')->execute(['id' => (int) $next['approval_step_id']]);
         $nextRoute = ['name' => (string) $next['step_name'], 'employee_id' => $next['approver_employee_reference_id'], 'user_id' => $next['approver_user_id'], 'role_id' => $next['approver_role_id']];
         $taskId = $this->createWorkflowTask($contract, $requestId, (int) $next['approval_step_id'], $nextRoute);
-        $this->notifyApprover($contract, $nextRoute, 'CONTRACT_APPROVAL_READY', 'Contract approval ready', 'A contract approval step is ready for your action.', $taskId);
+        $this->notifyApprover($contract, $nextRoute, 'CONTRACT_APPROVAL_READY', 'Contract approval ready', 'A contract approval step is ready for your action.', $taskId, $request);
         $this->auditApproval($user, 'CONTRACT_APPROVAL_STEP_APPROVED', $contract, $requestId, (int) $step['approval_step_id'], 'SUCCESS', $comment);
     }
 
@@ -1299,6 +1299,31 @@ SQL);
             return true;
         }
         return !empty($step['approver_employee_reference_id']) && (int) $step['approver_employee_reference_id'] === (int) ($user['employee_id'] ?? 0);
+    }
+
+    private function userCanActOnContractApprovalRequest(array $user, array $request, array $step, ?array $contract = null): bool
+    {
+        if ((string) ($request['module_code'] ?? 'contract_management') !== 'contract_management'
+            || (string) ($request['entity_type'] ?? 'contract') !== 'contract') {
+            return false;
+        }
+        if ((string) ($request['approval_status'] ?? '') !== 'PENDING') {
+            return false;
+        }
+        if ((int) ($request['current_step_number'] ?? 0) !== (int) ($step['step_number'] ?? 0)) {
+            return false;
+        }
+        if ((string) ($step['step_status'] ?? '') !== 'PENDING' || (string) ($step['decision'] ?? '') !== 'PENDING') {
+            return false;
+        }
+        $submitterUserId = (int) ($request['requested_by_user_id'] ?? 0);
+        if ($submitterUserId > 0 && $submitterUserId === (int) $user['id']) {
+            return false;
+        }
+
+        return $contract === null
+            ? $this->userCanActOnStep($user, $step)
+            : $this->userHasStepAuthority($user, $contract, $step);
     }
 
     private function approvalActionResult(int $contractId, int $requestId): array
@@ -1475,7 +1500,7 @@ SQL);
             && (string) $context['step']['step_status'] === 'PENDING'
             && (string) $context['step']['decision'] === 'PENDING'
             && (string) $context['contract']['contract_status'] === 'FOR_APPROVAL'
-            && $this->userHasStepAuthority($user, $context['contract'], $context['step']);
+            && $this->userCanActOnContractApprovalRequest($user, $context['request'], $context['step'], $context['contract']);
 
         return [
             'task' => [
@@ -1487,7 +1512,7 @@ SQL);
                 'completed_at' => $context['task']['completed_at'],
                 'is_actionable' => $isActionable,
             ],
-            'contract' => $contractPayload,
+            'contract' => $contract,
             'approval' => [
                 'request_id' => (int) $context['request']['approval_request_id'],
                 'status' => (string) $context['request']['approval_status'],
@@ -1535,10 +1560,13 @@ SQL);
                 break;
             }
         }
-        $canAct = $current !== null && (string) $request['approval_status'] === 'PENDING' && $this->userCanActOnStep($user, [
+        $canAct = $current !== null && $this->userCanActOnContractApprovalRequest($user, $request, [
             'step_name' => $current['name'],
             'approver_user_id' => $current['approverUserId'],
             'approver_employee_reference_id' => $current['approverEmployeeId'],
+            'step_status' => $current['status'],
+            'decision' => $current['decision'],
+            'step_number' => $current['sequence'],
         ]);
         return [
             'required' => true,
@@ -1630,10 +1658,10 @@ SQL);
         $this->pdo->prepare("UPDATE workflow_task SET task_status = 'COMPLETED', completed_at = NOW(), completed_by_user_id = :user_id, completion_notes = :notes, updated_at = NOW() WHERE approval_step_id = :step_id AND task_status IN ('PENDING','IN_PROGRESS')")->execute(['user_id' => $userId, 'notes' => $notes, 'step_id' => $stepId]);
     }
 
-    private function notifyApprover(array $contract, array $step, string $event, string $title, string $message, ?int $taskId = null): void
+    private function notifyApprover(array $contract, array $step, string $event, string $title, string $message, ?int $taskId = null, ?array $request = null): void
     {
         if ((string) ($step['name'] ?? '') === 'FAM Contract Approval' && empty($step['user_id'])) {
-            foreach ($this->contractApprovalNotificationRecipients() as $userId) {
+            foreach ($this->contractApprovalNotificationRecipients((int) ($request['requested_by_user_id'] ?? 0)) as $userId) {
                 $this->insertApprovalNotification($userId, $contract, $step, $event, $title, $message, $taskId);
             }
             return;
@@ -1668,9 +1696,9 @@ SQL);
         }
     }
 
-    private function contractApprovalNotificationRecipients(): array
+    private function contractApprovalNotificationRecipients(int $excludeUserId = 0): array
     {
-        return array_map(static fn (array $row): int => (int) $row['user_id'], $this->rows("SELECT DISTINCT ua.user_account_id user_id FROM user_account ua WHERE ua.account_status = 'ACTIVE' AND ua.deleted_at IS NULL AND (" . $this->effectivePermissionSql(['contract.approve','contract.manage']) . ") ORDER BY ua.user_account_id"));
+        return array_map(static fn (array $row): int => (int) $row['user_id'], $this->rows("SELECT DISTINCT ua.user_account_id user_id FROM user_account ua WHERE ua.account_status = 'ACTIVE' AND ua.deleted_at IS NULL AND (:exclude_user_id_zero = 0 OR ua.user_account_id <> :exclude_user_id_value) AND (" . $this->effectivePermissionSql(['contract.approve','contract.manage']) . ") ORDER BY ua.user_account_id", ['exclude_user_id_zero' => $excludeUserId, 'exclude_user_id_value' => $excludeUserId]));
     }
 
     private function approvalNotificationExists(int $userId, string $event, int $contractId, ?int $taskId): bool
