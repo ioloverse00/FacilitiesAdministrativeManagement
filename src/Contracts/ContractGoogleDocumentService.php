@@ -133,6 +133,10 @@ final class ContractGoogleDocumentService
     public function finalizeForReview(int $contractId, array $user): void
     {
         $link = $this->googleLink($contractId);
+        if ($this->linkIsFinalized($link)) {
+            $this->tryAnalyzeFinalizedContractDates($contractId, $user);
+            return;
+        }
         if (!$this->linkCanSync($link)) {
             return;
         }
@@ -425,7 +429,15 @@ final class ContractGoogleDocumentService
         if ($link === null || trim((string) ($link['google_file_id'] ?? '')) === '') {
             return false;
         }
-        return in_array((string) ($link['working_document_status'] ?? ''), ['WORKING', 'FINALIZED'], true);
+        return (string) ($link['working_document_status'] ?? '') === 'WORKING';
+    }
+
+    private function linkIsFinalized(?array $link): bool
+    {
+        return $link !== null
+            && (string) ($link['working_document_status'] ?? '') === 'FINALIZED'
+            && !empty($link['synced_document_id'])
+            && !empty($link['synced_document_version_id']);
     }
 
     private function templateSummary(array $context): array
