@@ -72,7 +72,15 @@ final class AuthService
             return new AuthResult(false, 'No verification email is configured for this account. Contact an administrator.', 409);
         }
 
-        unset($_SESSION['user_account_id'], $_SESSION['authenticated_at'], $_SESSION['last_activity_at'], $_SESSION['csrf_token'], $_SESSION['document_step_up']);
+        unset(
+            $_SESSION['user_account_id'],
+            $_SESSION['authenticated_at'],
+            $_SESSION['last_activity_at'],
+            $_SESSION['csrf_token'],
+            $_SESSION['document_step_up'],
+            $_SESSION['document_context_step_up'],
+            $_SESSION['document_step_up_challenge_context']
+        );
         $_SESSION['pending_login_mfa'] = [
             'user_account_id' => $userId,
             'created_at' => time(),
@@ -125,7 +133,12 @@ final class AuthService
             throw $exception;
         }
 
-        unset($_SESSION['pending_login_mfa'], $_SESSION['document_step_up']);
+        unset(
+            $_SESSION['pending_login_mfa'],
+            $_SESSION['document_step_up'],
+            $_SESSION['document_context_step_up'],
+            $_SESSION['document_step_up_challenge_context']
+        );
         session_regenerate_id(true);
         $_SESSION['user_account_id'] = $userId;
         $_SESSION['authenticated_at'] = time();

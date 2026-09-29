@@ -151,7 +151,7 @@ function contractGoogleDocumentService(): ContractGoogleDocumentService
     return new ContractGoogleDocumentService($connection, $oauth, new GoogleDriveService($oauth), new DocumentService($connection));
 }
 
-function requireConfidentialDocumentStepUp(int $documentId, ?int $versionId, array $user, string $action): void
+function requireConfidentialDocumentStepUp(int $documentId, ?int $versionId, array $user, string $action, array $stepUpContext = []): void
 {
     $service = documentService();
     if (!$service->requiresStepUp($documentId)) {
@@ -162,11 +162,11 @@ function requireConfidentialDocumentStepUp(int $documentId, ?int $versionId, arr
         return;
     }
 
-    if (canViewContractDocumentDuringWorkflowWithoutStepUp($documentId, $versionId, $user, $action)) {
+    if ($stepUpContext === [] && canViewContractDocumentDuringWorkflowWithoutStepUp($documentId, $versionId, $user, $action)) {
         return;
     }
 
-    if (!documentStepUpService()->hasValidStepUp($user, $documentId)) {
+    if (!documentStepUpService()->hasValidStepUp($user, $documentId, $stepUpContext)) {
         jsonResponse(false, 'Additional verification is required.', [
             'step_up_required' => true,
             'document_id' => $documentId,
@@ -174,6 +174,145 @@ function requireConfidentialDocumentStepUp(int $documentId, ?int $versionId, arr
             'action' => $action,
         ], 403);
     }
+}
+
+function documentRequestContext(array $input): array
+{
+    $versionId = isset($input['version_id']) && ctype_digit((string) $input['version_id']) ? (int) $input['version_id'] : null;
+    $contractId = isset($input['contract_id']) && ctype_digit((string) $input['contract_id']) ? (int) $input['contract_id'] : null;
+    $legalMatterId = isset($input['legal_matter_id']) && ctype_digit((string) $input['legal_matter_id']) ? (int) $input['legal_matter_id'] : null;
+    $action = strtolower(trim((string) ($input['action'] ?? 'view')));
+    if (!in_array($action, ['view', 'download'], true)) {
+        $action = 'view';
+    }
+
+    return [
+        'version_id' => $versionId,
+        'contract_id' => $contractId,
+        'legal_matter_id' => $legalMatterId,
+        'action' => $action,
+    ];
+}
+
+function authorizeDocumentFileAccessOrDeny(int $documentId, ?int $versionId, array $user, string $action, ?int $contractId = null, ?int $legalMatterId = null): array
+{
+    if (DocumentPolicy::hasPermission($user, 'records.view')) {
+        requireLegalDocumentAccessIfNeeded($documentId, $user);
+        return [];
+    }
+
+    if ($contractId !== null) {
+        $context = contractDocumentStepUpContext($documentId, $versionId, $contractId, $user, $action);
+        if ($context !== null) {
+            return $context;
+        }
+    }
+
+    if ($legalMatterId !== null && DocumentPolicy::hasWorkflowDocumentAccess(documentService(), $documentId, $user, null, $legalMatterId)) {
+        requireLegalDocumentAccessIfNeeded($documentId, $user);
+        return [
+            'scope' => 'legal_matter_document',
+            'legal_matter_id' => $legalMatterId,
+            'document_id' => $documentId,
+            'version_id' => $versionId ?? 0,
+        ];
+    }
+
+    jsonResponse(false, 'You do not have permission to perform this action.', [], 403);
+}
+
+function contractDocumentStepUpContext(int $documentId, ?int $versionId, int $contractId, array $user, string $action): ?array
+{
+    $action = strtolower($action);
+    if (!in_array($action, ['view', 'download'], true) || $versionId === null || $versionId < 1) {
+        return null;
+    }
+
+    try {
+        $connection = Database::connection();
+        $signedSchemaReady = (int) $connection->query("
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND (
+                (TABLE_NAME = 'contract' AND COLUMN_NAME = 'signed_document_version_id')
+                OR (TABLE_NAME = 'approval_request' AND COLUMN_NAME = 'signed_document_version_id')
+              )
+        ")->fetchColumn() === 2;
+
+        if ($signedSchemaReady) {
+            $statement = $connection->prepare("
+                SELECT c.contract_id, c.contract_status, c.signed_document_version_id,
+                       cgd.synced_document_id, cgd.synced_document_version_id,
+                       ar.signed_document_version_id approval_signed_document_version_id
+                FROM contract_google_document cgd
+                INNER JOIN contract c ON c.contract_id = cgd.contract_id AND c.deleted_at IS NULL
+                LEFT JOIN approval_request ar ON ar.module_code = 'contract_management'
+                  AND ar.entity_type = 'contract'
+                  AND ar.entity_id = c.contract_id
+                  AND ar.approval_status = 'PENDING'
+                WHERE c.contract_id = :contract_id
+                  AND cgd.synced_document_id = :document_id
+                  AND cgd.working_document_status = 'FINALIZED'
+                LIMIT 1
+            ");
+        } else {
+            $statement = $connection->prepare("
+                SELECT c.contract_id, c.contract_status, NULL signed_document_version_id,
+                       cgd.synced_document_id, cgd.synced_document_version_id,
+                       NULL approval_signed_document_version_id
+                FROM contract_google_document cgd
+                INNER JOIN contract c ON c.contract_id = cgd.contract_id AND c.deleted_at IS NULL
+                WHERE c.contract_id = :contract_id
+                  AND cgd.synced_document_id = :document_id
+                  AND cgd.working_document_status = 'FINALIZED'
+                LIMIT 1
+            ");
+        }
+        $statement->execute(['contract_id' => $contractId, 'document_id' => $documentId]);
+        $row = $statement->fetch();
+    } catch (Throwable) {
+        return null;
+    }
+
+    if (!is_array($row)) {
+        return null;
+    }
+
+    $contractStatus = strtoupper((string) $row['contract_status']);
+    $syncedVersionId = (int) ($row['synced_document_version_id'] ?? 0);
+    if ($contractStatus === 'DRAFT') {
+        if ($versionId !== $syncedVersionId || !ContractPolicy::hasPermission($user, 'contract.edit')) {
+            return null;
+        }
+        $scope = 'contract_finalized_authoring';
+    } elseif ($contractStatus === 'FOR_REVIEW') {
+        if ($versionId !== $syncedVersionId || !ContractPolicy::hasPermission($user, 'contract.review')) {
+            return null;
+        }
+        $scope = 'contract_review_evidence';
+    } elseif ($contractStatus === 'FOR_APPROVAL') {
+        $workflowVersionId = (int) ($row['approval_signed_document_version_id'] ?? 0);
+        if ($workflowVersionId < 1) {
+            $workflowVersionId = (int) ($row['signed_document_version_id'] ?? 0);
+        }
+        if ($workflowVersionId < 1) {
+            $workflowVersionId = $syncedVersionId;
+        }
+        if ($versionId !== $workflowVersionId || !userCanViewCurrentContractApprovalEvidenceWithoutStepUp($contractId, $user)) {
+            return null;
+        }
+        $scope = 'contract_approval_evidence';
+    } else {
+        return null;
+    }
+
+    return [
+        'scope' => $scope,
+        'contract_id' => $contractId,
+        'document_id' => $documentId,
+        'version_id' => $versionId,
+    ];
 }
 
 function canViewClientRequirementEvidenceDuringWorkflowWithoutStepUp(int $documentId, array $user, string $action): bool

@@ -123,16 +123,35 @@
         return {
             documentId,
             versionId: url.searchParams.get('version_id') || '',
+            contractId: url.searchParams.get('contract_id') || '',
+            legalMatterId: url.searchParams.get('legal_matter_id') || '',
             action: /download\.php$/i.test(url.pathname) ? 'download' : 'view',
             url: link.href,
             target: link.target || '_self',
         };
     }
 
+    function documentStepUpPayload(requestInfo, extra = {}) {
+        const url = requestInfo?.url ? new URL(requestInfo.url, window.location.href) : null;
+        const value = (name, fallback = '') => requestInfo?.[name] || url?.searchParams.get(name.replace(/[A-Z]/g, char => `_${char.toLowerCase()}`)) || fallback;
+        const payload = {
+            document_id: requestInfo.documentId,
+            version_id: value('versionId'),
+            contract_id: value('contractId'),
+            legal_matter_id: value('legalMatterId'),
+            action: requestInfo.action || (url && /download\.php$/i.test(url.pathname) ? 'download' : 'view'),
+            ...extra,
+        };
+        Object.keys(payload).forEach(key => {
+            if (payload[key] === '' || payload[key] === null || payload[key] === undefined) delete payload[key];
+        });
+        return payload;
+    }
+
     async function openDocumentWithStepUp(requestInfo) {
         await showDocumentOtpDialog(requestInfo, () => request(apiUrl('documents/request-otp.php'), {
             method: 'POST',
-            body: { document_id: requestInfo.documentId },
+            body: documentStepUpPayload(requestInfo),
         }));
     }
 
@@ -281,7 +300,7 @@
                     box?.classList.add('hidden');
                     try {
                         setBusy(true);
-                        const fresh = await request(apiUrl('documents/request-otp.php'), { method: 'POST', body: { document_id: requestInfo.documentId } });
+                        const fresh = await request(apiUrl('documents/request-otp.php'), { method: 'POST', body: documentStepUpPayload(requestInfo) });
                         challengeId = fresh.data.challenge_id || challengeId;
                         remaining = Number(fresh.data.expires_in_seconds || 60);
                         resend = Number(fresh.data.resend_cooldown_seconds || 30);
@@ -304,7 +323,7 @@
                     if (otp.length !== 6) return;
                     try {
                         setBusy(true);
-                        await request(apiUrl('documents/verify-otp.php'), { method: 'POST', body: { document_id: requestInfo.documentId, challenge_id: challengeId, otp } });
+                        await request(apiUrl('documents/verify-otp.php'), { method: 'POST', body: documentStepUpPayload(requestInfo, { challenge_id: challengeId, otp }) });
                         close();
                         window.open(requestInfo.url, requestInfo.target, 'noopener');
                     } catch (error) {

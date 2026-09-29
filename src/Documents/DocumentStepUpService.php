@@ -10,8 +10,22 @@ final class DocumentStepUpService
     {
     }
 
-    public function hasValidStepUp(array $user, int $documentId): bool
+    public function hasValidStepUp(array $user, int $documentId, array $context = []): bool
     {
+        $context = $this->normalizeContext($context);
+        if ($context !== []) {
+            $contextKey = $this->contextKey($context);
+            $entry = $_SESSION['document_context_step_up'][$documentId][$contextKey] ?? null;
+            if (!is_array($entry)) {
+                return false;
+            }
+
+            return (int) ($entry['user_id'] ?? 0) === (int) $user['id']
+                && hash_equals((string) ($entry['session_id'] ?? ''), session_id())
+                && hash_equals((string) ($entry['context_key'] ?? ''), $contextKey)
+                && (int) ($entry['expires_at'] ?? 0) > time();
+        }
+
         $entry = $_SESSION['document_step_up'][$documentId] ?? null;
         if (!is_array($entry)) {
             return false;
@@ -22,8 +36,9 @@ final class DocumentStepUpService
             && (int) ($entry['expires_at'] ?? 0) > time();
     }
 
-    public function requestChallenge(array $user, int $documentId): array
+    public function requestChallenge(array $user, int $documentId, array $context = []): array
     {
+        $context = $this->normalizeContext($context);
         $this->ensureTrustedEmail($user);
         $ttl = $this->otpTtl();
         $cooldown = $this->resendCooldown();
@@ -61,6 +76,16 @@ final class DocumentStepUpService
             $this->audit('CONFIDENTIAL_DOCUMENT_OTP_FAILED', (int) $user['id'], $documentId, null, 'MAIL_UNAVAILABLE');
             jsonResponse(false, 'Verification is temporarily unavailable. Please try again later.', [], 503);
         }
+        if ($context !== []) {
+            $_SESSION['document_step_up_challenge_context'][$challengeId] = [
+                'user_id' => (int) $user['id'],
+                'document_id' => $documentId,
+                'session_id' => session_id(),
+                'context' => $context,
+                'context_key' => $this->contextKey($context),
+                'expires_at' => $expiresAt->getTimestamp(),
+            ];
+        }
         $this->audit('CONFIDENTIAL_DOCUMENT_OTP_REQUESTED', (int) $user['id'], $documentId, null, 'SUCCESS');
 
         return [
@@ -72,11 +97,16 @@ final class DocumentStepUpService
         ];
     }
 
-    public function verifyChallenge(array $user, int $documentId, string $challengeId, string $otp): array
+    public function verifyChallenge(array $user, int $documentId, string $challengeId, string $otp, array $context = []): array
     {
+        $context = $this->normalizeContext($context);
         $challenge = $this->challenge($challengeId, (int) $user['id'], $this->sessionHash(), $documentId);
         if ($challenge === null || $challenge['consumed_at'] !== null || strtotime((string) $challenge['expires_at']) <= time()) {
             $this->audit('CONFIDENTIAL_DOCUMENT_OTP_FAILED', (int) $user['id'], $documentId, null, 'INVALID');
+            jsonResponse(false, 'Verification failed. Request a new code and try again.', [], 422);
+        }
+        if ($context !== [] && !$this->challengeContextMatches($user, $documentId, $challengeId, $context)) {
+            $this->audit('CONFIDENTIAL_DOCUMENT_OTP_FAILED', (int) $user['id'], $documentId, null, 'CONTEXT_MISMATCH');
             jsonResponse(false, 'Verification failed. Request a new code and try again.', [], 422);
         }
         if ((int) $challenge['attempt_count'] >= (int) $challenge['max_attempts']) {
@@ -100,12 +130,24 @@ final class DocumentStepUpService
 
         $this->pdo->prepare('UPDATE document_otp_challenge SET consumed_at = NOW() WHERE challenge_id = :id')->execute(['id' => (int) $challenge['challenge_id']]);
         $stepUpTtl = $this->stepUpTtl();
-        $_SESSION['document_step_up'][$documentId] = [
-            'user_id' => (int) $user['id'],
-            'session_id' => session_id(),
-            'purpose' => self::PURPOSE,
-            'expires_at' => time() + $stepUpTtl,
-        ];
+        if ($context === []) {
+            $_SESSION['document_step_up'][$documentId] = [
+                'user_id' => (int) $user['id'],
+                'session_id' => session_id(),
+                'purpose' => self::PURPOSE,
+                'expires_at' => time() + $stepUpTtl,
+            ];
+        } else {
+            $contextKey = $this->contextKey($context);
+            $_SESSION['document_context_step_up'][$documentId][$contextKey] = [
+                'user_id' => (int) $user['id'],
+                'session_id' => session_id(),
+                'purpose' => self::PURPOSE,
+                'context_key' => $contextKey,
+                'expires_at' => time() + $stepUpTtl,
+            ];
+            unset($_SESSION['document_step_up_challenge_context'][$challengeId]);
+        }
         $this->audit('CONFIDENTIAL_DOCUMENT_OTP_VERIFIED', (int) $user['id'], $documentId, null, 'SUCCESS');
 
         return ['step_up_expires_in_seconds' => $stepUpTtl];
@@ -121,6 +163,38 @@ final class DocumentStepUpService
         if (!filter_var((string) ($user['email'] ?? ''), FILTER_VALIDATE_EMAIL)) {
             jsonResponse(false, 'Verification is unavailable for this account.', [], 409);
         }
+    }
+
+    private function normalizeContext(array $context): array
+    {
+        $normalized = [];
+        foreach ($context as $key => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+            $normalized[(string) $key] = is_bool($value) ? $value : (string) $value;
+        }
+        ksort($normalized);
+        return $normalized;
+    }
+
+    private function contextKey(array $context): string
+    {
+        return hash('sha256', json_encode($this->normalizeContext($context), JSON_THROW_ON_ERROR));
+    }
+
+    private function challengeContextMatches(array $user, int $documentId, string $challengeId, array $context): bool
+    {
+        $entry = $_SESSION['document_step_up_challenge_context'][$challengeId] ?? null;
+        if (!is_array($entry)) {
+            return false;
+        }
+
+        return (int) ($entry['user_id'] ?? 0) === (int) $user['id']
+            && (int) ($entry['document_id'] ?? 0) === $documentId
+            && hash_equals((string) ($entry['session_id'] ?? ''), session_id())
+            && hash_equals((string) ($entry['context_key'] ?? ''), $this->contextKey($context))
+            && (int) ($entry['expires_at'] ?? 0) > time();
     }
 
     private function activeChallenge(int $userId, string $sessionHash, int $documentId): ?array

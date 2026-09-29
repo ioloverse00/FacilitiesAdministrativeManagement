@@ -6,13 +6,9 @@ $user = currentApiUser();
 $documentId = idParam();
 $contractId = isset($_GET['contract_id']) && ctype_digit((string) $_GET['contract_id']) ? (int) $_GET['contract_id'] : null;
 $legalMatterId = isset($_GET['legal_matter_id']) && ctype_digit((string) $_GET['legal_matter_id']) ? (int) $_GET['legal_matter_id'] : null;
-if (!DocumentPolicy::hasPermission($user, 'records.view')
-    && !DocumentPolicy::hasWorkflowDocumentAccess(documentService(), $documentId, $user, $contractId, $legalMatterId)) {
-    jsonResponse(false, 'You do not have permission to perform this action.', [], 403);
-}
-requireLegalDocumentAccessIfNeeded($documentId, $user);
 $versionId = isset($_GET['version_id']) && ctype_digit((string) $_GET['version_id']) ? (int) $_GET['version_id'] : null;
-requireConfidentialDocumentStepUp($documentId, $versionId, $user, 'view');
+$stepUpContext = authorizeDocumentFileAccessOrDeny($documentId, $versionId, $user, 'view', $contractId, $legalMatterId);
+requireConfidentialDocumentStepUp($documentId, $versionId, $user, 'view', $stepUpContext);
 $file = documentService()->downloadVersion($documentId, $versionId);
 if ($file === null) jsonResponse(false, 'Document file not found.', [], 404);
 if (strtoupper((string) ($file['confidentiality_level'] ?? '')) === 'CONFIDENTIAL') {
