@@ -126,7 +126,11 @@ final class ContractGoogleDocumentService
             'version_id' => $versionId,
             'id' => (int) $link['contract_google_document_id'],
         ]);
-        $this->history((int) $context['contract_id'], 'CONTRACT_GOOGLE_DOCUMENT_SYNCED', 'Google working document synchronized to FAM.', $user, ['document_id' => (int) $document['id']]);
+        $this->history((int) $context['contract_id'], 'CONTRACT_GOOGLE_DOCUMENT_SYNCED', 'Google working document synchronized to FAM.', $user, [
+            'document_id' => (int) $document['id'],
+            'document_version_id' => $versionId,
+            'format' => $extension,
+        ]);
         return $this->linkSummary($this->googleLink($contractId) ?? []);
     }
 
@@ -140,9 +144,14 @@ final class ContractGoogleDocumentService
         if (!$this->linkCanSync($link)) {
             return;
         }
-        $this->syncWorkingDocument($contractId, $user);
+        $this->syncWorkingDocument($contractId, $user, 'pdf');
         $this->pdo->prepare("UPDATE contract_google_document SET working_document_status = 'FINALIZED', finalized_at = NOW(), updated_at = NOW() WHERE contract_id = :id")->execute(['id' => $contractId]);
-        $this->history($contractId, 'CONTRACT_GOOGLE_DOCUMENT_FINALIZED', 'Google working document frozen as a FAM review artifact.', $user, []);
+        $finalized = $this->googleLink($contractId) ?? [];
+        $this->history($contractId, 'CONTRACT_GOOGLE_DOCUMENT_FINALIZED', 'Google working document frozen as a FAM review artifact.', $user, [
+            'document_id' => empty($finalized['synced_document_id']) ? null : (int) $finalized['synced_document_id'],
+            'document_version_id' => empty($finalized['synced_document_version_id']) ? null : (int) $finalized['synced_document_version_id'],
+            'format' => 'pdf',
+        ]);
         $this->tryAnalyzeFinalizedContractDates($contractId, $user);
     }
 

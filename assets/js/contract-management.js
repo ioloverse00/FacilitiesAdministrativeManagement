@@ -643,13 +643,19 @@
     function finalizedContractDocumentAction(doc) {
         const url = finalizedContractDocumentUrl(doc);
         return url
-            ? `<a class="btn-secondary dashboard-action-button" href="${esc(url)}" target="_blank" rel="noopener"><span class="material-symbols-outlined" aria-hidden="true">visibility</span>View Contract Document</a>`
+            ? `<a class="btn-secondary dashboard-action-button" href="${esc(url)}" target="_blank" rel="noopener"><span class="material-symbols-outlined" aria-hidden="true">visibility</span>View Finalized Contract</a>`
             : '';
     }
 
     function contractDateReviewAction(item = {}) {
         return item.contractDates?.canConfirm
             ? `<button class="btn-secondary dashboard-action-button" type="button" data-contract-dates-review="${esc(item.id)}"><span class="material-symbols-outlined" aria-hidden="true">event_available</span>Review Contract Dates</button>`
+            : '';
+    }
+
+    function retryDateExtractionAction(item = {}) {
+        return item.contractDates?.canRetryExtraction
+            ? `<button class="btn-secondary dashboard-action-button" type="button" data-contract-dates-retry="${esc(item.id)}"><span class="material-symbols-outlined" aria-hidden="true">refresh</span>Retry AI Date Extraction</button>`
             : '';
     }
 
@@ -829,10 +835,13 @@
         } else if (status.available && !doc && status.canCreate) {
             actions = `<button class="btn-primary dashboard-action-button" type="button" data-google-create="${esc(contractId)}"><span class="material-symbols-outlined" aria-hidden="true">edit_document</span>Edit in Google Docs</button>`;
         } else if (doc && !cancelled) {
-            const open = doc.webViewUrl ? `<a class="btn-primary dashboard-action-button" href="${esc(doc.webViewUrl)}" target="_blank" rel="noopener noreferrer"><span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>Open in Google Docs</a>` : '';
-            const canSyncDraftCopy = contractStatus === 'DRAFT' && status.canSync && ['WORKING','FINALIZED'].includes(String(doc.status || '').toUpperCase());
+            const docStatus = String(doc.status || '').toUpperCase();
+            const finalized = docStatus === 'FINALIZED';
+            const open = !finalized && doc.webViewUrl ? `<a class="btn-primary dashboard-action-button" href="${esc(doc.webViewUrl)}" target="_blank" rel="noopener noreferrer"><span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>Open in Google Docs</a>` : '';
+            const canSyncDraftCopy = contractStatus === 'DRAFT' && status.canSync && docStatus === 'WORKING';
             const finalize = canSyncDraftCopy ? `<button class="btn-secondary dashboard-action-button" type="button" data-google-finalize="${esc(contractId)}"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span>Finalize Contract Document</button>` : '';
-            actions = contractStatus === 'DRAFT' ? `${open}${finalize}${contractDateReviewAction(item)}` : '';
+            const finalizedView = finalized ? finalizedContractDocumentAction(doc) : '';
+            actions = contractStatus === 'DRAFT' ? `${open}${finalize}${finalizedView}${contractDateReviewAction(item)}${retryDateExtractionAction(item)}` : '';
             if (contractStatus === 'FOR_REVIEW') {
                 message = 'Finalized contract ready for review.';
             } else if (contractStatus === 'FOR_APPROVAL') {
@@ -845,11 +854,13 @@
             message = cancelled ? 'This contract was cancelled before Google authoring was completed.' : 'No Google working document has been created yet.';
         }
         const metadataMode = contractStatus === 'DRAFT' || cancelled ? 'authoring' : 'artifact';
+        const finalizedAction = doc && String(doc.status || '').toUpperCase() === 'FINALIZED' ? finalizedContractDocumentAction(doc) : '';
         const signedWorkflow = ['DRAFT','FOR_REVIEW','FOR_APPROVAL','APPROVED','ACTIVE','EXPIRED','TERMINATED','ARCHIVED','REJECTED'].includes(contractStatus)
             ? signedContractWorkflowHtml(item)
             : '';
         return `<section class="contract-google-authoring-panel">
             ${contractDocumentMetadataGrid(item, status, message, metadataMode)}
+            ${finalizedAction && contractStatus !== 'DRAFT' ? `<div class="contract-google-actions">${finalizedAction}</div>` : ''}
             ${signedWorkflow}
             ${contractStatus === 'DRAFT' || cancelled ? `<div class="contract-google-bottom">
                 ${message ? `<p class="contract-google-message">${esc(message)}</p>` : '<span></span>'}
@@ -885,6 +896,19 @@
         await window.FAMApi.request(api(`contracts/google-document/finalize.php?id=${encodeURIComponent(contractId)}`), { method: 'POST', body: {} });
         window.FAMModal?.showToast?.('Contract document finalized.');
         await openDetails(contractId);
+        await load();
+    }
+
+    async function retryContractDateExtraction(contractId) {
+        const payload = await window.FAMApi.request(api(`contracts/retry-date-extraction.php?id=${encodeURIComponent(contractId)}`), { method: 'POST', body: {} });
+        window.FAMModal?.showToast?.('AI date extraction retried.');
+        if (payload.data?.item) {
+            state.activeItem = payload.data.item;
+            renderContractDetails(payload.data.item, { preserveSections: true });
+            loadGoogleAuthoringStatus(payload.data.item.id).catch(() => {});
+        } else {
+            await openDetails(contractId);
+        }
         await load();
     }
 
@@ -1128,6 +1152,13 @@
         const item = state.activeItem;
         if (!item || Number(item.id) !== Number(id)) return;
         const dates = item.contractDates || {};
+        const unavailable = String(dates.candidateStatus || '').toUpperCase() === 'UNAVAILABLE';
+        const startSuggestion = dates.suggestedStartDate ? fmtDate(dates.suggestedStartDate) : (unavailable ? 'AI unavailable' : 'No reliable date found');
+        const endSuggestion = dates.suggestedEndDate ? fmtDate(dates.suggestedEndDate) : (unavailable ? 'AI unavailable' : 'No reliable date found');
+        const extractionMessage = unavailable
+            ? '<p class="legal-empty-note">AI date extraction is currently unavailable. Enter the dates manually or retry extraction.</p>'
+            : '';
+        const retry = dates.canRetryExtraction ? `<button class="btn-secondary dashboard-action-button" type="button" data-contract-dates-retry="${esc(id)}">Retry AI Date Extraction</button>` : '';
         const startValue = dates.stale ? (dates.suggestedStartDate || dates.startDate || '') : (dates.startDate || dates.suggestedStartDate || '');
         const endValue = dates.stale ? (dates.suggestedEndDate || dates.endDate || '') : (dates.endDate || dates.suggestedEndDate || '');
         const sourceLabel = dates.sourceDocumentVersionId ? `Source version #${dates.sourceDocumentVersionId}` : 'No finalized source version';
@@ -1142,12 +1173,14 @@
             </div>
             <form class="facility-dialog-body document-form-body" data-contract-dates-form data-contract-id="${esc(id)}">
                 <div class="visitor-detail-grid contract-detail-grid">
-                    <div class="visitor-detail-item"><span>AI START DATE</span><strong>${esc(dates.suggestedStartDate ? fmtDate(dates.suggestedStartDate) : 'No suggestion')}</strong></div>
-                    <div class="visitor-detail-item"><span>AI END DATE</span><strong>${esc(dates.suggestedEndDate ? fmtDate(dates.suggestedEndDate) : 'No suggestion')}</strong></div>
+                    <div class="visitor-detail-item"><span>AI START DATE</span><strong>${esc(startSuggestion)}</strong></div>
+                    <div class="visitor-detail-item"><span>AI END DATE</span><strong>${esc(endSuggestion)}</strong></div>
                 </div>
+                ${extractionMessage}
                 <label class="facility-field"><span>Start Date</span><input name="start_date" type="date" value="${esc(startValue)}" required></label>
                 <label class="facility-field"><span>End Date</span><input name="end_date" type="date" value="${esc(endValue)}" required></label>
                 <div class="facility-dialog-actions">
+                    ${retry}
                     <button class="btn-secondary dashboard-action-button" type="button" data-contract-dialog-close>Cancel</button>
                     <button class="btn-primary dashboard-action-button" type="submit">Confirm Dates</button>
                 </div>
@@ -1400,6 +1433,12 @@
                 event.stopPropagation();
                 dateReviewTrigger = dateReview;
                 return openContractDateReview(Number(dateReview.dataset.contractDatesReview), dateReview.dataset.contractDateField || 'start');
+            }
+            const dateRetry = event.target.closest('[data-contract-dates-retry]');
+            if (dateRetry) {
+                event.preventDefault();
+                event.stopPropagation();
+                return retryContractDateExtraction(Number(dateRetry.dataset.contractDatesRetry)).catch(showError);
             }
             const requirementUpload = event.target.closest('[data-client-requirement-upload]');
             if (requirementUpload) {

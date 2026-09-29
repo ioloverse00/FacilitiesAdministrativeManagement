@@ -31,16 +31,19 @@ final class ContractMetadataExtractionService
 
         $source = $this->source($documentId, $documentVersionId);
         if ($source === null) {
-            $this->storeUnavailable($documentId, 'NO_READABLE_SOURCE', (int) $user['id']);
+            $this->storeUnavailable($documentId, 'NO_READABLE_SOURCE', (int) $user['id'], $documentVersionId);
             return ($this->documentService ?? new DocumentService($this->pdo))->show($documentId);
         }
 
         try {
             $candidate = $this->requestExtraction($document, $source);
-            ($this->documentService ?? new DocumentService($this->pdo))->storeContractMetadataCandidate($documentId, $candidate, (int) $user['id']);
+            ($this->documentService ?? new DocumentService($this->pdo))->storeContractMetadataCandidate($documentId, $candidate, (int) $user['id'], (int) $source['document_version_id']);
             $this->activity('LEGAL_CONTRACT_METADATA_ANALYZED', 'Contract Metadata Analyzed', $documentId, (int) $user['id']);
         } catch (Throwable $exception) {
-            $this->storeUnavailable($documentId, $this->safeFailureStage($exception->getMessage()), (int) $user['id']);
+            $stage = $this->safeFailureStage($exception->getMessage());
+            $diagnostics = $this->safeFailureDiagnostics($exception->getMessage());
+            $this->storeUnavailable($documentId, $stage, (int) $user['id'], (int) $source['document_version_id'], $diagnostics);
+            $this->logExtractionFailure($documentId, (int) $source['document_version_id'], $stage, $diagnostics);
         }
 
         return ($this->documentService ?? new DocumentService($this->pdo))->show($documentId);
@@ -139,7 +142,7 @@ final class ContractMetadataExtractionService
         return "Extract structured contract/agreement metadata from this supporting document for human review.\n\n"
             . "Document title: " . (string) ($document['title'] ?? '') . "\n"
             . "File name: " . (string) ($source['file_name'] ?? '') . "\n\n"
-            . "Return only values clearly supported by the document. Do not infer dates from upload dates, matter dates, or summary text. Use ISO dates in YYYY-MM-DD format. If a value is not explicitly available, return null. Agreement status must be one of ACTIVE, EXPIRED, TERMINATED, RENEWED, or UNKNOWN. These are non-authoritative candidates; an admin will confirm or edit them before Records Retention can use them.";
+            . "Return only values clearly supported by the document. Distinguish execution, signing, agreement, renewal, and amendment dates from the contract term dates. effective_date means the date the contractual service or term actually begins, or an explicitly stated effective/start date. expiration_date means the date the contractual term ends or expires. Do not use an execution/signing/agreement date as effective_date when the document states a different contract start/effective date. Normalize clearly stated natural-language dates to ISO YYYY-MM-DD, such as November 1, 2026 to 2026-11-01. Do not infer ambiguous numeric dates. Do not infer dates from upload dates, matter dates, or summary text. If a value is not explicitly available, return null. Agreement status must be one of ACTIVE, EXPIRED, TERMINATED, RENEWED, or UNKNOWN. These are non-authoritative candidates; an admin will confirm or edit them before Records Retention can use them.";
     }
 
     private function schema(): array
@@ -298,10 +301,10 @@ final class ContractMetadataExtractionService
         ], JSON_UNESCAPED_SLASHES);
     }
 
-    private function storeUnavailable(int $documentId, string $stage, int $userId): void
+    private function storeUnavailable(int $documentId, string $stage, int $userId, ?int $documentVersionId = null, array $diagnostics = []): void
     {
-        ($this->documentService ?? new DocumentService($this->pdo))->storeContractMetadataUnavailable($documentId, $stage, $userId);
-        $this->activity('LEGAL_CONTRACT_METADATA_UNAVAILABLE', 'Contract Metadata Unavailable', $documentId, $userId);
+        ($this->documentService ?? new DocumentService($this->pdo))->storeContractMetadataUnavailable($documentId, $stage, $userId, $documentVersionId, $diagnostics);
+        $this->activity('LEGAL_CONTRACT_METADATA_UNAVAILABLE', 'Contract Metadata Unavailable', $documentId, $userId, $documentVersionId, $stage, $diagnostics);
     }
 
     private function nullableText(mixed $value, int $max): ?string
@@ -399,6 +402,36 @@ final class ContractMetadataExtractionService
         return is_string($category) && preg_match('/^[A-Z0-9_]+$/', $category) ? $category : 'AI_REQUEST_FAILED';
     }
 
+    private function safeFailureDiagnostics(string $message): array
+    {
+        $space = strpos($message, ' ');
+        if ($space === false) {
+            return ['model' => $this->model()];
+        }
+        $decoded = json_decode(trim(substr($message, $space + 1)), true);
+        if (!is_array($decoded)) {
+            return ['model' => $this->model()];
+        }
+        return [
+            'http_status' => isset($decoded['http_status']) && is_numeric($decoded['http_status']) ? (int) $decoded['http_status'] : null,
+            'gemini_status' => is_string($decoded['gemini_status'] ?? null) ? mb_substr($decoded['gemini_status'], 0, 80) : null,
+            'model' => is_string($decoded['model'] ?? null) ? mb_substr($decoded['model'], 0, 120) : $this->model(),
+            'provider_message' => is_string($decoded['message'] ?? null) ? mb_substr($decoded['message'], 0, 300) : '',
+        ];
+    }
+
+    private function logExtractionFailure(int $documentId, int $documentVersionId, string $stage, array $diagnostics): void
+    {
+        error_log('Contract metadata extraction failed: ' . json_encode([
+            'document_id' => $documentId,
+            'document_version_id' => $documentVersionId,
+            'failure_stage' => $stage,
+            'http_status' => $diagnostics['http_status'] ?? null,
+            'gemini_status' => $diagnostics['gemini_status'] ?? null,
+            'model' => $diagnostics['model'] ?? $this->model(),
+        ], JSON_UNESCAPED_SLASHES));
+    }
+
     private function streamStatus(array $headers): int
     {
         foreach ($headers as $header) {
@@ -409,16 +442,28 @@ final class ContractMetadataExtractionService
         return 0;
     }
 
-    private function activity(string $event, string $title, int $documentId, int $userId): void
+    private function activity(string $event, string $title, int $documentId, int $userId, ?int $documentVersionId = null, ?string $stage = null, array $diagnostics = []): void
     {
         try {
+            $metadata = ['document_id' => $documentId];
+            if ($documentVersionId !== null && $documentVersionId > 0) {
+                $metadata['document_version_id'] = $documentVersionId;
+            }
+            if ($stage !== null && $stage !== '') {
+                $metadata['failure_stage'] = $stage;
+            }
+            foreach ($diagnostics as $key => $value) {
+                if (is_scalar($value) || $value === null) {
+                    $metadata[$key] = is_string($value) ? mb_substr($value, 0, 300) : $value;
+                }
+            }
             $this->pdo->prepare("INSERT INTO activity_event (event_uuid, module_code, entity_type, entity_id, event_type, event_title, event_description, actor_user_id, visibility_scope, metadata_json, occurred_at, created_at) VALUES (UUID(), 'documents', 'document', :id, :event_type, :title, :description, :user_id, 'INTERNAL', :metadata, NOW(), NOW())")->execute([
                 'id' => $documentId,
                 'event_type' => $event,
                 'title' => $title,
                 'description' => $title,
                 'user_id' => $userId,
-                'metadata' => json_encode(['document_id' => $documentId], JSON_THROW_ON_ERROR),
+                'metadata' => json_encode($metadata, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
             ]);
         } catch (Throwable) {
         }

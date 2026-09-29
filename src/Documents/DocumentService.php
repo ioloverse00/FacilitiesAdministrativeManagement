@@ -339,7 +339,7 @@ final class DocumentService
         ]) > 0;
     }
 
-    public function storeContractMetadataCandidate(int $documentId, array $candidate, int $userId): void
+    public function storeContractMetadataCandidate(int $documentId, array $candidate, int $userId, ?int $documentVersionId = null): void
     {
         $payload = [
             'agreement_reference' => $this->nullableText($candidate['agreement_reference'] ?? null, 100),
@@ -348,6 +348,9 @@ final class DocumentService
             'agreement_status' => $this->agreementStatus($candidate['agreement_status'] ?? null),
             'confidence' => is_array($candidate['confidence'] ?? null) ? $candidate['confidence'] : [],
         ];
+        if ($documentVersionId !== null && $documentVersionId > 0) {
+            $payload['source_document_version_id'] = $documentVersionId;
+        }
         $this->pdo->prepare("UPDATE document SET contract_metadata_status = 'PENDING_CONFIRMATION', contract_metadata_candidate_json = :candidate, contract_metadata_source = 'AI_EXTRACTED', updated_at = NOW() WHERE document_id = :id AND deleted_at IS NULL")->execute([
             'candidate' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
             'id' => $documentId,
@@ -355,10 +358,19 @@ final class DocumentService
         $this->logActivity('DOCUMENT_CONTRACT_METADATA_ANALYZED', 'Contract Metadata Analyzed', $documentId, $userId);
     }
 
-    public function storeContractMetadataUnavailable(int $documentId, string $stage, int $userId): void
+    public function storeContractMetadataUnavailable(int $documentId, string $stage, int $userId, ?int $documentVersionId = null, array $diagnostics = []): void
     {
+        $payload = ['failure_stage' => mb_substr($stage, 0, 80)];
+        if ($documentVersionId !== null && $documentVersionId > 0) {
+            $payload['source_document_version_id'] = $documentVersionId;
+        }
+        foreach ($diagnostics as $key => $value) {
+            if (is_scalar($value) || $value === null) {
+                $payload[$key] = is_string($value) ? mb_substr($value, 0, 300) : $value;
+            }
+        }
         $this->pdo->prepare("UPDATE document SET contract_metadata_status = 'UNAVAILABLE', contract_metadata_candidate_json = :candidate, contract_metadata_source = 'AI_UNAVAILABLE', updated_at = NOW() WHERE document_id = :id AND deleted_at IS NULL")->execute([
-            'candidate' => json_encode(['failure_stage' => mb_substr($stage, 0, 80)], JSON_THROW_ON_ERROR),
+            'candidate' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
             'id' => $documentId,
         ]);
         $this->logActivity('DOCUMENT_CONTRACT_METADATA_UNAVAILABLE', 'Contract Metadata Unavailable', $documentId, $userId);

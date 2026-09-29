@@ -386,6 +386,25 @@ final class ContractService
         return $this->show($id, $user);
     }
 
+    public function retryContractDateExtraction(int $id, array $user): ?array
+    {
+        ContractPolicy::requirePermission($user, 'contract.edit');
+        $contract = $this->row('SELECT contract_id, contract_status FROM contract WHERE contract_id = :id AND deleted_at IS NULL LIMIT 1', ['id' => $id]);
+        if ($contract === null) {
+            return null;
+        }
+        $source = $this->currentFinalizedContractDateSource($id);
+        if ($source === null) {
+            throw new DomainException('Finalize the contract document before retrying AI date extraction.');
+        }
+        $status = strtoupper((string) ($source['contract_metadata_status'] ?? ''));
+        if (!in_array($status, ['UNAVAILABLE','FAILED','ERROR','NOT_ANALYZED'], true)) {
+            throw new DomainException('AI date extraction retry is only available when extraction is unavailable.');
+        }
+        (new ContractMetadataExtractionService($this->pdo, new DocumentService($this->pdo)))->analyzeVersion((int) $source['document_id'], (int) $source['document_version_id'], $user);
+        return $this->show($id, $user);
+    }
+
     private function deleteRolledBackDocumentFiles(array $storagePaths): void
     {
         $base = realpath(StoragePath::resolveWithin('documents', 'documents'));
@@ -1233,8 +1252,19 @@ SQL);
         $this->pdo->prepare('UPDATE approval_request SET approval_status = :status, decided_at = NOW(), completed_at = NOW(), cancelled_at = IF(:cancel_status = \'RETURNED\', NOW(), cancelled_at), remarks = :remarks, updated_at = NOW() WHERE approval_request_id = :id')->execute(['status' => $requestStatus, 'cancel_status' => $requestStatus, 'remarks' => $comment, 'id' => $requestId]);
         $this->pdo->prepare("UPDATE workflow_task SET task_status = 'CANCELLED', completed_at = NOW(), completed_by_user_id = :user_id, completion_notes = :notes, updated_at = NOW() WHERE approval_request_id = :request_id AND task_status IN ('PENDING','IN_PROGRESS')")->execute(['user_id' => (int) $user['id'], 'notes' => $comment, 'request_id' => $requestId]);
         $this->pdo->prepare('UPDATE contract SET contract_status = :status, updated_by_user_id = :user_id, updated_at = NOW() WHERE contract_id = :contract_id AND contract_status = \'FOR_APPROVAL\'')->execute(['status' => $targetStatus, 'user_id' => (int) $user['id'], 'contract_id' => (int) $contract['contract_id']]);
+        if ($targetStatus === 'DRAFT') {
+            $this->reopenGoogleDocumentForRevision((int) $contract['contract_id']);
+        }
         $this->historyEvent((int) $contract['contract_id'], $event, (string) $step['step_name'] . ' ' . strtolower(str_replace('_', ' ', $requestStatus)) . '.', 'FOR_APPROVAL', $targetStatus, (int) $user['id'], ['approval_request_id' => $requestId, 'approval_step_id' => (int) $step['approval_step_id'], 'reason' => $comment]);
         $this->auditApproval($user, 'CONTRACT_APPROVAL_' . $requestStatus, $contract, $requestId, (int) $step['approval_step_id'], 'SUCCESS', $comment);
+    }
+
+    private function reopenGoogleDocumentForRevision(int $contractId): void
+    {
+        if (!$this->hasTable('contract_google_document')) {
+            return;
+        }
+        $this->pdo->prepare("UPDATE contract_google_document SET working_document_status = 'WORKING', updated_at = NOW() WHERE contract_id = :id AND working_document_status = 'FINALIZED' AND google_file_id <> '' AND synced_document_id IS NOT NULL AND synced_document_version_id IS NOT NULL")->execute(['id' => $contractId]);
     }
 
     private function completeStep(int $stepId, string $decision, ?string $comment): void
@@ -2344,6 +2374,7 @@ SQL);
         $confirmedVersionId = $schemaReady ? (int) ($row['contract_dates_source_document_version_id'] ?? 0) : 0;
         $currentVersionId = (int) ($source['document_version_id'] ?? 0);
         $candidate = is_array($source['candidate'] ?? null) ? $source['candidate'] : [];
+        $failureStage = is_scalar($candidate['failure_stage'] ?? null) ? (string) $candidate['failure_stage'] : '';
         $startDate = $this->contractDateValue($row['start_date'] ?? null);
         $endDate = $this->contractDateValue($row['end_date'] ?? null);
         $stale = $confirmedVersionId > 0 && $currentVersionId > 0 && $confirmedVersionId !== $currentVersionId;
@@ -2365,6 +2396,8 @@ SQL);
             'suggestedStartDate' => $this->candidateDate($candidate, 'effective_date'),
             'suggestedEndDate' => $this->candidateDate($candidate, 'expiration_date'),
             'candidateStatus' => (string) ($source['contract_metadata_status'] ?? 'NOT_ANALYZED'),
+            'candidateFailureStage' => $failureStage,
+            'canRetryExtraction' => $schemaReady && $source !== null && in_array((string) ($source['contract_metadata_status'] ?? ''), ['UNAVAILABLE','FAILED','ERROR','NOT_ANALYZED'], true) && ContractPolicy::hasPermission($user, 'contract.edit'),
             'sourceDocumentId' => $source['document_id'] ?? null,
             'sourceDocumentVersionId' => $currentVersionId ?: null,
             'confirmedSourceDocumentVersionId' => $confirmedVersionId ?: null,
@@ -2923,7 +2956,7 @@ SQL);
         if (!$this->hasTable('contract_google_document')) {
             return null;
         }
-        $row = $this->row("SELECT cgd.synced_document_id document_id, cgd.synced_document_version_id document_version_id, d.contract_metadata_status, d.contract_metadata_candidate_json, d.effective_date, d.expiration_date FROM contract_google_document cgd INNER JOIN document d ON d.document_id = cgd.synced_document_id AND d.deleted_at IS NULL INNER JOIN document_version dv ON dv.document_version_id = cgd.synced_document_version_id AND dv.document_id = d.document_id AND dv.deleted_at IS NULL WHERE cgd.contract_id = :id AND cgd.working_document_status = 'FINALIZED' AND cgd.synced_document_id IS NOT NULL AND cgd.synced_document_version_id IS NOT NULL LIMIT 1", ['id' => $contractId]);
+        $row = $this->row("SELECT cgd.synced_document_id document_id, cgd.synced_document_version_id document_version_id, d.contract_metadata_status, d.contract_metadata_source, d.contract_metadata_candidate_json, d.effective_date, d.expiration_date FROM contract_google_document cgd INNER JOIN document d ON d.document_id = cgd.synced_document_id AND d.deleted_at IS NULL INNER JOIN document_version dv ON dv.document_version_id = cgd.synced_document_version_id AND dv.document_id = d.document_id AND dv.deleted_at IS NULL WHERE cgd.contract_id = :id AND cgd.working_document_status = 'FINALIZED' AND cgd.synced_document_id IS NOT NULL AND cgd.synced_document_version_id IS NOT NULL LIMIT 1", ['id' => $contractId]);
         if (!is_array($row)) {
             return null;
         }
@@ -2935,6 +2968,13 @@ SQL);
             } catch (Throwable) {
                 $candidate = [];
             }
+        }
+        $candidateVersionId = (int) ($candidate['source_document_version_id'] ?? 0);
+        if ($candidate !== [] && $candidateVersionId > 0 && $candidateVersionId !== (int) $row['document_version_id']) {
+            $candidate = [];
+        }
+        if ($candidate !== [] && $candidateVersionId < 1 && (string) ($row['contract_metadata_status'] ?? '') === 'PENDING_CONFIRMATION') {
+            $candidate = [];
         }
         return $row + ['candidate' => $candidate];
     }
