@@ -552,7 +552,7 @@ final class LegalMatterService
         if ($hasFailureReason && str_contains($reason, 'TIMEOUT')) {
             return 'TIMEOUT';
         }
-        if ($hasFailureReason && (str_contains($reason, 'RATE_LIMIT') || str_contains($reason, 'QUOTA') || $reason === 'GEMINI_HTTP_429')) {
+        if ($hasFailureReason && (str_contains($reason, 'RATE_LIMIT') || str_contains($reason, 'QUOTA') || str_contains($reason, 'HTTP_429'))) {
             return 'RATE_LIMITED';
         }
         if ($event === 'LEGAL_AI_PARTIES_FAILED' || $hasFailureReason || str_contains(strtolower((string) ($row['description'] ?? '')), 'could not be completed')) {

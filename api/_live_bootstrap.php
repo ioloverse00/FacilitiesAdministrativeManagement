@@ -22,7 +22,6 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATO
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterSummaryService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterPartyService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterActionService.php';
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterActionExtractionService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterAiAnalysisService.php';
 
 function currentApiUser(): array
@@ -118,11 +117,6 @@ function legalMatterActionService(): LegalMatterActionService
 {
     $connection = Database::connection();
     return new LegalMatterActionService($connection, new FamEmployeeEligibilityService($connection));
-}
-
-function legalMatterActionExtractionService(): LegalMatterActionExtractionService
-{
-    return new LegalMatterActionExtractionService(Database::connection());
 }
 
 function legalMatterAiAnalysisService(): LegalMatterAiAnalysisService

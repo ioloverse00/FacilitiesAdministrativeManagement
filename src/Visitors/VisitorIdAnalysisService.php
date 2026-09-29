@@ -77,8 +77,8 @@ final class VisitorIdAnalysisService
 
     private function assertConfigured(): void
     {
-        if (trim((string) env('GEMINI_API_KEY', '')) === '') {
-            throw new RuntimeException('GEMINI_KEY_MISSING');
+        if ($this->apiKey() === '') {
+            throw new RuntimeException('AI_KEY_MISSING');
         }
     }
 
@@ -138,7 +138,7 @@ final class VisitorIdAnalysisService
         $diagnostics = [
             'timestamp' => gmdate('c'),
             'stage' => 'CAPTURE',
-            'provider' => 'GEMINI',
+            'provider' => 'OPENAI',
             'model' => $this->model(),
             'image' => [
                 'width' => $image['width'] ?? null,
@@ -161,49 +161,44 @@ final class VisitorIdAnalysisService
         } catch (Throwable $e) {
             $diagnostics['latency_ms'] = (int) round((microtime(true) - $started) * 1000);
             $diagnostics['failure_stage'] = $this->safeFailureStage($e->getMessage());
-            $diagnostics['gemini_error'] = $this->safeGeminiErrorDetails($e->getMessage());
+            $diagnostics['openai_error'] = $this->safeProviderErrorDetails($e->getMessage());
             throw $e;
         }
     }
 
     private function requestVision(array $image): array
     {
-        $response = $this->postJson($this->geminiEndpoint(), $this->geminiPayload($image));
+        $response = $this->postJson($this->endpoint(), $this->payload($image));
         $text = $this->extractOutputText($response);
         $decoded = json_decode($text, true);
         if (!is_array($decoded)) {
-            throw new RuntimeException('GEMINI_RESPONSE_INVALID');
+            throw new RuntimeException('AI_RESPONSE_INVALID');
         }
         return $decoded;
     }
 
-    private function geminiEndpoint(): string
-    {
-        $model = trim((string) env('GEMINI_VISITOR_ID_MODEL', 'gemini-3.6-flash'));
-        if ($model === '') {
-            $model = 'gemini-3.6-flash';
-        }
-        $modelPath = str_starts_with($model, 'models/') ? $model : 'models/' . rawurlencode($model);
-        return 'https://generativelanguage.googleapis.com/v1beta/' . $modelPath . ':generateContent?key=' . rawurlencode(trim((string) env('GEMINI_API_KEY', '')));
-    }
-
-    private function geminiPayload(array $image): array
+    private function payload(array $image): array
     {
         return [
-            'contents' => [[
+            'model' => $this->model(),
+            'store' => false,
+            'input' => [[
                 'role' => 'user',
-                'parts' => [
-                    ['text' => $this->instructions()],
-                    ['inline_data' => [
-                        'mime_type' => (string) ($image['mime'] ?? 'image/jpeg'),
-                        'data' => (string) ($image['base64'] ?? ''),
-                    ]],
+                'content' => [
+                    ['type' => 'input_text', 'text' => $this->instructions()],
+                    [
+                        'type' => 'input_image',
+                        'image_url' => 'data:' . (string) ($image['mime'] ?? 'image/jpeg') . ';base64,' . (string) ($image['base64'] ?? ''),
+                    ],
                 ],
             ]],
-            'generationConfig' => [
-                'temperature' => 0,
-                'response_mime_type' => 'application/json',
-                'response_schema' => $this->schema(),
+            'text' => [
+                'format' => [
+                    'type' => 'json_schema',
+                    'name' => 'visitor_id_extraction',
+                    'strict' => true,
+                    'schema' => $this->schema(),
+                ],
             ],
         ];
     }
@@ -217,8 +212,9 @@ final class VisitorIdAnalysisService
         $headers = [
             'Content-Type: application/json',
             'Accept: application/json',
+            'Authorization: Bearer ' . $this->apiKey(),
         ];
-        $timeout = max(5, (int) env('GEMINI_VISITOR_ID_TIMEOUT_SECONDS', 30));
+        $timeout = max(5, (int) env('OPENAI_VISITOR_ID_TIMEOUT_SECONDS', 30));
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
@@ -231,9 +227,10 @@ final class VisitorIdAnalysisService
             $raw = curl_exec($ch);
             $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             $error = curl_error($ch);
+            $errorCode = (int) curl_errno($ch);
             curl_close($ch);
             if ($raw === false || $status < 200 || $status >= 300) {
-                throw new RuntimeException($this->geminiError($raw ?: '', $status, $error, $url, $payload));
+                throw new RuntimeException($this->httpFailureReason((string) ($raw ?: ''), $status, $error, $errorCode));
             }
             return $this->decodeResponse((string) $raw);
         }
@@ -250,7 +247,7 @@ final class VisitorIdAnalysisService
         $raw = file_get_contents($url, false, $context);
         $status = $this->streamStatus($http_response_header ?? []);
         if ($raw === false || $status < 200 || $status >= 300) {
-            throw new RuntimeException($this->geminiError((string) $raw, $status, '', $url, $payload));
+            throw new RuntimeException($this->httpFailureReason((string) $raw, $status, '', 0));
         }
         return $this->decodeResponse((string) $raw);
     }
@@ -259,42 +256,41 @@ final class VisitorIdAnalysisService
     {
         $decoded = json_decode($raw, true);
         if (!is_array($decoded)) {
-            throw new RuntimeException('GEMINI_RESPONSE_INVALID');
+            throw new RuntimeException('AI_RESPONSE_INVALID');
         }
         return $decoded;
     }
 
-    private function geminiError(string $raw, int $status, string $transportError, string $url, array $payload): string
+    private function httpFailureReason(string $raw, int $status, string $transportError, int $transportErrorCode): string
     {
-        $category = 'GEMINI_REQUEST_FAILED';
-        if ($transportError !== '') {
-            $category = 'GEMINI_TRANSPORT_ERROR';
-        } elseif ($status === 400) {
-            $category = 'GEMINI_HTTP_400';
-        } elseif ($status === 401 || $status === 403) {
-            $category = 'GEMINI_KEY_INVALID';
-        } elseif ($status === 404) {
-            $category = 'GEMINI_MODEL_INVALID';
-        } elseif ($status === 408 || $status === 504) {
-            $category = 'GEMINI_TIMEOUT';
-        } elseif ($status === 429) {
-            $category = 'GEMINI_QUOTA_OR_RATE_LIMIT';
-        } elseif ($status >= 500) {
-            $category = 'GEMINI_SERVICE_UNAVAILABLE';
-        } elseif ($status > 0) {
-            $category = 'GEMINI_HTTP_' . $status;
-        }
         $decoded = json_decode($raw, true);
         $error = is_array($decoded) && is_array($decoded['error'] ?? null) ? $decoded['error'] : [];
+        $providerType = is_string($error['type'] ?? null) ? $error['type'] : null;
+        $providerCode = is_string($error['code'] ?? null) ? $error['code'] : null;
+        $timedOut = $transportErrorCode > 0 && defined('CURLE_OPERATION_TIMEDOUT') && $transportErrorCode === CURLE_OPERATION_TIMEDOUT;
+        $category = match (true) {
+            $timedOut => 'AI_TIMEOUT',
+            $transportError !== '' => 'AI_SERVICE_UNAVAILABLE',
+            in_array($providerCode, ['model_not_found', 'invalid_model'], true) => 'AI_MODEL_INVALID',
+            $providerType === 'authentication_error' || $providerType === 'permission_error' => 'AI_AUTH_ERROR',
+            $providerType === 'rate_limit_error' => 'AI_RATE_LIMITED',
+            $status === 401 || $status === 403 => 'AI_AUTH_ERROR',
+            $status === 404 => 'AI_MODEL_INVALID',
+            $status === 408 || $status === 504 => 'AI_TIMEOUT',
+            $status === 429 => 'AI_RATE_LIMITED',
+            $status === 0 => 'AI_SERVICE_UNAVAILABLE',
+            $status >= 500 => 'AI_SERVICE_UNAVAILABLE',
+            default => 'AI_REQUEST_FAILED',
+        };
         $details = [
             'category' => $category,
             'http_status' => $status,
-            'gemini_status' => is_string($error['status'] ?? null) ? $error['status'] : null,
-            'gemini_code' => isset($error['code']) ? (int) $error['code'] : null,
-            'message' => $this->sanitizeGeminiMessage(is_string($error['message'] ?? null) ? $error['message'] : $transportError),
+            'provider_type' => $providerType,
+            'provider_code' => $providerCode,
+            'message' => $this->sanitizeProviderMessage(is_string($error['message'] ?? null) ? $error['message'] : $transportError),
             'model' => $this->model(),
-            'endpoint_path' => (string) parse_url($url, PHP_URL_PATH),
-            'structured_schema_included' => isset($payload['generationConfig']['response_schema']),
+            'endpoint_path' => '/v1/responses',
+            'structured_schema_included' => true,
         ];
         return $category . ' ' . json_encode($details, JSON_UNESCAPED_SLASHES);
     }
@@ -305,7 +301,7 @@ final class VisitorIdAnalysisService
         return is_string($category) && preg_match('/^[A-Z0-9_]+$/', $category) ? $category : 'AI_REQUEST_FAILED';
     }
 
-    private function safeGeminiErrorDetails(string $message): ?array
+    private function safeProviderErrorDetails(string $message): ?array
     {
         $jsonStart = strpos($message, '{');
         if ($jsonStart === false) {
@@ -315,10 +311,10 @@ final class VisitorIdAnalysisService
         return is_array($decoded) ? $decoded : null;
     }
 
-    private function sanitizeGeminiMessage(string $message): string
+    private function sanitizeProviderMessage(string $message): string
     {
-        $message = preg_replace('/key=[^&\s]+/i', 'key=[redacted]', $message) ?? $message;
-        $message = preg_replace('/AIza[0-9A-Za-z_\-]+/', '[redacted-api-key]', $message) ?? $message;
+        $message = preg_replace('/Bearer\s+[A-Za-z0-9._\-]+/i', 'Bearer [redacted]', $message) ?? $message;
+        $message = preg_replace('/sk-[A-Za-z0-9_\-]+/', '[redacted-api-key]', $message) ?? $message;
         $message = preg_replace('/[A-Za-z0-9+\/]{120,}={0,2}/', '[redacted-long-token]', $message) ?? $message;
         return trim($message);
     }
@@ -335,11 +331,27 @@ final class VisitorIdAnalysisService
 
     private function extractOutputText(array $response): string
     {
+        $status = (string) ($response['status'] ?? '');
+        if ($status !== '' && !in_array($status, ['completed', 'incomplete'], true)) {
+            throw new RuntimeException($this->responseFailureReason($response));
+        }
+        if ($status === 'incomplete') {
+            throw new RuntimeException('AI_RESPONSE_INVALID');
+        }
+        if (is_array($response['error'] ?? null)) {
+            throw new RuntimeException($this->responseFailureReason($response));
+        }
+        if (isset($response['output_text']) && is_string($response['output_text']) && trim($response['output_text']) !== '') {
+            return trim($response['output_text']);
+        }
         $parts = [];
-        foreach (($response['candidates'] ?? []) as $candidate) {
-            foreach (($candidate['content']['parts'] ?? []) as $part) {
-                if (isset($part['text']) && is_string($part['text'])) {
-                    $parts[] = $part['text'];
+        foreach (($response['output'] ?? []) as $item) {
+            foreach (($item['content'] ?? []) as $content) {
+                if (isset($content['refusal']) && is_string($content['refusal']) && trim($content['refusal']) !== '') {
+                    throw new RuntimeException('AI_RESPONSE_INVALID');
+                }
+                if (isset($content['text']) && is_string($content['text'])) {
+                    $parts[] = $content['text'];
                 }
             }
         }
@@ -348,7 +360,28 @@ final class VisitorIdAnalysisService
             $text = preg_replace('/^```(?:json)?\s*/i', '', $text) ?? $text;
             $text = preg_replace('/\s*```$/', '', $text) ?? $text;
         }
-        return trim($text);
+        $text = trim($text);
+        if ($text === '') {
+            throw new RuntimeException('AI_RESPONSE_INVALID');
+        }
+        return $text;
+    }
+
+    private function responseFailureReason(array $response): string
+    {
+        $error = is_array($response['error'] ?? null) ? $response['error'] : [];
+        $providerType = is_string($error['type'] ?? null) ? $error['type'] : null;
+        $providerCode = is_string($error['code'] ?? null) ? $error['code'] : null;
+        if (in_array($providerCode, ['model_not_found', 'invalid_model'], true)) {
+            return 'AI_MODEL_INVALID';
+        }
+        if ($providerType === 'authentication_error' || $providerType === 'permission_error') {
+            return 'AI_AUTH_ERROR';
+        }
+        if ($providerType === 'rate_limit_error') {
+            return 'AI_RATE_LIMITED';
+        }
+        return 'AI_RESPONSE_INVALID';
     }
 
     private function sanitizeResult(array $result): array
@@ -517,8 +550,18 @@ final class VisitorIdAnalysisService
 
     private function model(): string
     {
-        $model = trim((string) env('GEMINI_VISITOR_ID_MODEL', 'gemini-3.6-flash'));
-        return $model === '' ? 'gemini-3.6-flash' : $model;
+        $model = trim((string) env('OPENAI_VISITOR_ID_MODEL', 'gpt-6-sol'));
+        return $model === '' ? 'gpt-6-sol' : $model;
+    }
+
+    private function endpoint(): string
+    {
+        return 'https://api.openai.com/v1/responses';
+    }
+
+    private function apiKey(): string
+    {
+        return trim((string) env('OPENAI_API_KEY', ''));
     }
 
     private function diagnosticsEnabled(): bool
@@ -611,15 +654,16 @@ final class VisitorIdAnalysisService
     private function schema(): array
     {
         return [
-            'type' => 'OBJECT',
-            'required' => ['document_detected', 'full_name', 'id_type', 'id_last4', 'needs_review'],
+            'type' => 'object',
             'properties' => [
-                'document_detected' => ['type' => 'BOOLEAN'],
-                'full_name' => ['type' => 'STRING', 'nullable' => true],
-                'id_type' => ['type' => 'STRING', 'nullable' => true, 'enum' => $this->allowedIdTypes()],
-                'id_last4' => ['type' => 'STRING', 'nullable' => true],
-                'needs_review' => ['type' => 'BOOLEAN'],
+                'document_detected' => ['type' => 'boolean'],
+                'full_name' => ['type' => ['string', 'null']],
+                'id_type' => ['type' => ['string', 'null'], 'enum' => [...$this->allowedIdTypes(), null]],
+                'id_last4' => ['type' => ['string', 'null']],
+                'needs_review' => ['type' => 'boolean'],
             ],
+            'required' => ['document_detected', 'full_name', 'id_type', 'id_last4', 'needs_review'],
+            'additionalProperties' => false,
         ];
     }
 
@@ -627,8 +671,10 @@ final class VisitorIdAnalysisService
     {
         return implode("\n", [
             'Analyze only the supplied visitor ID image. Use the visual layout of the ID, not OCR text order alone.',
+            'This is assistive field extraction only. Do not authenticate the ID, judge whether it is genuine, match the ID photo to a person, perform biometric verification, decide whether the visitor may enter, or make any access-control decision.',
             'Extract only the actual card holder full name, the canonical ID type, and the last four characters of the relevant visible ID number when reliable.',
-            'Do not extract address, birth date, sex, nationality, signature, photo biometrics, full ID number, or unrelated fields.',
+            'Extract only clearly visible/readable information. Do not infer obscured, cropped, blurred, hidden, or unreadable characters.',
+            'Do not extract address, birth date, sex, nationality, signature, photo biometrics, full ID number, issuing authority, expiry date, or unrelated fields.',
             'Null is better than wrong: if you cannot confidently distinguish the actual person name from labels, return full_name=null and needs_review=true.',
             'Field labels are never names. Never return these labels by themselves: ' . implode(', ', self::FORBIDDEN_NAME_LABELS) . '.',
             'Driver license layout rule: strings such as LAST NAME FIRST NAME MIDDLE NAMES are labels. The real name value is usually printed near, beneath, or beside that label. If the nearby value is unreadable, return full_name=null.',
@@ -636,7 +682,7 @@ final class VisitorIdAnalysisService
             'Government/National/Professional ID layout rule: use the card holder name value near name labels. Do not return Republic of the Philippines, agency names, or document titles as the name.',
             'Company/School ID layout rule: use the employee/student/person name value, not school/company names, department labels, or ID card titles.',
             'ID type mapping: use only these id_type values when confident: ' . implode(', ', $this->allowedIdTypes()) . '. If the ID type is a Philippine National ID, PRC, or other government/professional ID, use GOVERNMENT_ID. If uncertain, use OTHER or null.',
-            'ID last four rule: return only the final four alphanumeric characters of the relevant ID/license/passport/student/employee number when reasonably confident. Do not output the full ID number.',
+            'ID last four rule: return only the final four clearly visible alphanumeric characters of the relevant ID/license/passport/student/employee number when reasonably confident. Do not infer hidden characters. Do not use unrelated serial, reference, date, address, or document-control numbers. Do not output the full ID number. If the actual ID number cannot be identified reliably, return id_last4=null.',
             'Few-shot guidance: observed text "LAST NAME FIRST NAME MIDDLE NAMES" means field label, not person name. Correct extraction is the printed value aligned near that label, for example "JUAN DELA CRUZ"; if that value is missing or unclear, full_name=null.',
             'Return only the strict schema result. Do not return prose or reasoning.',
         ]);

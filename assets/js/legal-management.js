@@ -501,7 +501,6 @@
 
     function aiSummaryHtml(item) {
         const status = item.aiSummaryStatus || 'NOT_REQUESTED';
-        const failureReason = item.aiSummaryFailureReason || '';
         const docs = item.supportingDocuments || [];
         const canRegenerate = docs.length > 0 && !isMatterReadOnly(item) && (can('legal.edit') || can('legal.manage'));
         const button = canRegenerate ? `<button class="btn-secondary dashboard-action-button legal-ai-summary-action" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Re-analyze AI</button>` : '';
@@ -511,13 +510,7 @@
         } else if (status === 'PENDING') {
             content = '<p>Analyzing summary...</p><small>Refresh this matter in a moment to see the generated summary.</small>';
         } else if (status === 'FAILED') {
-            if (failureReason === 'GEMINI_TIMEOUT') {
-                content = '<p>AI summary generation timed out. Try again.</p>';
-            } else if (failureReason === 'GEMINI_QUOTA_OR_RATE_LIMIT') {
-                content = '<p>AI summary is temporarily unavailable due to provider limits.</p>';
-            } else {
-                content = '<p>AI summary could not be generated. Review the supporting documents directly.</p>';
-            }
+            content = '<p>AI summary could not be generated. Review the supporting documents directly.</p>';
         } else if (status === 'NO_READABLE_SOURCE') {
             content = '<p>No readable supporting documents are available for AI summarization.</p>';
         } else if (status === 'STALE') {
@@ -1006,17 +999,14 @@
             if (type === 'edit-party-suggestion') fetchItem(id).then(item => { state.activeItem = item; openPartyForm(item, (item.partySuggestions || []).find(s => Number(s.id) === Number(action.dataset.suggestionId))); }).catch(console.error);
             if (type === 'accept-party-suggestion') acceptPartySuggestion(id, Number(action.dataset.suggestionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to accept party suggestion.'));
             if (type === 'dismiss-party-suggestion') dismissPartySuggestion(id, Number(action.dataset.suggestionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to dismiss party suggestion.'));
-            if (type === 'reanalyze-parties') reanalyzeParties(id).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to analyze parties.'));
             if (type === 'reanalyze-ai') reanalyzeAi(id).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to analyze legal matter.'));
             if (type === 'add-action') fetchItem(id).then(item => { state.activeItem = item; openActionForm(item); }).catch(console.error);
             if (type === 'edit-action') fetchItem(id).then(item => { state.activeItem = item; openActionForm(item, (item.actions || []).find(record => Number(record.id) === Number(action.dataset.actionId))); }).catch(console.error);
             if (type === 'review-action-suggestion') fetchItem(id).then(item => { state.activeItem = item; openActionForm(item, null, (item.actionSuggestions || []).find(record => Number(record.id) === Number(action.dataset.suggestionId))); }).catch(console.error);
             if (type === 'dismiss-action-suggestion') dismissActionSuggestion(id, Number(action.dataset.suggestionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to dismiss action suggestion.'));
-            if (type === 'reanalyze-actions') reanalyzeActions(id).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to analyze actions.'));
             if (type === 'start-action') startAction(id, Number(action.dataset.actionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to start action.'));
             if (type === 'complete-action') completeAction(id, Number(action.dataset.actionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to complete action.'));
             if (type === 'cancel-action') cancelAction(id, Number(action.dataset.actionId)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to cancel action.'));
-            if (type === 'regenerate-summary') regenerateSummary(id).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to refresh AI summary.'));
             if (['start_review', 'start_processing', 'resolve', 'close', 'cancel', 'reopen'].includes(type)) transition(id, type).catch(error => window.FAMModal?.showToast?.(validationMessage(error, 'Unable to update matter.')));
         });
         document.addEventListener('submit', event => {
@@ -1050,14 +1040,6 @@
         });
     }
 
-    async function regenerateSummary(id) {
-        if (!await window.FAMModal.confirm('Regenerate the AI matter summary from the current supporting documents?', { title: 'Regenerate AI Summary', confirmLabel: 'Regenerate' })) return;
-        const payload = await window.FAMApi.request(api(`legal/regenerate-summary.php?id=${id}`), { method: 'POST', body: {} });
-        window.FAMModal?.showToast?.(payload.message || 'AI matter summary updated.', payload.data?.ai_summary_status === 'READY' ? {} : { type: 'error' });
-        await load();
-        if (qs('#legal-details-modal')?.hidden === false) await openDetails(id);
-    }
-
     async function reanalyzeAi(id) {
         if (state.aiInitialJobs.has(id)) return;
         if (!await window.FAMModal.confirm('Analyze linked supporting documents for summary, parties, and action suggestions?', { title: 'Re-analyze AI', confirmLabel: 'Analyze' })) return;
@@ -1073,24 +1055,6 @@
         } finally {
             state.aiInitialJobs.delete(id);
         }
-    }
-
-    async function reanalyzeParties(id) {
-        if (!await window.FAMModal.confirm('Analyze linked supporting documents for party suggestions?', { title: 'Re-analyze Parties', confirmLabel: 'Analyze' })) return;
-        const payload = await window.FAMApi.request(api(`legal/analyze-parties.php?id=${id}`), { method: 'POST', body: {} });
-        const status = payload.data?.item?.aiPartiesStatus || '';
-        window.FAMModal?.showToast?.(payload.message || 'AI party suggestions updated.', ['FAILED', 'TIMEOUT', 'RATE_LIMITED'].includes(status) ? { type: 'error' } : {});
-        await load();
-        if (qs('#legal-details-modal')?.hidden === false) await openDetails(id);
-    }
-
-    async function reanalyzeActions(id) {
-        if (!await window.FAMModal.confirm('Analyze linked supporting documents for action and deadline suggestions?', { title: 'Re-analyze Actions', confirmLabel: 'Analyze' })) return;
-        const payload = await window.FAMApi.request(api(`legal/analyze-actions.php?id=${id}`), { method: 'POST', body: {} });
-        const status = payload.data?.item?.aiActionsStatus || '';
-        window.FAMModal?.showToast?.(payload.message || 'AI action suggestions updated.', ['FAILED', 'TIMEOUT', 'RATE_LIMITED'].includes(status) ? { type: 'error' } : {});
-        await load();
-        if (qs('#legal-details-modal')?.hidden === false) await openDetails(id);
     }
 
     async function analyzeContractMetadata(matterId, documentId) {

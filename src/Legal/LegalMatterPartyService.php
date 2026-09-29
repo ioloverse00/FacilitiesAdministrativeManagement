@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 final class LegalMatterPartyService
 {
-    private const READABLE_MIME = ['application/pdf', 'image/jpeg', 'image/png'];
-    private const MAX_SOURCE_BYTES = 12_000_000;
-
     public const PARTY_ROLES = [
         'REPORTING_PARTY',
         'COMPLAINANT',
@@ -196,38 +193,6 @@ final class LegalMatterPartyService
         return $this->matterWithParties((int) $suggestion['legal_matter_id']);
     }
 
-    public function analyze(int $matterId, array $user): ?array
-    {
-        $matter = $this->matter($matterId);
-        if ($matter === null) {
-            return null;
-        }
-        $this->assertMatterNotClosed($matter);
-        $sources = $this->readableSources($matter);
-        if (!$sources) {
-            $this->history($matterId, 'LEGAL_AI_PARTIES_ANALYZED', 'AI party analysis skipped because no readable supporting documents were available.', ['suggestion_count' => 0], $user);
-            return $this->matterWithParties($matterId);
-        }
-
-        $created = 0;
-        try {
-            $result = $this->requestExtraction($matter, $sources);
-            foreach (($result['parties'] ?? []) as $candidate) {
-                $clean = $this->validateSuggestionCandidate($candidate);
-                if ($clean === null || $this->duplicateSuggestionOrPartyExists($matterId, $clean)) {
-                    continue;
-                }
-                $this->insertAiParty($matterId, $clean);
-                $created++;
-            }
-            $this->history($matterId, 'LEGAL_AI_PARTIES_ANALYZED', "AI party analysis populated $created new part" . ($created === 1 ? 'y.' : 'ies.'), ['party_count' => $created, 'needs_review' => (bool) ($result['needs_review'] ?? true)], $user);
-            $this->activity('LEGAL_AI_PARTIES_ANALYZED', 'AI Parties Populated', 'AI party extraction updated parties involved.', $matterId, (string) $matter['matter_number'], $user);
-        } catch (Throwable $exception) {
-            $this->history($matterId, 'LEGAL_AI_PARTIES_FAILED', 'AI party analysis could not be completed.', ['reason' => $this->safeFailureStage($exception->getMessage())], $user);
-        }
-        return $this->matterWithParties($matterId);
-    }
-
     public function markPending(int $matterId, array $user): void
     {
         $matter = $this->matter($matterId);
@@ -288,180 +253,6 @@ final class LegalMatterPartyService
             'notes' => $this->nullableText($data['notes'] ?? null, 2000),
             'source_document_id' => $this->optionalId($data['source_document_id'] ?? null),
         ];
-    }
-
-    private function validateSuggestionCandidate(array $candidate): ?array
-    {
-        $name = $this->nullableText($candidate['name'] ?? null, 255);
-        $organization = $this->nullableText($candidate['organization'] ?? null, 255);
-        if ($name === null && $organization === null) return null;
-        $role = strtoupper($this->text($candidate['suggested_role'] ?? 'PERSON_INVOLVED', 40));
-        $type = strtoupper($this->text($candidate['suggested_type'] ?? 'EXTERNAL_PERSON', 40));
-        if (!in_array($role, self::PARTY_ROLES, true)) $role = 'PERSON_INVOLVED';
-        if (!in_array($type, self::PARTY_TYPES, true)) $type = 'EXTERNAL_PERSON';
-        if ($role === 'RESPONDENT' && empty($candidate['explicit_role_supported'])) {
-            $role = 'PERSON_INVOLVED';
-        }
-        return [
-            'name' => $name ?? $organization,
-            'organization' => $organization,
-            'suggested_role' => $role,
-            'suggested_type' => $type,
-            'context' => $this->nullableText($candidate['context'] ?? null, 1500),
-            'confidence' => in_array(strtoupper((string) ($candidate['confidence'] ?? '')), ['LOW', 'MEDIUM', 'HIGH'], true) ? strtoupper((string) $candidate['confidence']) : null,
-            'source_document_id' => isset($candidate['source_document_id']) && ctype_digit((string) $candidate['source_document_id']) ? (int) $candidate['source_document_id'] : null,
-            'source_document_reference' => $this->nullableText($candidate['source_document_reference'] ?? null, 80),
-        ];
-    }
-
-    private function insertSuggestion(int $matterId, array $clean): void
-    {
-        $this->pdo->prepare("INSERT INTO legal_matter_party_suggestion (legal_matter_id, suggestion_hash, suggested_name, suggested_organization, suggested_party_role, suggested_party_type, context, confidence, source_document_id, source_document_reference, status, created_at, updated_at) VALUES (:matter_id, :hash, :name, :organization, :role, :type, :context, :confidence, :source_document_id, :source_document_reference, 'PENDING', NOW(), NOW())")->execute([
-            'matter_id' => $matterId,
-            'hash' => $this->suggestionHash($matterId, $clean),
-            'name' => $clean['name'],
-            'organization' => $clean['organization'],
-            'role' => $clean['suggested_role'],
-            'type' => $clean['suggested_type'],
-            'context' => $clean['context'],
-            'confidence' => $clean['confidence'],
-            'source_document_id' => $clean['source_document_id'],
-            'source_document_reference' => $clean['source_document_reference'],
-        ]);
-    }
-
-    private function insertAiParty(int $matterId, array $clean): void
-    {
-        $this->pdo->prepare("INSERT INTO legal_matter_party (legal_matter_id, party_role, party_type, external_name, organization_name, notes, source_document_id, ai_suggested, party_source, review_status, created_at, updated_at) VALUES (:matter_id, :role, :type, :name, :organization, :notes, :source_document_id, 1, 'AI', 'PENDING_REVIEW', NOW(), NOW())")->execute([
-            'matter_id' => $matterId,
-            'role' => $clean['suggested_role'],
-            'type' => $clean['suggested_type'],
-            'name' => $clean['name'],
-            'organization' => $clean['organization'],
-            'notes' => $clean['context'],
-            'source_document_id' => $clean['source_document_id'],
-        ]);
-    }
-
-    private function readableSources(array $matter): array
-    {
-        $service = $this->documentService ?? new DocumentService($this->pdo);
-        $documents = $service->currentRelatedFiles('LEGAL_MANAGEMENT', (string) $matter['matter_number']);
-        $selected = [];
-        $total = 0;
-        foreach ($documents as $document) {
-            $path = (string) ($document['absolutePath'] ?? '');
-            $mime = (string) ($document['mimeType'] ?? '');
-            $size = (int) ($document['fileSize'] ?? 0);
-            if (!in_array($mime, self::READABLE_MIME, true) || $path === '' || !is_file($path) || $size <= 0 || $total + $size > self::MAX_SOURCE_BYTES) {
-                continue;
-            }
-            $bytes = file_get_contents($path);
-            if ($bytes === false || $bytes === '') continue;
-            $document['base64'] = base64_encode($bytes);
-            $selected[] = $document;
-            $total += $size;
-        }
-        return $selected;
-    }
-
-    private function requestExtraction(array $matter, array $sources): array
-    {
-        if (trim((string) env('GEMINI_API_KEY', '')) === '') {
-            throw new RuntimeException('GEMINI_KEY_MISSING');
-        }
-        $response = $this->postJson($this->geminiEndpoint(), $this->geminiPayload($matter, $sources));
-        $text = trim(implode("\n", array_map(static fn (array $candidate): string => implode("\n", array_column($candidate['content']['parts'] ?? [], 'text')), $response['candidates'] ?? [])));
-        $text = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', $text) ?? $text;
-        $decoded = json_decode(trim($text), true);
-        if (!is_array($decoded)) throw new RuntimeException('GEMINI_RESPONSE_INVALID');
-        return $decoded;
-    }
-
-    private function geminiPayload(array $matter, array $sources): array
-    {
-        $parts = [['text' => $this->instructions($matter)]];
-        foreach ($sources as $index => $source) {
-            $parts[] = ['text' => 'Source ' . ($index + 1) . ': document_id=' . (int) $source['id'] . ', reference=' . (string) $source['documentNo'] . ', title=' . (string) $source['title']];
-            $parts[] = ['inline_data' => ['mime_type' => (string) $source['mimeType'], 'data' => (string) $source['base64']]];
-        }
-        return [
-            'contents' => [['role' => 'user', 'parts' => $parts]],
-            'generationConfig' => [
-                'temperature' => 0,
-                'response_mime_type' => 'application/json',
-                'response_schema' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'parties' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
-                            'name' => ['type' => 'string', 'nullable' => true],
-                            'organization' => ['type' => 'string', 'nullable' => true],
-                            'suggested_type' => ['type' => 'string'],
-                            'suggested_role' => ['type' => 'string'],
-                            'context' => ['type' => 'string'],
-                            'confidence' => ['type' => 'string'],
-                            'source_document_id' => ['type' => 'integer', 'nullable' => true],
-                            'source_document_reference' => ['type' => 'string', 'nullable' => true],
-                            'explicit_role_supported' => ['type' => 'boolean'],
-                        ]]],
-                        'needs_review' => ['type' => 'boolean'],
-                    ],
-                    'required' => ['parties', 'needs_review'],
-                ],
-            ],
-        ];
-    }
-
-    private function instructions(array $matter): string
-    {
-        return "Identify people or organizations clearly mentioned in the supporting evidence for this Legal Matter. Matter title is context only: " . (string) $matter['title'] . "\n\n"
-            . "Return only party candidates supported by the supplied linked documents. Describe only the explicitly supported relationship to the matter.\n\n"
-            . "Canonical roles: " . implode(', ', self::PARTY_ROLES) . ". Canonical types: " . implode(', ', self::PARTY_TYPES) . ". Prefer PERSON_INVOLVED when the role is unclear. Do NOT assign RESPONDENT unless the source explicitly characterizes that party as respondent or equivalent.\n\n"
-            . "Do NOT infer guilt, fault, liability, responsibility, criminal involvement, wrongdoing, complainant status, or respondent status. A person being present, associated with a reservation, or mentioned in an incident report does not make them responsible. Do not invent names, organizations, titles, or relationships.\n\n"
-            . "For every candidate include a short neutral context sentence and confidence LOW, MEDIUM, or HIGH. Set explicit_role_supported=true only when the source explicitly supports the suggested role.";
-    }
-
-    private function postJson(string $url, array $payload): array
-    {
-        $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
-        if (!is_string($body)) throw new RuntimeException('GEMINI_REQUEST_INVALID');
-        $timeout = max(5, (int) env('GEMINI_LEGAL_PARTY_TIMEOUT_SECONDS', env('GEMINI_LEGAL_SUMMARY_TIMEOUT_SECONDS', 60)));
-        $headers = ['Content-Type: application/json', 'Accept: application/json'];
-        $attempts = 0;
-        $maxAttempts = 2;
-        $lastException = null;
-
-        while ($attempts < $maxAttempts) {
-            $attempts++;
-            try {
-                return $this->postJsonOnce($url, $body, $headers, $timeout, $payload);
-            } catch (RuntimeException $exception) {
-                $lastException = $exception;
-                if ($attempts >= $maxAttempts || !$this->isRetryableFailure($exception->getMessage())) {
-                    throw $exception;
-                }
-            }
-        }
-
-        throw $lastException ?? new RuntimeException('GEMINI_REQUEST_FAILED');
-    }
-
-    private function postJsonOnce(string $url, string $body, array $headers, int $timeout, array $payload): array
-    {
-        $ch = curl_init($url);
-        if ($ch === false) throw new RuntimeException('GEMINI_TRANSPORT_ERROR');
-        curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body, CURLOPT_HTTPHEADER => $headers, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => $timeout]);
-        $raw = curl_exec($ch);
-        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        $error = curl_error($ch);
-        $errorCode = (int) curl_errno($ch);
-        curl_close($ch);
-        if ($raw === false || $status < 200 || $status >= 300) {
-            throw new RuntimeException($this->geminiError((string) ($raw ?: ''), $status, $error, $errorCode, $payload));
-        }
-        $decoded = json_decode((string) $raw, true);
-        if (!is_array($decoded)) throw new RuntimeException('GEMINI_RESPONSE_INVALID');
-        return $decoded;
     }
 
     private function matterWithParties(int $matterId): array
@@ -668,49 +459,6 @@ final class LegalMatterPartyService
     private function nullableText(mixed $value, int $max): ?string { $text = $this->text($value ?? '', $max); return $text === '' ? null : $text; }
     private function normalizeName(string $value): string { return strtolower(preg_replace('/[^a-z0-9]+/i', '', $value) ?? ''); }
     private function human(string $value): string { return ucwords(strtolower(str_replace('_', ' ', $value))); }
-    private function safeFailureStage(string $message): string { $stage = strtok($message, ' '); return is_string($stage) && preg_match('/^[A-Z0-9_]+$/', $stage) ? $stage : 'AI_REQUEST_FAILED'; }
-    private function isRetryableFailure(string $message): bool { $stage = strtok($message, ' '); return in_array($stage, ['GEMINI_TIMEOUT', 'GEMINI_TRANSPORT_ERROR', 'GEMINI_SERVICE_UNAVAILABLE'], true); }
-    private function geminiError(string $raw, int $status, string $transportError, int $transportErrorCode, array $payload): string
-    {
-        $category = match (true) {
-            defined('CURLE_OPERATION_TIMEDOUT') && $transportErrorCode === CURLE_OPERATION_TIMEDOUT => 'GEMINI_TIMEOUT',
-            $transportError !== '' => 'GEMINI_TRANSPORT_ERROR',
-            $status === 400 => 'GEMINI_HTTP_400',
-            $status === 401 || $status === 403 => 'GEMINI_KEY_INVALID',
-            $status === 404 => 'GEMINI_MODEL_INVALID',
-            $status === 408 || $status === 504 => 'GEMINI_TIMEOUT',
-            $status === 429 => 'GEMINI_QUOTA_OR_RATE_LIMIT',
-            $status >= 500 => 'GEMINI_SERVICE_UNAVAILABLE',
-            $status > 0 => 'GEMINI_HTTP_' . $status,
-            default => 'GEMINI_REQUEST_FAILED',
-        };
-        $decoded = json_decode($raw, true);
-        $error = is_array($decoded) && is_array($decoded['error'] ?? null) ? $decoded['error'] : [];
-        $details = [
-            'category' => $category,
-            'http_status' => $status,
-            'gemini_status' => is_string($error['status'] ?? null) ? $error['status'] : null,
-            'gemini_code' => isset($error['code']) ? (int) $error['code'] : null,
-            'message' => $this->sanitizeGeminiMessage(is_string($error['message'] ?? null) ? $error['message'] : $transportError),
-            'structured_schema_included' => isset($payload['generationConfig']['response_schema']),
-        ];
-        return $category . ' ' . json_encode($details, JSON_UNESCAPED_SLASHES);
-    }
-    private function sanitizeGeminiMessage(string $message): string
-    {
-        $message = preg_replace('/key=[^&\s]+/i', 'key=[redacted]', $message) ?? $message;
-        $message = preg_replace('/AIza[0-9A-Za-z_\-]+/', '[redacted-api-key]', $message) ?? $message;
-        $message = preg_replace('/[A-Za-z0-9+\/]{120,}={0,2}/', '[redacted-long-token]', $message) ?? $message;
-        return trim($message);
-    }
-
-    private function geminiEndpoint(): string
-    {
-        $model = trim((string) env('GEMINI_LEGAL_SUMMARY_MODEL', ''));
-        if ($model === '') $model = trim((string) env('GEMINI_VISITOR_ID_MODEL', 'gemini-3.6-flash'));
-        $modelPath = str_starts_with($model, 'models/') ? $model : 'models/' . rawurlencode($model);
-        return 'https://generativelanguage.googleapis.com/v1beta/' . $modelPath . ':generateContent?key=' . rawurlencode(trim((string) env('GEMINI_API_KEY', '')));
-    }
 
     private function history(int $matterId, string $event, string $description, array $metadata, array $user): void
     {

@@ -19,7 +19,7 @@ final class DispositionRecommendationService
                  FROM record_disposition_recommendation rdr
                  LEFT JOIN user_account ua ON ua.user_account_id = rdr.reviewed_by_user_id
                  LEFT JOIN employee_reference er ON er.employee_reference_id = ua.employee_reference_id
-                 WHERE rdr.record_id = :id AND rdr.source_provider = "GEMINI"
+                 WHERE rdr.record_id = :id
                  ORDER BY FIELD(rdr.status, "PENDING", "STALE", "APPROVED", "MODIFIED", "REJECTED"), rdr.evaluated_at DESC, rdr.recommendation_id DESC
                  LIMIT 1',
                 ['id' => $recordId]
@@ -159,13 +159,13 @@ final class DispositionRecommendationService
     private function buildRecommendation(array $item): array
     {
         $fallback = $this->deterministicRecommendation($item);
-        $ai = $this->requestGemini($item);
+        $ai = $this->requestOpenAi($item);
         return [
             'recommended_action' => $this->validAction($ai['recommended_action'] ?? null, $fallback['recommended_action']),
             'reason' => $this->text($ai['reason'] ?? $fallback['reason'], 1000),
             'context_flags' => $this->flags($ai['context_flags'] ?? $fallback['context_flags']),
             'needs_review' => true,
-            'source_provider' => 'GEMINI',
+            'source_provider' => 'OPENAI',
             'source_model' => $this->modelName(),
             'can_use_ai' => true,
         ];
@@ -262,40 +262,47 @@ final class DispositionRecommendationService
         return new DateTimeImmutable($date) <= new DateTimeImmutable('today');
     }
 
-    private function requestGemini(array $item): array
+    private function requestOpenAi(array $item): array
     {
-        if (trim((string) env('GEMINI_API_KEY', '')) === '') {
-            throw new RuntimeException('GEMINI_KEY_MISSING');
+        if ($this->apiKey() === '') {
+            throw new RuntimeException('AI_KEY_MISSING');
         }
-        $response = $this->postJson($this->geminiEndpoint(), $this->geminiPayload($item));
-        $text = trim(implode("\n", array_map(static fn (array $candidate): string => implode("\n", array_column($candidate['content']['parts'] ?? [], 'text')), $response['candidates'] ?? [])));
-        $text = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', $text) ?? $text;
+        $response = $this->postJson($this->openAiEndpoint(), $this->openAiPayload($item));
+        $text = $this->extractOutputText($response);
         $decoded = json_decode(trim($text), true);
         if (!is_array($decoded)) {
-            throw new RuntimeException('GEMINI_RESPONSE_INVALID');
+            throw new RuntimeException('AI_RESPONSE_INVALID');
         }
         return $decoded;
     }
 
-    private function geminiPayload(array $item): array
+    private function openAiPayload(array $item): array
     {
         return [
-            'contents' => [[
+            'model' => $this->modelName(),
+            'store' => false,
+            'input' => [[
                 'role' => 'user',
-                'parts' => [['text' => $this->instructions($item)]],
+                'content' => [
+                    ['type' => 'input_text', 'text' => $this->instructions($item)],
+                ],
             ]],
-            'generationConfig' => [
-                'temperature' => 0,
-                'response_mime_type' => 'application/json',
-                'response_schema' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'recommended_action' => ['type' => 'string'],
-                        'reason' => ['type' => 'string'],
-                        'context_flags' => ['type' => 'array', 'items' => ['type' => 'string']],
-                        'needs_review' => ['type' => 'boolean'],
+            'text' => [
+                'format' => [
+                    'type' => 'json_schema',
+                    'name' => 'retention_disposition_recommendation',
+                    'strict' => true,
+                    'schema' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'recommended_action' => ['type' => 'string', 'enum' => self::ACTIONS],
+                            'reason' => ['type' => 'string'],
+                            'context_flags' => ['type' => 'array', 'items' => ['type' => 'string']],
+                            'needs_review' => ['type' => 'boolean'],
+                        ],
+                        'required' => ['recommended_action', 'reason', 'context_flags', 'needs_review'],
+                        'additionalProperties' => false,
                     ],
-                    'required' => ['recommended_action', 'reason', 'context_flags', 'needs_review'],
                 ],
             ],
         ];
@@ -305,10 +312,11 @@ final class DispositionRecommendationService
     {
         $schedule = $item['schedule'] ?? [];
         return "Provide an advisory Records Retention disposition recommendation. Valid recommended_action values: RETAIN, ARCHIVE, REVIEW, DISPOSE.\n\n"
-            . "Human Records Admin approval is required before any official action. The deterministic retention engine is authoritative for eligibility dates and legal hold blocks. Never recommend physical deletion.\n\n"
+            . "Use ONLY the supplied metadata. Do not invent retention policies, dates, legal basis, facts, or lifecycle events that are not supplied. The deterministic retention policy engine is authoritative for eligibility dates, schedule rules, legal hold blocks, and final disposition enforcement.\n\n"
+            . "Legal hold must always be respected. This recommendation is advisory only and is not a disposition decision. Human Records Admin review and approval is mandatory before any official action. Never recommend physical deletion as an AI-executed action. AI cannot authorize archival or disposition.\n\n"
             . "Record metadata: record_no=" . (string) $item['recordNo'] . "; title=" . (string) $item['title'] . "; category=" . (string) $item['category'] . "; status=" . (string) $item['recordStatus'] . "; due_state=" . (string) $item['dueState'] . "; legal_hold_status=" . (string) $item['legalHoldStatus'] . "; trigger_basis=" . (string) $item['retentionTriggerBasis'] . "; trigger_date=" . (string) $item['retentionTriggerDate'] . "; policy_eligibility_date=" . (string) $item['policyEligibilityDate'] . "; effective_review_date=" . (string) $item['effectiveReviewDate'] . ".\n\n"
             . "Schedule metadata: code=" . (string) ($schedule['code'] ?? '') . "; name=" . (string) ($schedule['name'] ?? '') . "; trigger_basis=" . (string) ($schedule['triggerBasis'] ?? '') . "; trigger_label=" . (string) ($schedule['triggerLabel'] ?? '') . "; period=" . (string) ($schedule['periodValue'] ?? '') . ' ' . (string) ($schedule['periodUnit'] ?? '') . "; disposition_action=" . (string) ($schedule['dispositionAction'] ?? '') . "; legal_basis=" . (string) ($schedule['legalBasis'] ?? '') . ".\n\n"
-            . "Use only this metadata. Keep the reason concise, factual, and grounded in the schedule and record lifecycle state.";
+            . "Keep the reason concise, factual, and grounded in the supplied schedule and record lifecycle state.";
     }
 
     private function insert(int $recordId, array $item, array $recommendation): int
@@ -378,46 +386,129 @@ final class DispositionRecommendationService
     {
         $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
         if (!is_string($body)) {
-            throw new RuntimeException('GEMINI_REQUEST_INVALID');
+            throw new RuntimeException('AI_REQUEST_FAILED');
         }
         $ch = curl_init($url);
         if ($ch === false) {
-            throw new RuntimeException('GEMINI_TRANSPORT_ERROR');
+            throw new RuntimeException('AI_SERVICE_UNAVAILABLE');
         }
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $body,
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'],
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $this->apiKey(),
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ],
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => max(5, (int) env('GEMINI_RETENTION_TIMEOUT_SECONDS', 30)),
+            CURLOPT_TIMEOUT => max(5, (int) env('OPENAI_RETENTION_RECOMMENDATION_TIMEOUT_SECONDS', 30)),
         ]);
         $raw = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $error = curl_error($ch);
+        $errorCode = (int) curl_errno($ch);
         curl_close($ch);
         if ($raw === false || $status < 200 || $status >= 300) {
-            throw new RuntimeException($error !== '' ? 'GEMINI_TRANSPORT_ERROR' : 'GEMINI_HTTP_' . $status);
+            throw new RuntimeException($this->httpFailureReason((string) ($raw ?: ''), $status, $error, $errorCode));
         }
         $decoded = json_decode((string) $raw, true);
         if (!is_array($decoded)) {
-            throw new RuntimeException('GEMINI_RESPONSE_INVALID');
+            throw new RuntimeException('AI_RESPONSE_INVALID');
         }
         return $decoded;
     }
 
-    private function geminiEndpoint(): string
+    private function extractOutputText(array $response): string
     {
-        $model = $this->modelName();
-        $modelPath = str_starts_with($model, 'models/') ? $model : 'models/' . rawurlencode($model);
-        return 'https://generativelanguage.googleapis.com/v1beta/' . $modelPath . ':generateContent?key=' . rawurlencode(trim((string) env('GEMINI_API_KEY', '')));
+        $status = (string) ($response['status'] ?? '');
+        if ($status !== '' && !in_array($status, ['completed', 'incomplete'], true)) {
+            throw new RuntimeException($this->responseFailureReason($response));
+        }
+        if ($status === 'incomplete') {
+            throw new RuntimeException('AI_RESPONSE_INVALID');
+        }
+        if (is_array($response['error'] ?? null)) {
+            throw new RuntimeException($this->responseFailureReason($response));
+        }
+        if (isset($response['output_text']) && is_string($response['output_text']) && trim($response['output_text']) !== '') {
+            return trim($response['output_text']);
+        }
+        $parts = [];
+        foreach (($response['output'] ?? []) as $item) {
+            foreach (($item['content'] ?? []) as $content) {
+                if (isset($content['refusal']) && is_string($content['refusal']) && trim($content['refusal']) !== '') {
+                    throw new RuntimeException('AI_RESPONSE_INVALID');
+                }
+                if (isset($content['text']) && is_string($content['text'])) {
+                    $parts[] = $content['text'];
+                }
+            }
+        }
+        $text = trim(implode("\n", $parts));
+        if (str_starts_with($text, '```')) {
+            $text = preg_replace('/^```(?:json)?\s*/i', '', $text) ?? $text;
+            $text = preg_replace('/\s*```$/', '', $text) ?? $text;
+        }
+        $text = trim($text);
+        if ($text === '') {
+            throw new RuntimeException('AI_RESPONSE_INVALID');
+        }
+        return $text;
+    }
+
+    private function httpFailureReason(string $raw, int $status, string $transportError, int $transportErrorCode): string
+    {
+        $decoded = json_decode($raw, true);
+        $error = is_array($decoded) && is_array($decoded['error'] ?? null) ? $decoded['error'] : [];
+        $providerType = is_string($error['type'] ?? null) ? $error['type'] : null;
+        $providerCode = is_string($error['code'] ?? null) ? $error['code'] : null;
+        $timedOut = $transportErrorCode > 0 && defined('CURLE_OPERATION_TIMEDOUT') && $transportErrorCode === CURLE_OPERATION_TIMEDOUT;
+        return match (true) {
+            $timedOut => 'AI_TIMEOUT',
+            $transportError !== '' => 'AI_SERVICE_UNAVAILABLE',
+            in_array($providerCode, ['model_not_found', 'invalid_model'], true) => 'AI_MODEL_INVALID',
+            $providerType === 'authentication_error' || $providerType === 'permission_error' => 'AI_AUTH_ERROR',
+            $providerType === 'rate_limit_error' => 'AI_RATE_LIMITED',
+            $status === 401 || $status === 403 => 'AI_AUTH_ERROR',
+            $status === 404 => 'AI_MODEL_INVALID',
+            $status === 408 || $status === 504 => 'AI_TIMEOUT',
+            $status === 429 => 'AI_RATE_LIMITED',
+            $status === 0 || $status >= 500 => 'AI_SERVICE_UNAVAILABLE',
+            default => 'AI_REQUEST_FAILED',
+        };
+    }
+
+    private function responseFailureReason(array $response): string
+    {
+        $error = is_array($response['error'] ?? null) ? $response['error'] : [];
+        $providerType = is_string($error['type'] ?? null) ? $error['type'] : null;
+        $providerCode = is_string($error['code'] ?? null) ? $error['code'] : null;
+        if (in_array($providerCode, ['model_not_found', 'invalid_model'], true)) {
+            return 'AI_MODEL_INVALID';
+        }
+        if ($providerType === 'authentication_error' || $providerType === 'permission_error') {
+            return 'AI_AUTH_ERROR';
+        }
+        if ($providerType === 'rate_limit_error') {
+            return 'AI_RATE_LIMITED';
+        }
+        return 'AI_RESPONSE_INVALID';
+    }
+
+    private function openAiEndpoint(): string
+    {
+        return 'https://api.openai.com/v1/responses';
+    }
+
+    private function apiKey(): string
+    {
+        return trim((string) env('OPENAI_API_KEY', ''));
     }
 
     private function modelName(): string
     {
-        $model = trim((string) env('GEMINI_RETENTION_MODEL', ''));
-        if ($model === '') $model = trim((string) env('GEMINI_LEGAL_ACTION_MODEL', ''));
-        if ($model === '') $model = trim((string) env('GEMINI_VISITOR_ID_MODEL', 'gemini-3.6-flash'));
-        return $model;
+        $model = trim((string) env('OPENAI_RETENTION_RECOMMENDATION_MODEL', 'gpt-6-sol'));
+        return $model !== '' ? $model : 'gpt-6-sol';
     }
 
     private function row(string $sql, array $params): ?array

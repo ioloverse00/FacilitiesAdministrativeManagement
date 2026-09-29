@@ -6,7 +6,7 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Support' . DIRECTORY_SEPA
 
 final class ContractMetadataExtractionService
 {
-    private const PROVIDER = 'GEMINI';
+    private const PROVIDER = 'OPENAI';
     private const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     private const READABLE_MIME = ['application/pdf', 'image/jpeg', 'image/png', self::DOCX_MIME];
     private const MAX_SOURCE_BYTES = 10_000_000;
@@ -91,32 +91,37 @@ final class ContractMetadataExtractionService
 
     private function requestExtraction(array $document, array $source): array
     {
-        if (trim((string) env('GEMINI_API_KEY', '')) === '') {
-            throw new RuntimeException('GEMINI_KEY_MISSING');
+        if ($this->apiKey() === '') {
+            throw new RuntimeException('AI_KEY_MISSING');
         }
-        $response = $this->postJson($this->geminiEndpoint(), $this->geminiPayload($document, $source));
+        $response = $this->postJson($this->openAiEndpoint(), $this->openAiPayload($document, $source));
         $text = $this->extractOutputText($response);
         $decoded = json_decode($text, true);
         if (!is_array($decoded)) {
-            throw new RuntimeException('GEMINI_RESPONSE_INVALID');
+            throw new RuntimeException('AI_RESPONSE_INVALID');
         }
         return $this->sanitizeCandidate($decoded);
     }
 
-    private function geminiPayload(array $document, array $source): array
+    private function openAiPayload(array $document, array $source): array
     {
         return [
-            'contents' => [[
+            'model' => $this->model(),
+            'store' => false,
+            'input' => [[
                 'role' => 'user',
-                'parts' => [
-                    ['text' => $this->instructions($document, $source)],
+                'content' => [
+                    ['type' => 'input_text', 'text' => $this->instructions($document, $source)],
                     ...$this->sourceParts($source),
                 ],
             ]],
-            'generationConfig' => [
-                'temperature' => 0,
-                'response_mime_type' => 'application/json',
-                'response_schema' => $this->schema(),
+            'text' => [
+                'format' => [
+                    'type' => 'json_schema',
+                    'name' => 'contract_metadata_candidate',
+                    'strict' => true,
+                    'schema' => $this->schema(),
+                ],
             ],
         ];
     }
@@ -125,15 +130,22 @@ final class ContractMetadataExtractionService
     {
         if (isset($source['textContent'])) {
             return [[
+                'type' => 'input_text',
                 'text' => "Extract from this DOCX text export:\n\n" . (string) $source['textContent'],
             ]];
         }
 
+        if ((string) ($source['mimeType'] ?? '') === 'application/pdf') {
+            return [[
+                'type' => 'input_file',
+                'filename' => $this->inputFileName($source),
+                'file_data' => 'data:application/pdf;base64,' . (string) $source['base64'],
+            ]];
+        }
+
         return [[
-            'inline_data' => [
-                'mime_type' => (string) $source['mimeType'],
-                'data' => (string) $source['base64'],
-            ],
+            'type' => 'input_image',
+            'image_url' => 'data:' . (string) $source['mimeType'] . ';base64,' . (string) $source['base64'],
         ]];
     }
 
@@ -142,7 +154,7 @@ final class ContractMetadataExtractionService
         return "Extract structured contract/agreement metadata from this supporting document for human review.\n\n"
             . "Document title: " . (string) ($document['title'] ?? '') . "\n"
             . "File name: " . (string) ($source['file_name'] ?? '') . "\n\n"
-            . "Return only values clearly supported by the document. Distinguish execution, signing, agreement, renewal, and amendment dates from the contract term dates. effective_date means the date the contractual service or term actually begins, or an explicitly stated effective/start date. expiration_date means the date the contractual term ends or expires. Do not use an execution/signing/agreement date as effective_date when the document states a different contract start/effective date. Normalize clearly stated natural-language dates to ISO YYYY-MM-DD, such as November 1, 2026 to 2026-11-01. Do not infer ambiguous numeric dates. Do not infer dates from upload dates, matter dates, or summary text. If a value is not explicitly available, return null. Agreement status must be one of ACTIVE, EXPIRED, TERMINATED, RENEWED, or UNKNOWN. These are non-authoritative candidates; an admin will confirm or edit them before Records Retention can use them.";
+            . "Return only values clearly supported by the document. Distinguish execution, signing, agreement, renewal, and amendment dates from the contract term dates. Agreement Date is not automatically Effective Date. Execution Date is not automatically Effective Date. Signing Date is not automatically Effective Date. Amendment Date is not automatically Effective Date. Renewal Date is not automatically Effective Date. Prefer an explicit Effective Date, Commencement Date, Start Date, or the explicit beginning of the contract/service term. effective_date means the date the contractual service or term actually begins, or an explicitly stated effective/start date. expiration_date means the date the contractual term ends or expires and must represent the end/expiry of the relevant contract term. Example: Agreement/Execution Date: October 20, 2026; Effective/Start Date: November 3, 2026; Expiration/End Date: October 31, 2027. Correct extraction: effective_date = 2026-11-03 and expiration_date = 2027-10-31. Incorrect: effective_date = 2026-10-20. Normalize clearly stated natural-language dates to ISO YYYY-MM-DD, such as November 1, 2026 to 2026-11-01. Do not infer ambiguous numeric dates. Do not infer dates from upload dates, matter dates, or summary text. If a value is not explicitly available, return null. Agreement status must be one of ACTIVE, EXPIRED, TERMINATED, RENEWED, or UNKNOWN. These are non-authoritative candidates; an admin will confirm or edit them before Records Retention can use them.";
     }
 
     private function schema(): array
@@ -150,22 +162,24 @@ final class ContractMetadataExtractionService
         return [
             'type' => 'object',
             'properties' => [
-                'agreement_reference' => ['type' => 'string', 'nullable' => true],
-                'effective_date' => ['type' => 'string', 'nullable' => true],
-                'expiration_date' => ['type' => 'string', 'nullable' => true],
-                'agreement_status' => ['type' => 'string', 'nullable' => true],
+                'agreement_reference' => ['type' => ['string', 'null']],
+                'effective_date' => ['type' => ['string', 'null']],
+                'expiration_date' => ['type' => ['string', 'null']],
+                'agreement_status' => ['type' => ['string', 'null'], 'enum' => ['ACTIVE', 'EXPIRED', 'TERMINATED', 'RENEWED', 'UNKNOWN', null]],
                 'confidence' => [
                     'type' => 'object',
                     'properties' => [
-                        'agreement_reference' => ['type' => 'string'],
-                        'effective_date' => ['type' => 'string'],
-                        'expiration_date' => ['type' => 'string'],
-                        'agreement_status' => ['type' => 'string'],
+                        'agreement_reference' => ['type' => 'string', 'enum' => self::CONFIDENCE],
+                        'effective_date' => ['type' => 'string', 'enum' => self::CONFIDENCE],
+                        'expiration_date' => ['type' => 'string', 'enum' => self::CONFIDENCE],
+                        'agreement_status' => ['type' => 'string', 'enum' => self::CONFIDENCE],
                     ],
                     'required' => ['agreement_reference', 'effective_date', 'expiration_date', 'agreement_status'],
+                    'additionalProperties' => false,
                 ],
             ],
             'required' => ['agreement_reference', 'effective_date', 'expiration_date', 'agreement_status', 'confidence'],
+            'additionalProperties' => false,
         ];
     }
 
@@ -190,10 +204,14 @@ final class ContractMetadataExtractionService
     {
         $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
         if (!is_string($body)) {
-            throw new RuntimeException('GEMINI_REQUEST_INVALID');
+            throw new RuntimeException('AI_REQUEST_FAILED');
         }
-        $timeout = max(5, (int) env('GEMINI_CONTRACT_METADATA_TIMEOUT_SECONDS', 35));
-        $headers = ['Content-Type: application/json', 'Accept: application/json'];
+        $timeout = max(5, (int) env('OPENAI_CONTRACT_METADATA_TIMEOUT_SECONDS', 35));
+        $headers = [
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'Authorization: Bearer ' . $this->apiKey(),
+        ];
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
@@ -206,9 +224,10 @@ final class ContractMetadataExtractionService
             $raw = curl_exec($ch);
             $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             $error = curl_error($ch);
+            $errorCode = (int) curl_errno($ch);
             curl_close($ch);
             if ($raw === false || $status < 200 || $status >= 300) {
-                throw new RuntimeException($this->geminiError((string) ($raw ?: ''), $status, $error));
+                throw new RuntimeException($this->openAiError((string) ($raw ?: ''), $status, $error, $errorCode));
             }
             return $this->decodeResponse((string) $raw);
         }
@@ -225,7 +244,7 @@ final class ContractMetadataExtractionService
         $raw = file_get_contents($url, false, $context);
         $status = $this->streamStatus($http_response_header ?? []);
         if ($raw === false || $status < 200 || $status >= 300) {
-            throw new RuntimeException($this->geminiError((string) $raw, $status, ''));
+            throw new RuntimeException($this->openAiError((string) $raw, $status, '', 0));
         }
         return $this->decodeResponse((string) $raw);
     }
@@ -234,18 +253,44 @@ final class ContractMetadataExtractionService
     {
         $decoded = json_decode($raw, true);
         if (!is_array($decoded)) {
-            throw new RuntimeException('GEMINI_RESPONSE_INVALID');
+            throw new RuntimeException('AI_RESPONSE_INVALID');
         }
         return $decoded;
     }
 
     private function extractOutputText(array $response): string
     {
+        $status = (string) ($response['status'] ?? '');
+        if ($status !== '' && !in_array($status, ['completed', 'incomplete'], true)) {
+            throw new RuntimeException($this->openAiResponseError($response));
+        }
+        if ($status === 'incomplete') {
+            throw new RuntimeException('AI_RESPONSE_INVALID ' . json_encode([
+                'http_status' => 200,
+                'provider_status' => $status,
+                'message' => is_string($response['incomplete_details']['reason'] ?? null) ? $response['incomplete_details']['reason'] : 'Response was incomplete.',
+                'model' => $this->model(),
+            ], JSON_UNESCAPED_SLASHES));
+        }
+        if (is_array($response['error'] ?? null)) {
+            throw new RuntimeException($this->openAiResponseError($response));
+        }
+        if (isset($response['output_text']) && is_string($response['output_text']) && trim($response['output_text']) !== '') {
+            return trim($response['output_text']);
+        }
         $parts = [];
-        foreach (($response['candidates'] ?? []) as $candidate) {
-            foreach (($candidate['content']['parts'] ?? []) as $part) {
-                if (isset($part['text']) && is_string($part['text'])) {
-                    $parts[] = $part['text'];
+        foreach (($response['output'] ?? []) as $item) {
+            foreach (($item['content'] ?? []) as $content) {
+                if (isset($content['refusal']) && is_string($content['refusal']) && trim($content['refusal']) !== '') {
+                    throw new RuntimeException('AI_RESPONSE_INVALID ' . json_encode([
+                        'http_status' => 200,
+                        'provider_status' => 'refused',
+                        'message' => mb_substr(trim($content['refusal']), 0, 300),
+                        'model' => $this->model(),
+                    ], JSON_UNESCAPED_SLASHES));
+                }
+                if (isset($content['text']) && is_string($content['text'])) {
+                    $parts[] = $content['text'];
                 }
             }
         }
@@ -254,51 +299,89 @@ final class ContractMetadataExtractionService
             $text = preg_replace('/^```(?:json)?\s*/i', '', $text) ?? $text;
             $text = preg_replace('/\s*```$/', '', $text) ?? $text;
         }
-        return trim($text);
+        $text = trim($text);
+        if ($text === '') {
+            throw new RuntimeException('AI_RESPONSE_INVALID');
+        }
+        return $text;
     }
 
-    private function geminiEndpoint(): string
+    private function openAiEndpoint(): string
     {
-        $model = $this->model();
-        $modelPath = str_starts_with($model, 'models/') ? $model : 'models/' . rawurlencode($model);
-        return 'https://generativelanguage.googleapis.com/v1beta/' . $modelPath . ':generateContent?key=' . rawurlencode(trim((string) env('GEMINI_API_KEY', '')));
+        return 'https://api.openai.com/v1/responses';
     }
 
     private function model(): string
     {
-        $model = trim((string) env('GEMINI_CONTRACT_METADATA_MODEL', ''));
-        if ($model === '') {
-            $model = trim((string) env('GEMINI_LEGAL_SUMMARY_MODEL', ''));
-        }
-        if ($model === '') {
-            $model = trim((string) env('GEMINI_VISITOR_ID_MODEL', 'gemini-3.6-flash'));
-        }
-        return $model === '' ? 'gemini-3.6-flash' : $model;
+        $model = trim((string) env('OPENAI_CONTRACT_METADATA_MODEL', 'gpt-6-sol'));
+        return $model === '' ? 'gpt-6-sol' : $model;
     }
 
-    private function geminiError(string $raw, int $status, string $transportError): string
+    private function apiKey(): string
     {
-        $category = match (true) {
-            $transportError !== '' => 'GEMINI_TRANSPORT_ERROR',
-            $status === 400 => 'GEMINI_HTTP_400',
-            $status === 401 || $status === 403 => 'GEMINI_KEY_INVALID',
-            $status === 404 => 'GEMINI_MODEL_INVALID',
-            $status === 408 || $status === 504 => 'GEMINI_TIMEOUT',
-            $status === 429 => 'GEMINI_QUOTA_OR_RATE_LIMIT',
-            $status >= 500 => 'GEMINI_SERVICE_UNAVAILABLE',
-            $status > 0 => 'GEMINI_HTTP_' . $status,
-            default => 'GEMINI_REQUEST_FAILED',
-        };
+        return trim((string) env('OPENAI_API_KEY', ''));
+    }
+
+    private function openAiError(string $raw, int $status, string $transportError, int $transportErrorCode): string
+    {
+        $timedOut = $transportErrorCode > 0 && defined('CURLE_OPERATION_TIMEDOUT') && $transportErrorCode === CURLE_OPERATION_TIMEDOUT;
         $decoded = json_decode($raw, true);
         $error = is_array($decoded) && is_array($decoded['error'] ?? null) ? $decoded['error'] : [];
+        $providerType = is_string($error['type'] ?? null) ? $error['type'] : null;
+        $providerCode = is_string($error['code'] ?? null) ? $error['code'] : null;
+        $category = match (true) {
+            $timedOut => 'AI_TIMEOUT',
+            $transportError !== '' => 'AI_REQUEST_FAILED',
+            in_array($providerCode, ['model_not_found', 'invalid_model'], true) => 'AI_MODEL_INVALID',
+            $providerType === 'authentication_error' || $providerType === 'permission_error' => 'AI_AUTH_ERROR',
+            $providerType === 'rate_limit_error' => 'AI_RATE_LIMITED',
+            $status === 400 => 'AI_REQUEST_FAILED',
+            $status === 401 || $status === 403 => 'AI_AUTH_ERROR',
+            $status === 404 => 'AI_MODEL_INVALID',
+            $status === 408 || $status === 504 => 'AI_TIMEOUT',
+            $status === 429 => 'AI_RATE_LIMITED',
+            $status >= 500 => 'AI_SERVICE_UNAVAILABLE',
+            $status > 0 => 'AI_REQUEST_FAILED',
+            default => 'AI_REQUEST_FAILED',
+        };
         $message = is_string($error['message'] ?? null) ? $error['message'] : $transportError;
-        $message = preg_replace('/key=[^&\s]+/i', 'key=[redacted]', $message) ?? $message;
+        $message = $this->redactProviderMessage($message);
         return $category . ' ' . json_encode([
             'http_status' => $status,
-            'gemini_status' => is_string($error['status'] ?? null) ? $error['status'] : null,
+            'provider' => self::PROVIDER,
+            'provider_status' => $providerType,
+            'provider_code' => $providerCode,
             'message' => trim($message),
             'model' => $this->model(),
         ], JSON_UNESCAPED_SLASHES);
+    }
+
+    private function openAiResponseError(array $response): string
+    {
+        $error = is_array($response['error'] ?? null) ? $response['error'] : [];
+        $message = is_string($error['message'] ?? null) ? $error['message'] : 'OpenAI response was not completed.';
+        return 'AI_RESPONSE_INVALID ' . json_encode([
+            'http_status' => 200,
+            'provider' => self::PROVIDER,
+            'provider_status' => is_string($response['status'] ?? null) ? $response['status'] : null,
+            'provider_code' => is_string($error['code'] ?? null) ? $error['code'] : null,
+            'message' => $this->redactProviderMessage($message),
+            'model' => $this->model(),
+        ], JSON_UNESCAPED_SLASHES);
+    }
+
+    private function redactProviderMessage(string $message): string
+    {
+        $message = preg_replace('/Bearer\s+[A-Za-z0-9._~+\-\/]+=*/i', 'Bearer [redacted]', $message) ?? $message;
+        $message = preg_replace('/api[_ -]?key["\']?\s*[:=]\s*["\']?[^"\',\s]+/i', 'api_key=[redacted]', $message) ?? $message;
+        return mb_substr($message, 0, 300);
+    }
+
+    private function inputFileName(array $source): string
+    {
+        $fileName = trim((string) ($source['file_name'] ?? 'contract-document.pdf'));
+        $fileName = preg_replace('/[^A-Za-z0-9._-]+/', '-', $fileName) ?: 'contract-document.pdf';
+        return str_ends_with(strtolower($fileName), '.pdf') ? $fileName : $fileName . '.pdf';
     }
 
     private function storeUnavailable(int $documentId, string $stage, int $userId, ?int $documentVersionId = null, array $diagnostics = []): void
@@ -406,15 +489,17 @@ final class ContractMetadataExtractionService
     {
         $space = strpos($message, ' ');
         if ($space === false) {
-            return ['model' => $this->model()];
+            return ['provider' => self::PROVIDER, 'model' => $this->model()];
         }
         $decoded = json_decode(trim(substr($message, $space + 1)), true);
         if (!is_array($decoded)) {
-            return ['model' => $this->model()];
+            return ['provider' => self::PROVIDER, 'model' => $this->model()];
         }
         return [
             'http_status' => isset($decoded['http_status']) && is_numeric($decoded['http_status']) ? (int) $decoded['http_status'] : null,
-            'gemini_status' => is_string($decoded['gemini_status'] ?? null) ? mb_substr($decoded['gemini_status'], 0, 80) : null,
+            'provider' => is_string($decoded['provider'] ?? null) ? mb_substr($decoded['provider'], 0, 40) : self::PROVIDER,
+            'provider_status' => is_string($decoded['provider_status'] ?? null) ? mb_substr($decoded['provider_status'], 0, 80) : null,
+            'provider_code' => is_string($decoded['provider_code'] ?? null) ? mb_substr($decoded['provider_code'], 0, 80) : null,
             'model' => is_string($decoded['model'] ?? null) ? mb_substr($decoded['model'], 0, 120) : $this->model(),
             'provider_message' => is_string($decoded['message'] ?? null) ? mb_substr($decoded['message'], 0, 300) : '',
         ];
@@ -427,7 +512,9 @@ final class ContractMetadataExtractionService
             'document_version_id' => $documentVersionId,
             'failure_stage' => $stage,
             'http_status' => $diagnostics['http_status'] ?? null,
-            'gemini_status' => $diagnostics['gemini_status'] ?? null,
+            'provider' => $diagnostics['provider'] ?? self::PROVIDER,
+            'provider_status' => $diagnostics['provider_status'] ?? null,
+            'provider_code' => $diagnostics['provider_code'] ?? null,
             'model' => $diagnostics['model'] ?? $this->model(),
         ], JSON_UNESCAPED_SLASHES));
     }

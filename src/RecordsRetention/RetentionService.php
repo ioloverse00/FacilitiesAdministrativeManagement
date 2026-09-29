@@ -889,7 +889,7 @@ final class RetentionService
     private function hasCurrentDispositionRecommendation(int $recordId): bool
     {
         try {
-            return (bool) $this->scalar("SELECT COUNT(*) FROM record_disposition_recommendation WHERE record_id = :id AND source_provider = 'GEMINI' AND status IN ('PENDING','APPROVED','MODIFIED')", ['id' => $recordId]);
+            return (bool) $this->scalar("SELECT COUNT(*) FROM record_disposition_recommendation WHERE record_id = :id AND status IN ('PENDING','APPROVED','MODIFIED')", ['id' => $recordId]);
         } catch (Throwable) {
             return false;
         }
