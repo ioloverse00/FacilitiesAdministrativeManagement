@@ -245,7 +245,7 @@
         const assignment = assignmentDetailsHtml(item);
         const partyCount = (item.parties || []).length;
         const parties = partiesHtml2(item);
-        const actionsCount = (item.actions || []).length + (item.actionSuggestions || []).length;
+        const actionsCount = (item.actions || []).length;
         const actions = actionsDeadlinesHtml(item);
         const supportingDocuments = supportingDocumentsHtml(item);
         const resolution = resolutionHtml(item);
@@ -304,50 +304,12 @@
         return `${guidance}${buttons.join('')}`;
     }
 
-    function partiesHtml(item) {
-        const parties = item.parties || [];
-        const suggestions = item.partySuggestions || [];
-        const canManage = can('legal.manage');
-        const actions = canManage ? `<div class="legal-party-toolbar">
-            <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="add-party" data-legal-id="${esc(item.id)}">Add Party</button>
-            <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Refresh AI Insights</button>
-        </div>` : '';
-        const confirmed = parties.length ? `<div class="legal-party-list">${parties.map(party => `<article class="legal-party-card">
-            <div><strong>${esc(party.name)}</strong><span>${esc(title(party.role))}</span><small>${esc([title(party.type), party.subtitle || party.organization].filter(Boolean).join(' Ã¢â‚¬Â¢ ') || 'No additional profile context')}</small>${party.notes ? `<p>${esc(party.notes)}</p>` : ''}</div>
-            ${party.aiSuggested ? '<em>AI suggested, human confirmed</em>' : ''}
-        </article>`).join('')}</div>` : '<p class="legal-empty-note">No confirmed parties yet.</p>';
-        const suggested = suggestions.length ? `<div class="legal-party-suggestions">${suggestions.map(suggestion => `<article class="legal-party-suggestion">
-            <div><strong>${esc(suggestion.name)}</strong><span>${esc(title(suggestion.role))} Ã¢â‚¬Â¢ ${esc(title(suggestion.type))}</span>${suggestion.organization ? `<small>${esc(suggestion.organization)}</small>` : ''}${suggestion.context ? `<p>${esc(suggestion.context)}</p>` : ''}</div>
-            <div class="legal-party-actions">
-                <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="accept-party-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Accept</button>
-                <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="edit-party-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Edit & Accept</button>
-                <button class="btn-secondary dashboard-action-button document-danger-action" type="button" data-legal-action="dismiss-party-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Dismiss</button>
-            </div>
-        </article>`).join('')}</div>` : '<p class="legal-empty-note">No pending AI party suggestions.</p>';
-        return `<div class="legal-parties-section">
-            ${actions}
-            <section><h3>Confirmed Parties</h3>${confirmed}</section>
-            <section><h3>AI Suggested Parties</h3><p class="document-form-note">Detected automatically from linked supporting documents. Review before adding to the matter.</p>${suggested}</section>
-        </div>`;
-    }
-
     function partiesHtml2(item) {
         const parties = item.parties || [];
         const canManage = can('legal.manage') && !isMatterReadOnly(item);
         const addAction = canManage ? `<button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="add-party" data-legal-id="${esc(item.id)}">Add Party</button>` : '';
-        const analyzeAction = aiRefreshButton(item, item.aiPartiesStatus);
-        const bottomActions = canManage ? `<div class="legal-party-footer">${addAction}${analyzeAction}</div>` : '';
-        const status = item.aiPartiesStatus || 'NOT_REQUESTED';
-        const emptyText = status === 'PENDING'
-            ? 'Analyzing parties...'
-            : status === 'TIMEOUT'
-                ? 'AI party analysis timed out. Try again.'
-            : status === 'RATE_LIMITED'
-                ? 'AI party analysis is temporarily unavailable because the provider limit was reached. Try again later.'
-            : status === 'FAILED'
-                ? 'AI party extraction is unavailable. Review the supporting documents directly or try again.'
-                : 'No parties associated with this matter yet.';
-        const partyRows = parties.length ? `<div class="legal-party-list">${parties.map(party => partyEntryHtml(item, party)).join('')}</div>` : `<p class="legal-empty-note">${esc(emptyText)}</p>`;
+        const bottomActions = canManage ? `<div class="legal-party-footer">${addAction}</div>` : '';
+        const partyRows = parties.length ? `<div class="legal-party-list">${parties.map(party => partyEntryHtml(item, party)).join('')}</div>` : '<p class="legal-empty-note">No authoritative parties associated with this matter yet.</p>';
         return `<div class="legal-parties-section">
             ${partyRows}
             ${bottomActions}
@@ -376,26 +338,10 @@
 
     function actionsDeadlinesHtml(item) {
         const legalActions = item.actions || [];
-        const suggestions = item.actionSuggestions || [];
         const canManage = can('legal.manage') && !isMatterReadOnly(item);
-        const visibleRows = [
-            ...legalActions.map(action => actionEntryHtml(item, action)),
-            ...suggestions.map(suggestion => actionSuggestionHtml(item, suggestion)),
-        ];
-        const status = item.aiActionsStatus || 'NOT_REQUESTED';
-        const emptyText = status === 'PENDING'
-            ? 'Analyzing action recommendations...'
-            : status === 'TIMEOUT'
-                ? 'AI action analysis timed out. Try again.'
-            : status === 'RATE_LIMITED'
-                ? 'AI action analysis is temporarily unavailable because the provider limit was reached. Try again later.'
-            : status === 'FAILED'
-                ? 'AI action recommendation extraction is unavailable. Review the supporting documents directly or try again.'
-                : 'No legal actions or recommendations available.';
-        const rows = visibleRows.length ? `<div class="legal-action-list">${visibleRows.join('')}</div>` : `<p class="legal-empty-note">${esc(emptyText)}</p>`;
-        const footer = canManage ? `<div class="legal-party-footer"><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="add-action" data-legal-id="${esc(item.id)}">Add Action</button>${aiRefreshButton(item, item.aiActionsStatus)}</div>` : '';
+        const rows = legalActions.length ? `<div class="legal-action-list">${legalActions.map(action => actionEntryHtml(item, action)).join('')}</div>` : '<p class="legal-empty-note">No official legal actions available.</p>';
+        const footer = canManage ? `<div class="legal-party-footer"><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="add-action" data-legal-id="${esc(item.id)}">Add Action</button></div>` : '';
         return `<div class="legal-actions-section">
-            <p class="document-form-note">Suggested Actions &amp; Deadlines are AI suggestions until reviewed and added by a human.</p>
             ${rows}
             ${footer}
         </div>`;
@@ -501,37 +447,98 @@
         return cleaned.endsWith('.') ? cleaned : `${cleaned}.`;
     }
 
-    function summaryParagraphs(text) {
+    function summaryProse(text) {
         const normalized = String(text || '').replace(/\r\n/g, '\n').trim();
         const chunks = normalized
             ? normalized.split(/\n{2,}/).map(chunk => chunk.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean)
             : ['AI summary is ready, but no content was returned.'];
-        const sentences = chunks.join(' ').match(/[^.!?]+[.!?]+|[^.!?]+$/g) || chunks;
-        return sentences.slice(0, 2).map(chunk => `<p class="legal-ai-summary-paragraph">${esc(chunk.trim())}</p>`).join('');
+        return `<p class="legal-ai-summary-paragraph">${esc(chunks.join(' '))}</p>`;
+    }
+
+    function legalAiStatus(item) {
+        const statuses = [item.aiSummaryStatus, item.aiPartiesStatus, item.aiActionsStatus].map(status => String(status || '').toUpperCase());
+        if (statuses.includes('STALE')) return 'STALE';
+        if (statuses.some(status => ['FAILED', 'TIMEOUT', 'RATE_LIMITED'].includes(status))) return statuses.find(status => ['FAILED', 'TIMEOUT', 'RATE_LIMITED'].includes(status));
+        const hasAiContent = Boolean(item.aiSummary || (item.partySuggestions || []).length || (item.actionSuggestions || []).length);
+        if (!hasAiContent && statuses.some(status => ['NOT_REQUESTED', 'EMPTY'].includes(status))) return statuses.find(status => ['NOT_REQUESTED', 'EMPTY'].includes(status));
+        return String(item.aiSummaryStatus || 'NOT_REQUESTED').toUpperCase();
+    }
+
+    function aiInsightSubsection(titleText, helperText, content) {
+        return `<section class="legal-ai-insight-subsection">
+            <h4>${esc(titleText)}</h4>
+            ${helperText ? `<p class="document-form-note">${esc(helperText)}</p>` : ''}
+            ${content}
+        </section>`;
+    }
+
+    function aiActionSuggestionsHtml(item) {
+        const suggestions = item.actionSuggestions || [];
+        const status = String(item.aiActionsStatus || 'NOT_REQUESTED').toUpperCase();
+        if (suggestions.length) return `<div class="legal-action-list">${suggestions.map(suggestion => actionSuggestionHtml(item, suggestion)).join('')}</div>`;
+        if (status === 'PENDING') return '<p class="legal-empty-note">Analyzing action suggestions...</p>';
+        if (['FAILED', 'TIMEOUT', 'RATE_LIMITED'].includes(status)) return '<p class="legal-empty-note">Action suggestions are unavailable. Review source documents directly or retry AI Insights.</p>';
+        if (status === 'STALE') return '<p class="legal-empty-note">Supporting documents changed. Refresh AI Insights for updated action suggestions.</p>';
+        return '<p class="legal-empty-note">No pending AI action suggestions.</p>';
+    }
+
+    function aiPartySuggestionsHtml(item) {
+        const suggestions = uniquePartySuggestions(item.partySuggestions || []);
+        const status = String(item.aiPartiesStatus || 'NOT_REQUESTED').toUpperCase();
+        if (suggestions.length) return `<div class="legal-party-suggestions">${suggestions.map(suggestion => partySuggestionHtml(item, suggestion)).join('')}</div>`;
+        if (status === 'PENDING') return '<p class="legal-empty-note">Analyzing party suggestions...</p>';
+        if (['FAILED', 'TIMEOUT', 'RATE_LIMITED'].includes(status)) return '<p class="legal-empty-note">Party suggestions are unavailable. Review source documents directly or retry AI Insights.</p>';
+        if (status === 'STALE') return '<p class="legal-empty-note">Supporting documents changed. Refresh AI Insights for updated party suggestions.</p>';
+        return '<p class="legal-empty-note">No pending AI party suggestions.</p>';
+    }
+
+    function partySuggestionHtml(item, suggestion) {
+        const actions = can('legal.manage') && !isMatterReadOnly(item) ? `<div class="legal-party-actions">
+            <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="accept-party-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Accept</button>
+            <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="edit-party-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Edit &amp; Accept</button>
+            <button class="btn-secondary dashboard-action-button document-danger-action" type="button" data-legal-action="dismiss-party-suggestion" data-legal-id="${esc(item.id)}" data-suggestion-id="${esc(suggestion.id)}">Dismiss</button>
+        </div>` : '';
+        return `<article class="legal-party-entry">
+            <div class="legal-party-summary">
+                <div class="legal-party-copy">
+                    <strong>${esc(suggestion.name)}</strong>
+                    <span>${esc(title(suggestion.role))} &middot; ${esc(title(suggestion.type))}</span>
+                    ${suggestion.organization ? `<small>${esc(suggestion.organization)}</small>` : ''}
+                    ${suggestion.context ? `<p>${esc(suggestion.context)}</p>` : ''}
+                </div>
+                ${actions}
+            </div>
+        </article>`;
     }
 
     function aiSummaryHtml(item) {
         const status = item.aiSummaryStatus || 'NOT_REQUESTED';
         const docs = item.supportingDocuments || [];
         const canRegenerate = docs.length > 0 && !isMatterReadOnly(item) && (can('legal.edit') || can('legal.manage'));
-        const button = canRegenerate ? aiRefreshButton(item, status).replace('legal-inline-action', 'legal-ai-summary-action') : '';
-        let content = '';
+        const button = canRegenerate ? aiRefreshButton(item, legalAiStatus(item)).replace('legal-inline-action', 'legal-ai-summary-action') : '';
+        let summary = '';
         if (status === 'READY') {
-            content = `${summaryParagraphs(item.aiSummary)}<small>Generated ${item.aiSummaryGeneratedAt ? esc(fmt(item.aiSummaryGeneratedAt)) : 'from linked supporting documents'}. Review source documents for authoritative details.</small>`;
+            summary = summaryProse(item.aiSummary);
         } else if (status === 'PENDING') {
-            content = '<p>Analyzing summary...</p><small>Refresh this matter in a moment to see the generated summary.</small>';
+            summary = '<p class="legal-ai-summary-paragraph">Analyzing summary...</p>';
         } else if (status === 'FAILED') {
-            content = '<p>AI summary could not be generated. Review the supporting documents directly.</p>';
+            summary = '<p class="legal-ai-summary-paragraph">AI summary could not be generated. Review the supporting documents directly.</p>';
         } else if (status === 'NO_READABLE_SOURCE') {
-            content = '<p>No readable supporting documents are available for AI summarization.</p>';
+            summary = '<p class="legal-ai-summary-paragraph">No readable supporting documents are available for AI summarization.</p>';
         } else if (status === 'STALE') {
-            content = `${item.aiSummary ? summaryParagraphs(item.aiSummary) : '<p>Supporting documents have changed.</p>'}<small>Supporting documents have changed. Refresh the AI summary.</small>`;
+            summary = item.aiSummary ? summaryProse(item.aiSummary) : '<p class="legal-ai-summary-paragraph">Supporting documents have changed.</p>';
         } else {
-            content = docs.length ? '<p>No AI summary has been generated yet.</p>' : '<p>No supporting documents are available for AI summarization.</p>';
+            summary = docs.length ? '<p class="legal-ai-summary-paragraph">No AI summary has been generated yet.</p>' : '<p class="legal-ai-summary-paragraph">No supporting documents are available for AI summarization.</p>';
         }
+        const generated = item.aiSummaryGeneratedAt ? `Generated ${esc(fmt(item.aiSummaryGeneratedAt))}` : 'Generated from linked supporting documents';
         return `<section class="legal-ai-summary ai-insights-card" aria-label="AI Matter Summary">
-            <div class="legal-ai-summary-header"><div><h3><span class="material-symbols-outlined ai-insights-icon" aria-hidden="true">auto_awesome</span>AI Insights</h3><p>Matter Summary</p></div>${button}</div>
-            <div class="legal-ai-summary-content legal-ai-summary-${esc(status.toLowerCase().replace(/_/g, '-'))}">${content}</div>
+            <div class="legal-ai-summary-header"><div><h3><span class="material-symbols-outlined ai-insights-icon" aria-hidden="true">auto_awesome</span>AI Insights</h3></div>${button}</div>
+            <div class="legal-ai-summary-content legal-ai-summary-${esc(status.toLowerCase().replace(/_/g, '-'))}">
+                ${aiInsightSubsection('Matter Summary', '', summary)}
+                ${aiInsightSubsection('Suggested Actions & Deadlines', 'AI suggestions until reviewed and added.', aiActionSuggestionsHtml(item))}
+                ${aiInsightSubsection('Suggested Parties', 'AI-extracted suggestions until reviewed and accepted.', aiPartySuggestionsHtml(item))}
+                <small>${generated}. Review source documents for authoritative details.</small>
+            </div>
         </section>`;
     }
 

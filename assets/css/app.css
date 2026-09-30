@@ -13182,7 +13182,7 @@ body.facility-drawer-open {
 
 .legal-ai-summary {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.75rem;
   margin-bottom: 1rem;
   padding: 1rem;
   border: 1px solid var(--outline-variant, #dbe2ef);
@@ -13211,15 +13211,38 @@ body.facility-drawer-open {
 
 .legal-ai-summary-content {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.95rem;
   color: var(--text-main);
   line-height: 1.55;
 }
 
+.legal-ai-insight-subsection {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.legal-ai-insight-subsection h4 {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-style: italic;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.legal-ai-insight-subsection:not(:first-child) h4 {
+  color: var(--text-main);
+  font-style: normal;
+  font-weight: 800;
+}
+
 .legal-ai-summary-paragraph {
+  margin: 0;
   font: inherit;
   font-size: 0.88rem;
   font-weight: 400;
+  line-height: 1.55;
   text-align: justify;
   text-justify: inter-word;
 }
