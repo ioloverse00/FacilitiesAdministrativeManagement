@@ -233,7 +233,7 @@ final class DispositionRecommendationService
             $flags[] = 'unknown_schedule_action';
         }
         $flags[] = 'policy_eligible';
-        return ['recommended_action' => $action, 'reason' => 'The record is policy-eligible for retention review based on its schedule and review date. Human review is required before any official action.', 'context_flags' => $flags, 'needs_review' => true, 'can_use_ai' => true];
+        return ['recommended_action' => $action, 'reason' => 'The record has reached its policy eligibility date. Before proceeding, verify whether an active operational, audit, regulatory, contractual, or legal need requires continued retention. Human review is required before any official action.', 'context_flags' => $flags, 'needs_review' => true, 'can_use_ai' => true];
     }
 
     private function assertActionSafe(string $action, array $item): void
@@ -311,12 +311,14 @@ final class DispositionRecommendationService
     private function instructions(array $item): string
     {
         $schedule = $item['schedule'] ?? [];
-        return "Provide an advisory Records Retention disposition recommendation. Valid recommended_action values: RETAIN, ARCHIVE, REVIEW, DISPOSE.\n\n"
+        return "Provide an advisory Records Retention disposition recommendation for a Records Officer. Valid recommended_action values: RETAIN, ARCHIVE, REVIEW, DISPOSE.\n\n"
             . "Use ONLY the supplied metadata. Do not invent retention policies, dates, legal basis, facts, or lifecycle events that are not supplied. The deterministic retention policy engine is authoritative for eligibility dates, schedule rules, legal hold blocks, and final disposition enforcement.\n\n"
             . "Legal hold must always be respected. This recommendation is advisory only and is not a disposition decision. Human Records Admin review and approval is mandatory before any official action. Never recommend physical deletion as an AI-executed action. AI cannot authorize archival or disposition.\n\n"
+            . "Assume the deterministic engine has already established whether the record is eligible for recommendation analysis. Do not merely restate status, due state, schedule code, or legal hold values. Explain what disposition action the Records Officer should consider, why, and what must be verified before proceeding.\n\n"
+            . "The reason field should be concise but structured for display: start with a short rationale, then include a 'Before proceeding:' sentence with concrete verification considerations. Express unknown conditions as 'Verify whether...' rather than as facts. Use human-readable terms such as Active, Due for Review, No Legal Hold, and Review Before Disposal instead of raw enum phrasing when writing prose.\n\n"
             . "Record metadata: record_no=" . (string) $item['recordNo'] . "; title=" . (string) $item['title'] . "; category=" . (string) $item['category'] . "; status=" . (string) $item['recordStatus'] . "; due_state=" . (string) $item['dueState'] . "; legal_hold_status=" . (string) $item['legalHoldStatus'] . "; trigger_basis=" . (string) $item['retentionTriggerBasis'] . "; trigger_date=" . (string) $item['retentionTriggerDate'] . "; policy_eligibility_date=" . (string) $item['policyEligibilityDate'] . "; effective_review_date=" . (string) $item['effectiveReviewDate'] . ".\n\n"
             . "Schedule metadata: code=" . (string) ($schedule['code'] ?? '') . "; name=" . (string) ($schedule['name'] ?? '') . "; trigger_basis=" . (string) ($schedule['triggerBasis'] ?? '') . "; trigger_label=" . (string) ($schedule['triggerLabel'] ?? '') . "; period=" . (string) ($schedule['periodValue'] ?? '') . ' ' . (string) ($schedule['periodUnit'] ?? '') . "; disposition_action=" . (string) ($schedule['dispositionAction'] ?? '') . "; legal_basis=" . (string) ($schedule['legalBasis'] ?? '') . ".\n\n"
-            . "Keep the reason concise, factual, and grounded in the supplied schedule and record lifecycle state.";
+            . "Keep the reason factual, decision-support oriented, and grounded in the supplied schedule and record lifecycle state.";
     }
 
     private function insert(int $recordId, array $item, array $recommendation): int

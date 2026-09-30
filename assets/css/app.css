@@ -13162,6 +13162,24 @@ body.facility-drawer-open {
   width: min(58rem, calc(100vw - 2rem));
 }
 
+.ai-insights-card {
+  border-left-color: #6366f1;
+}
+
+.ai-insights-icon {
+  margin-right: 0.35rem;
+  color: #4f46e5;
+  font-size: 1.05em;
+  vertical-align: -0.18em;
+}
+
+.ai-insights-kicker {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 .legal-ai-summary {
   display: grid;
   gap: 0.85rem;
@@ -13744,6 +13762,14 @@ body.facility-drawer-open {
   font-weight: 700;
 }
 
+.retention-ai-card h4 {
+  margin: 0.7rem 0 0;
+  color: var(--text-muted, #64748b);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .retention-ai-card-header {
   display: flex;
   align-items: flex-start;
@@ -13774,6 +13800,10 @@ body.facility-drawer-open {
   font-size: 0.8rem;
 }
 
+.retention-ai-meta-primary {
+  color: var(--text-main, #111827);
+}
+
 .retention-ai-flags {
   margin-top: 0.6rem;
 }
@@ -13794,6 +13824,13 @@ body.facility-drawer-open {
 
 .retention-recommendation-review .detail-grid {
   margin-bottom: 1rem;
+}
+
+.retention-action-consequence {
+  margin: 0.3rem 0 0.8rem;
+  color: var(--text-muted, #64748b);
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 /* Reports & Analytics */

@@ -14,6 +14,20 @@
         return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     }
 
+    function humanAction(value) {
+        return {
+            RETAIN: 'Retain',
+            ARCHIVE: 'Archive',
+            REVIEW: 'Review for Disposal',
+            DISPOSE: 'Dispose',
+            REVIEW_THEN_DISPOSE: 'Review Before Disposal',
+        }[String(value || '').toUpperCase()] || title(value);
+    }
+
+    function holdLabel(value) {
+        return String(value || '').toUpperCase() === 'NONE' ? 'No Legal Hold' : title(value);
+    }
+
     function retentionStatusLabel(value) {
         return {
             WAITING_FOR_TRIGGER: 'Waiting Trigger',
@@ -199,7 +213,7 @@
     function actions(row) {
         const items = [`<button type="button" data-retention-action="view" data-retention-id="${row.id}">View Details</button>`];
         const allowed = new Set(row.allowedActions || []);
-        if (allowed.has('analyze') && can('retention.review')) items.push(`<button type="button" data-retention-action="analyze-recommendation" data-retention-id="${row.id}">${row.hasDispositionRecommendation ? 'Re-analyze Disposition' : 'Analyze Disposition'}</button>`);
+        if (allowed.has('analyze') && can('retention.review') && !row.hasDispositionRecommendation) items.push(`<button type="button" data-retention-action="analyze-recommendation" data-retention-id="${row.id}">Analyze Disposition</button>`);
         if (allowed.has('assign') && can('retention.assign')) items.push(`<button type="button" data-retention-action="assign" data-retention-id="${row.id}">Assign Schedule</button>`);
         if (allowed.has('extend') && can('retention.extend')) items.push(`<button type="button" data-retention-action="extend" data-retention-id="${row.id}">Extend Review Date</button>`);
         if (allowed.has('release-hold') && can('retention.legal_hold')) items.push(`<button type="button" data-retention-action="release-hold" data-retention-id="${row.id}">Release Legal Hold</button>`);
@@ -286,38 +300,45 @@
     function recommendationSection(recommendation, item, analysis = null) {
         const allowed = new Set(item?.allowedActions || []);
         const canAnalyze = can('retention.review') && allowed.has('analyze');
-        const analyzeLabel = recommendation ? 'Re-analyze Disposition' : 'Analyze Disposition';
         const analysisBlocked = item?.dueState === 'WAITING_FOR_TRIGGER';
-        const actions = canAnalyze ? `<div class="retention-ai-actions"><button class="btn-secondary dashboard-action-button" type="button" data-retention-action="analyze-recommendation" data-retention-id="${item.id}">${analyzeLabel}</button>${recommendation?.status === 'PENDING' ? `<button class="btn-primary dashboard-action-button" type="button" data-retention-action="review-recommendation" data-retention-recommendation-id="${recommendation.id}">Review Recommendation</button>` : ''}</div>` : '';
+        const holdBlocked = item?.legalHoldStatus === 'ACTIVE' || item?.dueState === 'ON_HOLD';
+        const retryAction = canAnalyze && analysis?.status === 'UNAVAILABLE' ? `<button class="btn-secondary dashboard-action-button" type="button" data-retention-action="analyze-recommendation" data-retention-id="${item.id}">Retry</button>` : '';
+        const initialAction = canAnalyze && !recommendation && !holdBlocked && !analysisBlocked && analysis?.status !== 'UNAVAILABLE' ? `<button class="btn-secondary dashboard-action-button" type="button" data-retention-action="analyze-recommendation" data-retention-id="${item.id}">Analyze Disposition</button>` : '';
+        const reviewAction = recommendation?.status === 'PENDING' ? `<button class="btn-primary dashboard-action-button" type="button" data-retention-action="review-recommendation" data-retention-recommendation-id="${recommendation.id}">Review Recommendation</button>` : '';
+        const refreshAction = recommendation?.status === 'STALE' && canAnalyze ? `<button class="btn-secondary dashboard-action-button" type="button" data-retention-action="analyze-recommendation" data-retention-id="${item.id}">Refresh AI Insights</button>` : '';
+        const actions = [retryAction, initialAction, reviewAction, refreshAction].filter(Boolean).join('');
         if (!recommendation) {
             const isUnavailable = analysis?.status === 'UNAVAILABLE';
             const isPolicyState = analysis && !isUnavailable;
-            const cardTitle = isPolicyState ? 'Policy Status' : 'AI Recommendation';
-            const heading = isUnavailable ? 'Unavailable' : (isPolicyState ? title(analysis.status) : (analysisBlocked ? 'Waiting for retention trigger' : 'No recommendation'));
-            const message = analysis?.message || (analysisBlocked ? 'Disposition analysis is unavailable until the authoritative retention trigger date is established.' : 'No AI-assisted recommendation has been generated for this record.');
-            return `<section class="retention-ai-card">
+            const heading = isUnavailable ? 'Unavailable' : (holdBlocked ? 'Disposition Recommendation' : (isPolicyState ? title(analysis.status) : (analysisBlocked ? 'Waiting for retention trigger' : 'No recommendation')));
+            const message = analysis?.message || (holdBlocked ? 'Unavailable while this record is under an active legal hold.' : (analysisBlocked ? 'Disposition analysis is unavailable until the authoritative retention trigger date is established.' : 'No AI-assisted recommendation has been generated for this record.'));
+            return `<section class="retention-ai-card ai-insights-card">
                 <div class="retention-ai-card-header">
-                    <div><h3>${esc(cardTitle)}</h3><p class="retention-muted">${esc(heading)}</p></div>
+                    <div><h3><span class="material-symbols-outlined ai-insights-icon" aria-hidden="true">auto_awesome</span>AI Insights</h3><p class="retention-muted">${esc(heading)}</p></div>
                     ${isUnavailable ? badge('Unavailable', 'status') : ''}
                 </div>
                 <p class="retention-ai-reason">${esc(message)}</p>
-                ${actions}
+                ${actions ? `<div class="retention-ai-actions">${actions}</div>` : ''}
             </section>`;
         }
         const flags = (recommendation.contextFlags || []).map(flag => `<span>${esc(title(flag))}</span>`).join('');
-        return `<section class="retention-ai-card">
+        return `<section class="retention-ai-card ai-insights-card">
             <div class="retention-ai-card-header">
-                <div><h3>AI Disposition Recommendation</h3><p class="retention-muted">${esc(recommendation.sourceProvider || 'System')} ${recommendation.evaluatedAt ? `&middot; ${esc(fmt(recommendation.evaluatedAt))}` : ''}</p></div>
-                <div class="retention-ai-badges">${badge(recommendation.recommendedAction, 'status')}${badge(recommendation.status, 'status')}</div>
+                <div><h3><span class="material-symbols-outlined ai-insights-icon" aria-hidden="true">auto_awesome</span>AI Insights</h3><p class="retention-muted">Disposition Recommendation${recommendation.evaluatedAt ? ` &middot; Generated ${esc(fmt(recommendation.evaluatedAt))}` : ''}</p></div>
+                <div class="retention-ai-badges">${badge(humanAction(recommendation.recommendedAction), 'status')}${badge(recommendation.status, 'status')}</div>
             </div>
+            <div class="retention-ai-meta retention-ai-meta-primary">
+                <span><strong>Recommended Action:</strong> ${esc(humanAction(recommendation.recommendedAction))}</span>
+                <span><strong>Needs Human Review:</strong> ${recommendation.needsReview ? 'Yes' : 'No'}</span>
+            </div>
+            <h4>Rationale</h4>
             <p class="retention-ai-reason">${esc(recommendation.reason)}</p>
             <div class="retention-ai-meta">
                 <span>Policy eligible: ${esc(fmtDate(recommendation.policyEligibleDate))}</span>
-                <span>Hold: ${esc(title(recommendation.legalHoldStatus))}</span>
-                <span>Needs review: ${recommendation.needsReview ? 'Yes' : 'No'}</span>
+                <span>Hold: ${esc(holdLabel(recommendation.legalHoldStatus))}</span>
             </div>
             ${flags ? `<div class="retention-ai-flags">${flags}</div>` : ''}
-            ${actions}
+            ${actions ? `<div class="retention-ai-actions">${actions}</div>` : ''}
         </section>`;
     }
 
@@ -414,17 +435,20 @@
             <div class="facility-dialog-body retention-form-body"><div class="document-form-error hidden" data-retention-error></div>
                 <section class="document-form-section retention-recommendation-review">
                     <h3>${esc(state.activeItem?.title || 'Retention Record')}</h3>
-                    <div class="detail-grid">${detail('Recommended Action', title(recommendation.recommendedAction))}${detail('Recommendation Status', title(recommendation.status))}${detail('Reason', recommendation.reason, 'detail-item--full')}</div>
+                    <p class="retention-muted">Accepting or changing this recommendation may perform the selected retention action immediately, subject to deterministic retention and legal-hold validation.</p>
+                    <div class="detail-grid">${detail('AI Recommendation', humanAction(recommendation.recommendedAction))}${detail('Recommendation Status', title(recommendation.status))}${detail('Rationale', recommendation.reason, 'detail-item--full')}</div>
                     <div class="document-form-grid">
-                        <label class="facility-field"><span>Decision *</span><select name="decision" required><option value="APPROVED">Approve</option><option value="MODIFIED">Modify</option><option value="REJECTED">Reject</option></select></label>
-                        <label class="facility-field"><span>Final Action *</span><select name="approved_action" required>${permitted.map(action => `<option value="${action}" ${action === recommendation.recommendedAction ? 'selected' : ''}>${title(action)}</option>`).join('')}</select></label>
+                        <label class="facility-field"><span>Human Decision *</span><select name="decision" required data-retention-review-decision><option value="APPROVED">Accept Recommendation</option><option value="MODIFIED">Change Recommendation</option><option value="REJECTED">Reject Recommendation</option></select></label>
+                        <label class="facility-field"><span>Action on Submission *</span><select name="approved_action" required data-retention-review-action>${permitted.map(action => `<option value="${action}" ${action === recommendation.recommendedAction ? 'selected' : ''}>${humanAction(action)}</option>`).join('')}</select></label>
                     </div>
+                    <p class="retention-action-consequence" data-retention-action-consequence></p>
                     <label class="facility-field document-full-field"><span>Review Reason</span><textarea name="review_reason" rows="3" placeholder="Required when modifying or rejecting the recommendation."></textarea></label>
                 </section>
             </div>
-            <div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-retention-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Submit Review</button></div>
+            <div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-retention-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit" data-retention-review-submit>Complete Review</button></div>
         </form>`;
         document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
+        syncRecommendationReviewUi(modal.querySelector('[data-retention-form="recommendation-review"]'));
     }
 
     function finalActionOptions(item, recommendation) {
@@ -439,6 +463,51 @@
         modal.hidden = true;
         modal.innerHTML = '';
         if (qs('#retention-details-modal')?.hidden !== false) document.body.classList.remove('fam-modal-open', 'facility-details-modal-open');
+    }
+
+    function actionConsequence(action, decision) {
+        if (decision === 'REJECTED') return 'Rejecting the recommendation records the rejection only. No archive, dispose, or review completion action will run.';
+        return {
+            REVIEW: 'Submitting will record this retention review and will not archive or dispose the record.',
+            ARCHIVE: 'Submitting will attempt to archive this record now through the retention workflow. Deterministic eligibility and legal-hold rules still apply.',
+            DISPOSE: 'Submitting will attempt to mark this record disposed now through the retention workflow. Files are not physically deleted by this action, and deterministic eligibility and legal-hold rules still apply.',
+            RETAIN: 'Submitting will record the reviewed recommendation only. The current backend does not perform a separate retain lifecycle action.',
+        }[String(action || '').toUpperCase()] || 'Submitting will record the reviewed recommendation using the selected action.';
+    }
+
+    function submitLabel(action, decision) {
+        if (decision === 'REJECTED') return 'Reject Recommendation';
+        const changed = decision === 'MODIFIED' ? 'Change & ' : '';
+        return {
+            REVIEW: `${changed}Complete Review`,
+            ARCHIVE: `${changed}Approve & Archive`,
+            DISPOSE: `${changed}Approve & Dispose`,
+            RETAIN: `${changed}Record Retain Decision`,
+        }[String(action || '').toUpperCase()] || `${changed}Submit Review`;
+    }
+
+    function syncRecommendationReviewUi(form) {
+        if (!form) return;
+        const decision = form.querySelector('[data-retention-review-decision]')?.value || 'APPROVED';
+        const action = form.querySelector('[data-retention-review-action]')?.value || 'REVIEW';
+        const actionField = form.querySelector('[data-retention-review-action]');
+        if (actionField) actionField.disabled = decision === 'REJECTED';
+        const consequence = form.querySelector('[data-retention-action-consequence]');
+        if (consequence) consequence.textContent = actionConsequence(action, decision);
+        const submit = form.querySelector('[data-retention-review-submit]');
+        if (submit) submit.textContent = submitLabel(action, decision);
+    }
+
+    async function confirmRecommendationSubmission(form) {
+        const decision = form.querySelector('[data-retention-review-decision]')?.value || 'APPROVED';
+        const action = form.querySelector('[data-retention-review-action]')?.value || 'REVIEW';
+        if (decision === 'REJECTED' || !['ARCHIVE', 'DISPOSE'].includes(action)) return true;
+        const item = state.activeItem || {};
+        const label = humanAction(action);
+        const message = `${item.recordNo || 'This record'} - ${item.title || 'Retention record'}\n\nSubmitting will attempt to ${label.toLowerCase()} this record now through the retention workflow. Deterministic retention eligibility and legal-hold rules still apply.`;
+        return window.FAMModal?.confirm
+            ? window.FAMModal.confirm(message, { title: `${label} on Submission`, confirmLabel: action === 'DISPOSE' ? 'Approve & Dispose' : 'Approve & Archive' })
+            : window.confirm(message);
     }
 
     function updateAssignTriggerDisplay(select) {
@@ -568,6 +637,8 @@
         document.addEventListener('change', event => {
             const assignSchedule = event.target.closest('select[name="retention_schedule_id"]');
             if (assignSchedule) updateAssignTriggerDisplay(assignSchedule);
+            const reviewControl = event.target.closest('[data-retention-review-decision], [data-retention-review-action]');
+            if (reviewControl) syncRecommendationReviewUi(reviewControl.closest('[data-retention-form="recommendation-review"]'));
         });
         document.addEventListener('click', event => {
             const close = event.target.closest('[data-retention-dialog-close]');
@@ -603,6 +674,7 @@
             event.preventDefault();
             const type = form.dataset.retentionForm;
             const path = type === 'recommendation-review' ? `retention/review-recommendation.php?id=${state.activeRecommendation?.id || ''}` : `retention/${type === 'extend' ? 'extend' : 'assign'}.php?id=${state.activeItem.id}`;
+            if (type === 'recommendation-review' && !await confirmRecommendationSubmission(form)) return;
             if (await postForm(path, form)) {
                 closeDialog();
                 window.FAMModal?.showToast?.(type === 'extend' ? 'Retention extended.' : (type === 'recommendation-review' ? 'Disposition recommendation reviewed.' : 'Retention schedule assigned.'));

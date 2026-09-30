@@ -868,8 +868,8 @@
     dialog.innerHTML = `<div class="facility-dialog-panel id-capture-panel">
       <div class="facility-details-modal-header"><div><p>Review ID Details</p><h2 id="id-capture-title">Verify extracted details</h2></div><button class="facility-details-modal-close" type="button" data-id-capture-close aria-label="Close ID capture">&times;</button></div>
       <div class="facility-dialog-body id-capture-body">
-        <p class="scanner-dialog-copy">Verify the extracted information against the visitor's physical ID before continuing. Every field remains editable.</p>
-        ${result.source ? `<p class="scanner-dialog-copy id-review-source">${esc(result.source)}${result.needsReview ? ' - review required' : ''}</p>` : ''}
+        <p class="scanner-dialog-copy"><span class="material-symbols-outlined ai-insights-icon" aria-hidden="true">auto_awesome</span>AI Insights assisted the extraction. Verify the extracted information against the visitor's physical ID before continuing. Every field remains editable.</p>
+        ${result.source ? `<p class="scanner-dialog-copy id-review-source">AI-assisted extraction${result.needsReview ? ' - review required' : ''}</p>` : ''}
         <div class="id-review-layout">
           ${state.idScan.imageDataUrl ? `<img class="id-captured-image" src="${esc(state.idScan.imageDataUrl)}" alt="Temporary captured visitor ID preview">` : ''}
           <div class="facility-form-grid">
@@ -899,7 +899,7 @@
       <div class="id-diagnostics-grid">
         <div><span>Capture Quality</span><strong>Sharpness ${esc(quality.sharpness_rating || 'UNKNOWN')} / Brightness ${esc(quality.brightness_rating || 'UNKNOWN')} / Contrast ${esc(quality.contrast_rating || 'UNKNOWN')}</strong></div>
         <div><span>Image</span><strong>${esc(diagnostics.image?.width || 'n/a')} x ${esc(diagnostics.image?.height || 'n/a')} / ${esc(String(diagnostics.image?.sha256 || '').slice(0, 12) || 'no hash')}</strong></div>
-        <div><span>Analysis</span><strong>${esc(diagnostics.provider || 'AI')} ${esc(diagnostics.model || '')} / ${esc(diagnostics.failure_stage || diagnostics.stage || 'UNKNOWN')} / ${esc(diagnostics.latency_ms ?? 'n/a')} ms</strong></div>
+        <div><span>Analysis</span><strong>${esc(diagnostics.failure_stage || diagnostics.stage || 'Completed')} / ${esc(diagnostics.latency_ms ?? 'n/a')} ms</strong></div>
         <div><span>Name</span><strong>${ai.full_name_present ? 'Detected' : 'Missing'}${ai.full_name_rejected_as_label ? ' / label rejected' : ''}</strong></div>
         <div><span>ID Type</span><strong>${ai.id_type_valid ? 'Detected' : 'Missing'}</strong></div>
         <div><span>Last 4</span><strong>${ai.last4_present ? 'Detected' : 'Missing'}</strong></div>

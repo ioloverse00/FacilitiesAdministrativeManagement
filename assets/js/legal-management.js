@@ -310,7 +310,7 @@
         const canManage = can('legal.manage');
         const actions = canManage ? `<div class="legal-party-toolbar">
             <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="add-party" data-legal-id="${esc(item.id)}">Add Party</button>
-            <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Re-analyze AI</button>
+            <button class="btn-secondary dashboard-action-button" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Refresh AI Insights</button>
         </div>` : '';
         const confirmed = parties.length ? `<div class="legal-party-list">${parties.map(party => `<article class="legal-party-card">
             <div><strong>${esc(party.name)}</strong><span>${esc(title(party.role))}</span><small>${esc([title(party.type), party.subtitle || party.organization].filter(Boolean).join(' Ã¢â‚¬Â¢ ') || 'No additional profile context')}</small>${party.notes ? `<p>${esc(party.notes)}</p>` : ''}</div>
@@ -335,7 +335,7 @@
         const parties = item.parties || [];
         const canManage = can('legal.manage') && !isMatterReadOnly(item);
         const addAction = canManage ? `<button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="add-party" data-legal-id="${esc(item.id)}">Add Party</button>` : '';
-        const analyzeAction = canManage ? `<button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Re-analyze AI</button>` : '';
+        const analyzeAction = aiRefreshButton(item, item.aiPartiesStatus);
         const bottomActions = canManage ? `<div class="legal-party-footer">${addAction}${analyzeAction}</div>` : '';
         const status = item.aiPartiesStatus || 'NOT_REQUESTED';
         const emptyText = status === 'PENDING'
@@ -393,8 +393,9 @@
                 ? 'AI action recommendation extraction is unavailable. Review the supporting documents directly or try again.'
                 : 'No legal actions or recommendations available.';
         const rows = visibleRows.length ? `<div class="legal-action-list">${visibleRows.join('')}</div>` : `<p class="legal-empty-note">${esc(emptyText)}</p>`;
-        const footer = canManage ? `<div class="legal-party-footer"><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="add-action" data-legal-id="${esc(item.id)}">Add Action</button><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Re-analyze AI</button></div>` : '';
+        const footer = canManage ? `<div class="legal-party-footer"><button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="add-action" data-legal-id="${esc(item.id)}">Add Action</button>${aiRefreshButton(item, item.aiActionsStatus)}</div>` : '';
         return `<div class="legal-actions-section">
+            <p class="document-form-note">Suggested Actions &amp; Deadlines are AI suggestions until reviewed and added by a human.</p>
             ${rows}
             ${footer}
         </div>`;
@@ -440,7 +441,7 @@
                 <div class="legal-party-copy">
                     <strong>${esc(suggestion.title)}</strong>
                     <span>${esc(title(suggestion.actionType))}${suggestion.dueAt ? ` &middot; ${targetLabel} ${esc(fmt(suggestion.dueAt))}` : ' &middot; No suggested target'}</span>
-                    <small class="legal-action-basis">${esc(basisLabel)}</small>
+                    <small class="legal-action-basis">AI suggestion &middot; ${esc(basisLabel)}</small>
                 </div>
                 ${actions}
             </div>
@@ -450,8 +451,17 @@
     function actionBasisLabel(value) {
         const basis = String(value || '').toUpperCase();
         if (basis === 'SOURCE_DERIVED') return 'Source-derived deadline';
-        if (basis === 'AI_RECOMMENDED') return 'AI Recommended';
+        if (basis === 'AI_RECOMMENDED') return 'Suggested target';
         return 'No deadline basis';
+    }
+
+    function aiRefreshButton(item, status) {
+        if (!can('legal.manage') || isMatterReadOnly(item)) return '';
+        const normalized = String(status || '').toUpperCase();
+        if (normalized === 'STALE') return `<button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Refresh AI Insights</button>`;
+        if (['FAILED', 'TIMEOUT', 'RATE_LIMITED'].includes(normalized)) return `<button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Retry</button>`;
+        if (['NOT_REQUESTED', 'EMPTY'].includes(normalized)) return `<button class="btn-secondary dashboard-action-button legal-inline-action" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Analyze AI Insights</button>`;
+        return '';
     }
 
     function uniquePartySuggestions(suggestions) {
@@ -496,17 +506,18 @@
         const chunks = normalized
             ? normalized.split(/\n{2,}/).map(chunk => chunk.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean)
             : ['AI summary is ready, but no content was returned.'];
-        return chunks.map(chunk => `<p class="legal-ai-summary-paragraph">${esc(chunk)}</p>`).join('');
+        const sentences = chunks.join(' ').match(/[^.!?]+[.!?]+|[^.!?]+$/g) || chunks;
+        return sentences.slice(0, 2).map(chunk => `<p class="legal-ai-summary-paragraph">${esc(chunk.trim())}</p>`).join('');
     }
 
     function aiSummaryHtml(item) {
         const status = item.aiSummaryStatus || 'NOT_REQUESTED';
         const docs = item.supportingDocuments || [];
         const canRegenerate = docs.length > 0 && !isMatterReadOnly(item) && (can('legal.edit') || can('legal.manage'));
-        const button = canRegenerate ? `<button class="btn-secondary dashboard-action-button legal-ai-summary-action" type="button" data-legal-action="reanalyze-ai" data-legal-id="${esc(item.id)}">Re-analyze AI</button>` : '';
+        const button = canRegenerate ? aiRefreshButton(item, status).replace('legal-inline-action', 'legal-ai-summary-action') : '';
         let content = '';
         if (status === 'READY') {
-            content = `${summaryParagraphs(item.aiSummary)}<small>Generated automatically from linked supporting documents${item.aiSummaryGeneratedAt ? ` on ${esc(fmt(item.aiSummaryGeneratedAt))}` : ''}. Review source documents for authoritative details.</small>`;
+            content = `${summaryParagraphs(item.aiSummary)}<small>Generated ${item.aiSummaryGeneratedAt ? esc(fmt(item.aiSummaryGeneratedAt)) : 'from linked supporting documents'}. Review source documents for authoritative details.</small>`;
         } else if (status === 'PENDING') {
             content = '<p>Analyzing summary...</p><small>Refresh this matter in a moment to see the generated summary.</small>';
         } else if (status === 'FAILED') {
@@ -518,8 +529,8 @@
         } else {
             content = docs.length ? '<p>No AI summary has been generated yet.</p>' : '<p>No supporting documents are available for AI summarization.</p>';
         }
-        return `<section class="legal-ai-summary" aria-label="AI Matter Summary">
-            <div class="legal-ai-summary-header"><div><h3>AI Matter Summary</h3><p>Generated automatically from linked supporting documents.</p></div>${button}</div>
+        return `<section class="legal-ai-summary ai-insights-card" aria-label="AI Matter Summary">
+            <div class="legal-ai-summary-header"><div><h3><span class="material-symbols-outlined ai-insights-icon" aria-hidden="true">auto_awesome</span>AI Insights</h3><p>Matter Summary</p></div>${button}</div>
             <div class="legal-ai-summary-content legal-ai-summary-${esc(status.toLowerCase().replace(/_/g, '-'))}">${content}</div>
         </section>`;
     }
@@ -1042,7 +1053,7 @@
 
     async function reanalyzeAi(id) {
         if (state.aiInitialJobs.has(id)) return;
-        if (!await window.FAMModal.confirm('Analyze linked supporting documents for summary, parties, and action suggestions?', { title: 'Re-analyze AI', confirmLabel: 'Analyze' })) return;
+        if (!await window.FAMModal.confirm('Analyze linked supporting documents for summary, parties, and action suggestions?', { title: 'Refresh AI Insights', confirmLabel: 'Analyze' })) return;
         state.aiInitialJobs.add(id);
         try {
             const payload = await window.FAMApi.request(api(`legal/analyze-ai.php?id=${id}&regenerate=1`), { method: 'POST', body: {} });

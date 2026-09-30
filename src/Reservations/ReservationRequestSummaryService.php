@@ -191,7 +191,8 @@ final class ReservationRequestSummaryService
     {
         return "Summarize a room reservation request letter for FAM review.\n"
             . "Use only facts supported by the uploaded letter. Do not approve, reject, judge policy compliance, or invent missing details.\n"
-            . "Return concise JSON with summary only. Keep the summary to 2 to 4 factual advisory sentences for a FAM reviewer.\n"
+            . "Return concise JSON with summary only. Keep the summary to a maximum of 2 short factual sentences for a FAM reviewer.\n"
+            . "Prioritize only letter-supported requester, department, requested facility, requested date/time, attendee count, purpose, setup requirements, equipment requirements, and special instructions when explicitly present.\n"
             . "When explicitly stated in the letter, include the reservation purpose/context, meeting/training/event context, requested room setup, seating arrangement, projector/display, microphone/audio, whiteboard/equipment, or other facility arrangement requests.\n"
             . "Do not infer setup or equipment requirements when the letter does not state them. Do not repeat room, schedule, or attendee data unless the letter itself makes it review-relevant.\n"
             . "Reservation number, room, requester, and department are supplied only as review context; do not state that the uploaded letter contains those facts unless the letter itself supports them.\n"

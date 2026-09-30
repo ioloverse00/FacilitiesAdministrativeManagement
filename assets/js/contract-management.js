@@ -1158,7 +1158,7 @@
         const extractionMessage = unavailable
             ? '<p class="legal-empty-note">AI date extraction is currently unavailable. Enter the dates manually or retry extraction.</p>'
             : '';
-        const retry = dates.canRetryExtraction ? `<button class="btn-secondary dashboard-action-button" type="button" data-contract-dates-retry="${esc(id)}">Retry AI Date Extraction</button>` : '';
+        const retry = dates.canRetryExtraction ? `<button class="btn-secondary dashboard-action-button" type="button" data-contract-dates-retry="${esc(id)}">Retry</button>` : '';
         const startValue = dates.stale ? (dates.suggestedStartDate || dates.startDate || '') : (dates.startDate || dates.suggestedStartDate || '');
         const endValue = dates.stale ? (dates.suggestedEndDate || dates.endDate || '') : (dates.endDate || dates.suggestedEndDate || '');
         const sourceLabel = dates.sourceDocumentVersionId ? `Source version #${dates.sourceDocumentVersionId}` : 'No finalized source version';
@@ -1168,15 +1168,16 @@
         document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
         modal.innerHTML = `<div class="facility-dialog-panel document-form">
             <div class="facility-details-modal-header">
-                <div><p>Contract Dates</p><h2>Review Contract Dates</h2><span class="facility-details-modal-request-number">${esc(item.contractNo)} - ${esc(sourceLabel)}</span></div>
+                <div><p><span class="material-symbols-outlined ai-insights-icon" aria-hidden="true">auto_awesome</span>AI Insights</p><h2>Review Contract Dates</h2><span class="facility-details-modal-request-number">${esc(item.contractNo)} - ${esc(sourceLabel)}</span></div>
                 <button class="facility-details-modal-close" type="button" data-contract-dialog-close aria-label="Close dialog">&times;</button>
             </div>
             <form class="facility-dialog-body document-form-body" data-contract-dates-form data-contract-id="${esc(id)}">
                 <div class="visitor-detail-grid contract-detail-grid">
-                    <div class="visitor-detail-item"><span>AI START DATE</span><strong>${esc(startSuggestion)}</strong></div>
-                    <div class="visitor-detail-item"><span>AI END DATE</span><strong>${esc(endSuggestion)}</strong></div>
+                    <div class="visitor-detail-item"><span>Suggested Start Date</span><strong>${esc(startSuggestion)}</strong></div>
+                    <div class="visitor-detail-item"><span>Suggested End Date</span><strong>${esc(endSuggestion)}</strong></div>
                 </div>
                 ${extractionMessage}
+                <p class="document-form-note">Source version is preserved for review. Confirm Dates remains a human action.</p>
                 <label class="facility-field"><span>Start Date</span><input name="start_date" type="date" value="${esc(startValue)}" required></label>
                 <label class="facility-field"><span>End Date</span><input name="end_date" type="date" value="${esc(endValue)}" required></label>
                 <div class="facility-dialog-actions">

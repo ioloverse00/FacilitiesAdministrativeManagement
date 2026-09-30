@@ -227,12 +227,27 @@
     function disclosure(titleText, content, open = false) {
         return `<details class="visitor-detail-disclosure"${open ? ' open' : ''}><summary>${esc(titleText)}</summary>${content}</details>`;
     }
+    function sentenceLimit(value, max = 2) {
+        const text = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!text) return '';
+        const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+        return sentences.slice(0, max).join(' ').trim();
+    }
     function aiSummary(item) {
         const ai = item.ai_request_summary || {};
-        if (String(ai.status || '').toUpperCase() === 'READY' && ai.summary) return esc(ai.summary);
+        if (String(ai.status || '').toUpperCase() === 'READY' && ai.summary) return esc(sentenceLimit(ai.summary, 2));
         if (['FAILED', 'NO_READABLE_SOURCE', 'TIMEOUT', 'RATE_LIMITED'].includes(String(ai.status || '').toUpperCase())) return 'AI summary is unavailable. Review the request letter as the authoritative source.';
         if (String(ai.status || '').toUpperCase() === 'PENDING') return 'AI summary is still being prepared.';
         return 'AI summary is not available for this reservation.';
+    }
+    function aiSummaryPanel(item) {
+        const ai = item.ai_request_summary || {};
+        const generated = ai.generatedAt ? `Generated ${fmtDateTime(ai.generatedAt)}` : 'Generated from the attached request letter';
+        return `<section class="retention-ai-card ai-insights-card" aria-label="AI Request Letter Summary">
+            <div class="retention-ai-card-header"><div><h3><span class="material-symbols-outlined ai-insights-icon" aria-hidden="true">auto_awesome</span>AI Insights</h3><p class="retention-muted">Request Letter Summary</p></div></div>
+            <p class="retention-ai-reason">${aiSummary(item)}</p>
+            <p class="retention-muted">${esc(generated)} · Review against the source document.</p>
+        </section>`;
     }
     function requestLetterLinks(item) {
         if (!item.request_letter) return '<p>No request letter is attached to this reservation.</p>';
@@ -273,7 +288,7 @@
         const requester = detailGrid(`${detail('Name', item.requester)}${detail('Employee No.', item.employeeNumber)}${detail('Department', item.department)}`);
         const attendance = detailGrid(`${detail('Checked In', fmtDateTime(item.lifecycle?.checked_in_at))}${detail('Checked Out', fmtDateTime(item.lifecycle?.checked_out_at))}`);
         const approvalHistory = `${historyTimeline(item.history || [])}${participants.length ? `<h3 class="reservation-accordion-subhead">Participants</h3>${lines(participants, 'No participants recorded.')}` : ''}`;
-        return `<div class="facility-details-modal-panel"><div class="facility-details-modal-header"><div><p>Room Reservation</p><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h2 id="reservation-drawer-title">${esc(item.room || 'Reservation Details')}</h2></div><button class="facility-details-modal-close" type="button" data-close-reservation-drawer aria-label="Close reservation details">&times;</button></div><div class="facility-details-modal-body"><div class="visitor-detail-accordion reservation-detail-accordion">${disclosure('General Information', general, true)}${disclosure('Schedule', schedule, true)}${disclosure('Room Information', room)}${disclosure('Requester', requester, true)}${disclosure('AI Request Summary', `<p>${aiSummary(item)}</p>`, true)}${disclosure('Request Letter', requestLetterLinks(item), true)}${disclosure('Attendance', attendance)}${disclosure('Approval / History', approvalHistory)}</div></div>${actions ? `<div class="facility-dialog-actions">${actions}</div>` : ''}</div>`;
+        return `<div class="facility-details-modal-panel"><div class="facility-details-modal-header"><div><p>Room Reservation</p><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h2 id="reservation-drawer-title">${esc(item.room || 'Reservation Details')}</h2></div><button class="facility-details-modal-close" type="button" data-close-reservation-drawer aria-label="Close reservation details">&times;</button></div><div class="facility-details-modal-body">${aiSummaryPanel(item)}<div class="visitor-detail-accordion reservation-detail-accordion">${disclosure('General Information', general, true)}${disclosure('Schedule', schedule, true)}${disclosure('Room Information', room)}${disclosure('Requester', requester, true)}${disclosure('Request Letter', requestLetterLinks(item), true)}${disclosure('Attendance', attendance)}${disclosure('Approval / History', approvalHistory)}</div></div>${actions ? `<div class="facility-dialog-actions">${actions}</div>` : ''}</div>`;
     }
     function adminActions(item) {
         const status = String(item.status || '').toUpperCase();
