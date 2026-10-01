@@ -149,13 +149,10 @@
     }
 
     async function openDocumentWithStepUp(requestInfo) {
-        await showDocumentOtpDialog(requestInfo, () => request(apiUrl('documents/request-otp.php'), {
-            method: 'POST',
-            body: documentStepUpPayload(requestInfo),
-        }));
+        await showDocumentPasswordDialog(requestInfo);
     }
 
-    function showDocumentOtpDialog(requestInfo, loadChallenge) {
+    function showDocumentPasswordDialog(requestInfo) {
         return new Promise(resolve => {
             let modal = document.getElementById('fam-document-step-up-modal');
             if (!modal) {
@@ -165,27 +162,14 @@
                 modal.hidden = true;
                 document.body.appendChild(modal);
             }
-            let remaining = 0;
-            let resend = 0;
-            let challengeId = '';
-            let timer = null;
             let busy = false;
-            let closed = false;
-            const cells = () => Array.from(modal.querySelectorAll('[data-document-otp-cell]'));
-            const otpValue = () => cells().map(input => input.value).join('');
             const setBusy = nextBusy => {
                 busy = nextBusy;
                 modal.querySelectorAll('button, input').forEach(control => { control.disabled = nextBusy; });
-                renderTimer();
-            };
-            const clearCode = () => {
-                cells().forEach(input => { input.value = ''; });
-                modal.querySelector('[data-document-otp-cell]')?.focus();
-                modal.querySelector('[data-document-otp-submit]')?.setAttribute('disabled', 'disabled');
             };
             const close = () => {
-                closed = true;
-                if (timer) clearInterval(timer);
+                const passwordInput = modal.querySelector('[data-document-password-input]');
+                if (passwordInput) passwordInput.value = '';
                 modal.hidden = true;
                 modal.innerHTML = '';
                 if (!document.querySelector('.facility-details-modal:not([hidden]), .facility-dialog:not([hidden])')) {
@@ -195,162 +179,73 @@
             };
             const renderShell = body => {
                 modal.hidden = false;
-                modal.innerHTML = `<form class="facility-dialog-panel document-form document-otp-panel" data-document-otp-form>
+                modal.innerHTML = `<form class="facility-dialog-panel document-form document-otp-panel" data-document-password-form>
                     <div class="facility-details-modal-header">
-                        <div><p>Confidential Document</p><h2>Verify document access</h2></div>
-                        <button class="facility-details-modal-close" type="button" data-document-otp-close aria-label="Close dialog">&times;</button>
+                        <div><p>Confidential Document</p><h2>Confirm document access</h2></div>
+                        <button class="facility-details-modal-close" type="button" data-document-password-close aria-label="Close dialog">&times;</button>
                     </div>
                     ${body}
                 </form>`;
                 window.FAMModal?.bringToFront?.(modal);
                 document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
-                modal.querySelectorAll('[data-document-otp-close]').forEach(button => button.addEventListener('click', close));
+                modal.querySelectorAll('[data-document-password-close]').forEach(button => button.addEventListener('click', close));
             };
-            const renderLoading = () => {
+            const renderReady = () => {
                 renderShell(`<div class="facility-dialog-body document-form-body">
                     <section class="document-form-section document-otp-section">
                         <div class="document-otp-heading">
-                            <h3>Sending verification code...</h3>
-                            <p>Please wait while we prepare secure access for this confidential document.</p>
+                            <h3>Enter your current password</h3>
+                            <p>This confirms your identity before opening the confidential document.</p>
                         </div>
-                        <div class="document-otp-loading" aria-hidden="true"></div>
-                        <div class="document-form-error hidden" data-document-otp-error role="alert"></div>
+                        <label class="document-form-field">
+                            <span>Password</span>
+                            <input type="password" data-document-password-input autocomplete="current-password" required>
+                        </label>
+                        <div class="document-form-error hidden" data-document-password-error role="alert"></div>
                     </section>
                 </div>
                 <div class="facility-dialog-actions document-otp-actions">
-                    <button class="btn-secondary dashboard-action-button" type="button" data-document-otp-close>Cancel</button>
+                    <button class="btn-secondary dashboard-action-button" type="button" data-document-password-close>Cancel</button>
+                    <button class="btn-primary dashboard-action-button" type="submit" data-document-password-submit>Continue</button>
                 </div>`);
-            };
-            const renderDeliveryError = error => {
-                renderShell(`<div class="facility-dialog-body document-form-body">
-                    <section class="document-form-section document-otp-section">
-                        <div class="document-otp-heading">
-                            <h3>We couldn't send the verification code.</h3>
-                            <p>${escapeHtml(error?.message || 'Please try again.')}</p>
-                        </div>
-                        <div class="document-form-error" data-document-otp-error role="alert">Document access was not granted.</div>
-                    </section>
-                </div>
-                <div class="facility-dialog-actions document-otp-actions">
-                    <button class="btn-secondary dashboard-action-button" type="button" data-document-otp-close>Close</button>
-                </div>`);
-            };
-            const renderTimer = () => {
-                const countdown = modal.querySelector('[data-document-otp-countdown]');
-                if (countdown) countdown.textContent = `${Math.max(0, remaining)}s`;
-                const resendButton = modal.querySelector('[data-document-otp-resend]');
-                if (resendButton) {
-                    resendButton.disabled = busy || resend > 0;
-                    resendButton.textContent = resend > 0 ? `Resend code · ${resend}s` : 'Resend code';
-                }
-                const submit = modal.querySelector('[data-document-otp-submit]');
-                if (submit) submit.disabled = busy || otpValue().length !== 6;
-                const errorBox = modal.querySelector('[data-document-otp-error]');
-                if (remaining <= 0 && errorBox) {
-                    errorBox.textContent = 'The code expired. Request a new code.';
-                    errorBox.classList.remove('hidden');
-                }
-            };
-            const renderReady = challenge => {
-                remaining = Number(challenge.expires_in_seconds || 60);
-                resend = Number(challenge.resend_cooldown_seconds || 30);
-                challengeId = challenge.challenge_id || '';
-                renderShell(`<div class="facility-dialog-body document-form-body">
-                    <section class="document-form-section document-otp-section">
-                        <div class="document-otp-heading">
-                            <h3>Enter verification code</h3>
-                            <p>For your security, enter the 6-digit code sent to ${challenge.email_hint ? `<strong>${escapeHtml(challenge.email_hint)}</strong>` : 'your registered email'}.</p>
-                            <p>Code expires in <strong data-document-otp-countdown>${remaining}s</strong>.</p>
-                        </div>
-                        <fieldset class="document-otp-group" aria-label="Document verification code">
-                            ${Array.from({ length: 6 }).map((_, index) => `<input class="document-otp-cell" data-document-otp-cell data-index="${index}" inputmode="numeric" autocomplete="${index === 0 ? 'one-time-code' : 'off'}" maxlength="1" pattern="[0-9]" aria-label="Verification code digit ${index + 1} of 6">`).join('')}
-                        </fieldset>
-                        <div class="document-form-error hidden" data-document-otp-error role="alert"></div>
-                    </section>
-                </div>
-                <div class="facility-dialog-actions document-otp-actions">
-                    <button class="btn-secondary dashboard-action-button" type="button" data-document-otp-close>Cancel</button>
-                    <button class="btn-secondary dashboard-action-button" type="button" data-document-otp-resend disabled>Resend code · ${resend}s</button>
-                    <button class="btn-primary dashboard-action-button" type="submit" data-document-otp-submit disabled>Verify</button>
-                </div>`);
-                modal.querySelector('[data-document-otp-cell]')?.focus();
-                renderTimer();
-                timer = setInterval(() => { remaining -= 1; resend -= 1; renderTimer(); }, 1000);
-                cells().forEach((input, index) => {
-                    input.addEventListener('input', () => {
-                        input.value = input.value.replace(/\D/g, '').slice(-1);
-                        if (input.value && index < 5) cells()[index + 1]?.focus();
-                        renderTimer();
-                    });
-                    input.addEventListener('keydown', event => {
-                        if (event.key === 'Backspace' && !input.value && index > 0) cells()[index - 1]?.focus();
-                        if (event.key === 'ArrowLeft' && index > 0) cells()[index - 1]?.focus();
-                        if (event.key === 'ArrowRight' && index < 5) cells()[index + 1]?.focus();
-                    });
-                    input.addEventListener('paste', event => {
-                        event.preventDefault();
-                        const digits = (event.clipboardData?.getData('text') || '').replace(/\D/g, '').slice(0, 6).split('');
-                        cells().forEach((cell, cellIndex) => { cell.value = digits[cellIndex] || ''; });
-                        cells()[Math.min(digits.length, 5)]?.focus();
-                        renderTimer();
-                    });
-                });
-                modal.querySelector('[data-document-otp-resend]')?.addEventListener('click', async () => {
-                    const box = modal.querySelector('[data-document-otp-error]');
-                    box?.classList.add('hidden');
-                    try {
-                        setBusy(true);
-                        const fresh = await request(apiUrl('documents/request-otp.php'), { method: 'POST', body: documentStepUpPayload(requestInfo) });
-                        challengeId = fresh.data.challenge_id || challengeId;
-                        remaining = Number(fresh.data.expires_in_seconds || 60);
-                        resend = Number(fresh.data.resend_cooldown_seconds || 30);
-                        clearCode();
-                        renderTimer();
-                    } catch (error) {
-                        if (box) {
-                            box.textContent = error.message || 'Unable to send a new verification code.';
-                            box.classList.remove('hidden');
-                        }
-                    } finally {
-                        setBusy(false);
-                    }
-                });
-                modal.querySelector('[data-document-otp-form]')?.addEventListener('submit', async event => {
+                const passwordInput = modal.querySelector('[data-document-password-input]');
+                const errorBox = modal.querySelector('[data-document-password-error]');
+                passwordInput?.focus();
+                modal.querySelector('[data-document-password-form]')?.addEventListener('submit', async event => {
                     event.preventDefault();
-                    const box = modal.querySelector('[data-document-otp-error]');
-                    box?.classList.add('hidden');
-                    const otp = otpValue();
-                    if (otp.length !== 6) return;
-                    try {
-                        setBusy(true);
-                        await request(apiUrl('documents/verify-otp.php'), { method: 'POST', body: documentStepUpPayload(requestInfo, { challenge_id: challengeId, otp }) });
-                        close();
-                        window.open(requestInfo.url, requestInfo.target, 'noopener');
-                    } catch (error) {
-                        if (box) {
-                            box.textContent = error.message || 'Verification failed. Check the code and try again.';
-                            box.classList.remove('hidden');
+                    if (busy) return;
+                    const password = passwordInput?.value || '';
+                    if (password === '') {
+                        if (errorBox) {
+                            errorBox.textContent = 'Password verification failed.';
+                            errorBox.classList.remove('hidden');
                         }
-                        clearCode();
-                        setBusy(false);
-                    }
-                });
-            };
-            renderLoading();
-            loadChallenge()
-                .then(payload => {
-                    if (closed) return;
-                    if (payload.data?.step_up_required === false) {
-                        close();
-                        window.open(requestInfo.url, requestInfo.target, 'noopener');
                         return;
                     }
-                    renderReady(payload.data || {});
-                })
-                .catch(error => {
-                    if (closed) return;
-                    renderDeliveryError(error);
+
+                    try {
+                        setBusy(true);
+                        await request(apiUrl('documents/verify-password.php'), {
+                            method: 'POST',
+                            body: documentStepUpPayload(requestInfo, { password }),
+                        });
+                        if (passwordInput) passwordInput.value = '';
+                        close();
+                        window.open(requestInfo.url, requestInfo.target, 'noopener');
+                    } catch (error) {
+                        if (passwordInput) {
+                            passwordInput.value = '';
+                            passwordInput.focus();
+                        }
+                        if (errorBox) {
+                            errorBox.textContent = error.message || 'Password verification failed.';
+                            errorBox.classList.remove('hidden');
+                        }
+                        setBusy(false);
+                    }
                 });
+            };
+            renderReady();
         });
     }
 

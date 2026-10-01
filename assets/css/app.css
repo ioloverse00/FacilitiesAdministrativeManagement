@@ -9609,9 +9609,19 @@ col.table-col-actions { width: 4.75rem; }
 .visitor-table-header { align-items: flex-end; row-gap: 0.85rem; }
 .visitor-records-toolbar {
   display: grid;
-  grid-template-columns: minmax(18rem, 2fr) repeat(2, minmax(10rem, 1fr));
+  grid-template-columns: minmax(18rem, 2fr) repeat(4, minmax(9rem, 1fr)) auto;
   gap: 0.75rem;
   align-items: center;
+}
+.visitor-date-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+.visitor-date-actions .dashboard-action-button {
+  min-height: 2.5rem;
+  padding-inline: 0.95rem;
 }
 .visitor-check-filter {
   display: inline-flex;
@@ -10289,10 +10299,12 @@ col.table-col-actions { width: 4.75rem; }
 @media (max-width: 760px) {
   .visitor-records-toolbar,
   .visitor-records-toolbar .facility-search-field,
-  .visitor-records-toolbar .document-filter-field {
+  .visitor-records-toolbar .document-filter-field,
+  .visitor-date-actions {
     width: 100%;
     justify-content: stretch;
   }
+  .visitor-date-actions .dashboard-action-button { flex: 1 1 0; }
   .visitor-management-table { min-width: 560px; }
   .visitor-management-table th:nth-child(3), .visitor-management-table td:nth-child(3),
   .visitor-management-table th:nth-child(4), .visitor-management-table td:nth-child(4),
@@ -10598,6 +10610,104 @@ body[data-active-nav="employee-request-room"] .employee-reservation-workspace {
 .employee-calendar-panel,
 .employee-selected-date-panel {
   padding: 1rem 1.1rem;
+}
+.employee-room-selection-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+}
+.employee-room-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+.employee-room-card {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--outline-variant, #d6dbe6);
+  border-radius: 0.75rem;
+  background: var(--surface, #fff);
+}
+.employee-room-card.selected {
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.employee-room-card-media {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #eef2f7;
+}
+.employee-room-card-media img,
+.reservation-room-image-panel img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.employee-room-card-placeholder,
+.reservation-room-image-placeholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 10rem;
+  place-items: center;
+  gap: 0.35rem;
+  color: var(--text-muted, #64748b);
+  background: linear-gradient(135deg, #eef2f7, #f8fafc);
+  font-weight: 700;
+  text-align: center;
+}
+.employee-room-card-placeholder .material-symbols-outlined,
+.reservation-room-image-placeholder .material-symbols-outlined {
+  color: var(--primary, #2563eb);
+  font-size: 2.4rem;
+}
+.employee-room-card-body {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+.employee-room-card-body h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+.employee-room-card-body p,
+.reservation-room-image-panel small {
+  margin: 0;
+  color: var(--text-muted, #64748b);
+  line-height: 1.45;
+}
+.employee-room-card-actions,
+.reservation-room-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.reservation-room-image-panel {
+  display: grid;
+  grid-template-columns: minmax(10rem, 16rem) 1fr;
+  gap: 1rem;
+  align-items: start;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--outline-variant, #d6dbe6);
+  border-radius: 0.75rem;
+  background: var(--surface, #fff);
+}
+.reservation-room-image-panel > img,
+.reservation-room-image-placeholder {
+  aspect-ratio: 16 / 9;
+  min-height: 8rem;
+  overflow: hidden;
+  border-radius: 0.55rem;
+}
+.reservation-room-image-panel > div:last-child,
+.reservation-room-image-form {
+  display: grid;
+  gap: 0.75rem;
+}
+.reservation-room-image-form {
+  margin-top: 0.35rem;
 }
 .employee-next-panel {
   display: grid;
@@ -12111,6 +12221,16 @@ body.facility-drawer-open {
   .employee-selected-date-header {
     align-items: stretch;
     flex-direction: column;
+  }
+  .employee-room-card-grid,
+  .reservation-room-image-panel {
+    grid-template-columns: 1fr;
+  }
+  .employee-room-card-actions .dashboard-action-button,
+  .employee-room-card-actions .facility-page-button,
+  .reservation-room-image-actions .dashboard-action-button {
+    width: 100%;
+    justify-content: center;
   }
   .employee-calendar-toolbar {
     align-items: stretch;

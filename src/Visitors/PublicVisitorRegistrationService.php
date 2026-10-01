@@ -83,6 +83,7 @@ final class PublicVisitorRegistrationService
             }
             $this->assertNoActiveVisitForEmail((string) $payload['email_address']);
             $visitorId = $this->createOrUpdateVisitor($payload);
+            $this->assertVisitorNotBlacklisted($visitorId);
             $reference = $this->nextReference();
             $scheduled = $payload['scheduled_start_at'] ?? null;
             $stmt = $this->pdo->prepare("INSERT INTO visit (visit_number, visitor_id, visitor_type, host_employee_reference_id, destination_department_reference_id, destination_space_id, purpose, visit_description, scheduled_arrival, scheduled_departure, actual_time_in, actual_time_out, visit_status, approval_status, registration_source, applicant_reference, company_or_school, privacy_consent, consented_at, consent_version, remarks, created_by_user_id, updated_by_user_id, created_at, updated_at) VALUES (:ref,:visitor_id,:type,:host,:dept,:space,:purpose,:description,:start,:end,NULL,NULL,'PENDING_REVIEW','PENDING','PUBLIC_PRE_REGISTRATION',:applicant,:company,1,NOW(),:consent_version,NULL,NULL,NULL,NOW(),NOW())");
@@ -196,6 +197,15 @@ final class PublicVisitorRegistrationService
         $stmt->execute(['email' => strtolower(trim($email))]);
         if ($stmt->fetchColumn() !== false) {
             throw new DomainException('You already have an active visitor registration. Please complete or check out from your current visit before registering another visit.', 409);
+        }
+    }
+
+    private function assertVisitorNotBlacklisted(int $visitorId): void
+    {
+        $stmt = $this->pdo->prepare("SELECT visitor_blacklist_id FROM visitor_blacklist WHERE visitor_id=:visitor_id AND status='ACTIVE' LIMIT 1");
+        $stmt->execute(['visitor_id' => $visitorId]);
+        if ($stmt->fetchColumn() !== false) {
+            throw new DomainException('Visitor registration cannot proceed. Please contact Facilities/Admin.', 409);
         }
     }
 

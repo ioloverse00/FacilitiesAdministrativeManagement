@@ -4,7 +4,7 @@
       tabTitle: 'Facility Requests',
       eyebrow: 'Facility Requests Report',
       fallbackTitle: 'Facility Requests Report',
-      filters: ['date_from', 'date_to', 'status', 'priority', 'department_id'],
+      filters: ['search', 'date_from', 'date_to', 'status', 'priority', 'department_id'],
       analysis: {
         categorical: { dataset: 'charts.Priority', title: 'Requests by Priority', type: 'bar' },
         distribution: { dataset: 'charts.Status', title: 'Request Status Distribution', type: 'doughnut' },
@@ -19,8 +19,8 @@
       fallbackTitle: 'Documents & Records Report',
       description: data => data.description || 'Metadata reporting over documents and retention records.',
       filters: context => context.source === 'records'
-        ? ['source', 'date_from', 'date_to', 'department_id', 'status', 'retention_schedule_id', 'retention_state']
-        : ['source', 'date_from', 'date_to', 'status', 'category_id', 'confidentiality'],
+        ? ['source', 'search', 'date_from', 'date_to', 'department_id', 'status', 'retention_schedule_id', 'retention_state']
+        : ['source', 'search', 'date_from', 'date_to', 'status', 'category_id', 'confidentiality'],
       analysis: context => context.source === 'records' ? {
         categorical: { dataset: 'records.charts.Records by Schedule', title: 'Records by Schedule', type: 'horizontalBar' },
         distribution: { dataset: 'records.charts.Records by Retention State', title: 'Records by Retention State', type: 'doughnut' },
@@ -44,7 +44,7 @@
       eyebrow: 'Contracts Report',
       fallbackTitle: 'Contracts Report',
       fallbackDescription: 'Contract lifecycle, type, and expiry analysis',
-      filters: ['date_basis', 'date_from', 'date_to', 'status', 'type_id', 'department_id'],
+      filters: ['date_basis', 'search', 'date_from', 'date_to', 'status', 'type_id', 'department_id'],
       analysis: {
         categorical: { dataset: 'charts.Contracts by Type', title: 'Contracts by Type', type: 'horizontalBar' },
         distribution: { dataset: 'charts.Contracts by Lifecycle Status', title: 'Contracts by Lifecycle Status', type: 'doughnut' },
@@ -64,13 +64,14 @@
         timeline: { dataset: 'charts.Legal Matter Activity Over Time', title: 'Legal Matter Activity Over Time', type: 'line' }
       },
       table: { title: 'Legal Matter Register', rows: 'rows', columns: 'columns', count: 'record_count', badgeColumns: ['Priority', 'Status'], empty: 'No legal matters match the selected filters.' },
-      csv: false
+      csv: true
     }
   };
 
   const FILTER_DEFINITIONS = {
     source: { label: 'Source', type: 'select', options: 'sources', defaultValue: 'documents', requiredChoice: true },
     date_basis: { label: 'Date Basis', type: 'select', options: 'date_basises', defaultValue: 'effective_start', requiredChoice: true },
+    search: { label: 'Search', type: 'search' },
     date_from: { label: 'From', type: 'date' },
     date_to: { label: 'To', type: 'date' },
     status: { label: context => context.report === 'contracts' ? 'Lifecycle Status' : 'Status', type: 'select', options: context => context.report === 'documents_records' && context.source === 'records' ? 'record_statuses' : 'statuses' },
@@ -222,7 +223,7 @@
 
   function exportActionsHtml() {
     return `<button id="reports-export-csv" class="btn-primary dashboard-action-button" type="button"><span class="material-symbols-outlined" aria-hidden="true">download</span>Export CSV</button>
-      <button id="reports-export-pdf" class="btn-primary dashboard-action-button reports-export-button" type="button" disabled title="PDF export is queued for the next reporting phase."><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>Export PDF</button>`;
+      <button id="reports-export-pdf" class="btn-primary dashboard-action-button reports-export-button" type="button"><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>Export PDF</button>`;
   }
 
   function renderFilters(def, ctx, options) {
@@ -247,7 +248,7 @@
   function filterFields(def, ctx, options) {
     const configured = valueOf(def.filters, state.data, ctx) || [];
     return configured.map(name => ({ name, ...FILTER_DEFINITIONS[name] }))
-      .filter(field => field.type === 'date' || optionList(field, ctx, options).length || field.requiredChoice);
+      .filter(field => ['date', 'search'].includes(field.type) || optionList(field, ctx, options).length || field.requiredChoice);
   }
 
   function populateFilter(label, field, ctx, options) {
@@ -289,6 +290,12 @@
     csv.disabled = !enabled;
     csv.classList.toggle('is-disabled', !enabled);
     csv.title = enabled ? '' : 'CSV export is not available for this report yet.';
+    const pdf = qs('#reports-export-pdf');
+    if (!pdf) return;
+    const pdfEnabled = state.data?.export?.pdf === true;
+    pdf.disabled = !pdfEnabled;
+    pdf.classList.toggle('is-disabled', !pdfEnabled);
+    pdf.title = pdfEnabled ? '' : 'PDF export is not available for this report yet.';
   }
 
   function updateTimestamp() {
@@ -479,7 +486,11 @@
       const pdf = event.target.closest('#reports-export-pdf');
       if (!csv && !pdf) return;
       if (pdf) {
-        showError('PDF export is planned for the next reporting phase after selecting a Composer PDF library.');
+        if (pdf.disabled || state.data?.export?.pdf !== true) {
+          showError('PDF export is not available for this report yet.');
+          return;
+        }
+        window.location.href = `../api/reports/export-pdf.php?${params()}`;
         return;
       }
       if (csv.disabled || state.data?.export?.csv !== true || definition().csv === false) {

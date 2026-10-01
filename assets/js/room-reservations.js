@@ -15,6 +15,9 @@
         if (value < 1048576) return `${Math.ceil(value / 1024)} KB`;
         return `${(value / 1048576).toFixed(value < 10485760 ? 1 : 0)} MB`;
     };
+    const roomImageUrl = image => image?.has_image && image.url
+        ? (window.FAMApi?.apiUrl?.(image.url) || `../api/${image.url}`)
+        : '';
     const badge = value => `<span class="facility-badge facility-status-${String(value || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${esc(title(value || 'Not applicable'))}</span>`;
     const can = permission => (window.FAMApi?.currentUser?.permissions || []).includes(permission);
     const canAny = permissions => permissions.some(can);
@@ -256,6 +259,24 @@
         const meta = [letter.fileName || 'File unavailable', String(letter.extension || letter.mimeType || '').toUpperCase(), fileSize(letter.fileSize), letter.uploadedAt ? `Uploaded ${fmtDateTime(letter.uploadedAt)}` : 'Current request letter'].filter(Boolean).join(' · ');
         return `<article class="document-file-row reservation-request-letter-row"><div><span class="material-symbols-outlined document-file-icon" aria-hidden="true">description</span><div><strong>Request Letter</strong><small>${esc(meta)}</small></div></div><div class="document-file-actions"><a href="../api/reservations/request-letter.php?id=${id}&mode=view" target="_blank" rel="noopener">View</a><a href="../api/reservations/request-letter.php?id=${id}&mode=download" target="_blank" rel="noopener">Download</a></div></article>`;
     }
+    function roomImagePanel(item) {
+        const canManage = canAny(['reservations.edit', 'reservations.manage']);
+        const imageUrl = roomImageUrl(item.roomImage);
+        const meta = item.roomImage?.has_image
+            ? [item.roomImage.fileName, item.roomImage.fileSize ? fileSize(item.roomImage.fileSize) : '', item.roomImage.uploadedAt ? `Uploaded ${fmtDateTime(item.roomImage.uploadedAt)}` : ''].filter(Boolean).join(' - ')
+            : 'No room image uploaded yet.';
+        const media = imageUrl
+            ? `<img src="${esc(imageUrl)}" alt="${esc(item.room || 'Room image')}" loading="lazy">`
+            : `<div class="reservation-room-image-placeholder"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><span>No image</span></div>`;
+        const controls = canManage && item.facilitySpaceId ? `<form class="reservation-room-image-form" data-room-image-form data-reservation-id="${esc(item.id)}" data-space-id="${esc(item.facilitySpaceId)}">
+                <label class="facility-field"><span>Room Image</span><input name="room_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required><small>JPEG, PNG, or WebP up to 5 MB.</small></label>
+                <div class="reservation-room-image-actions">
+                    <button class="btn-primary dashboard-action-button" type="submit">${item.roomImage?.has_image ? 'Replace Image' : 'Upload Image'}</button>
+                    ${item.roomImage?.has_image ? `<button class="btn-secondary dashboard-action-button" type="button" data-remove-room-image="${esc(item.facilitySpaceId)}" data-reservation-id="${esc(item.id)}">Remove Image</button>` : ''}
+                </div>
+            </form>` : '';
+        return `<section class="reservation-room-image-panel">${media}<div><strong>${esc(item.room || 'Room')}</strong><small>${esc(meta)}</small>${controls}</div></section>`;
+    }
     function historyTitle(row) {
         const next = String(row.new_status || '').toUpperCase();
         const old = String(row.old_status || '').toUpperCase();
@@ -284,7 +305,7 @@
         const actions = adminActions(item);
         const general = detailGrid(`${detail('Reservation No.', item.reservationNo)}${detail('Status', title(item.status))}${detail('Approval Status', title(item.approval))}${detail('Reservation Type', title(item.reservationType || 'MEETING'))}`);
         const schedule = detailGrid(`${detail('Start', fmtDateTime(item.start))}${detail('End', fmtDateTime(item.end))}${detail('Attendee Count', item.attendees)}`);
-        const room = detailGrid(`${detail('Facility Space', item.room)}${detail('Building', item.building)}${detail('Floor', item.floor)}${detail('Room Type', item.roomType)}${detail('Capacity', item.capacity)}`);
+        const room = `${roomImagePanel(item)}${detailGrid(`${detail('Facility Space', item.room)}${detail('Building', item.building)}${detail('Floor', item.floor)}${detail('Room Type', item.roomType)}${detail('Capacity', item.capacity)}${item.locationDescription ? detail('Location', item.locationDescription, 'detail-item--full') : ''}`)}`;
         const requester = detailGrid(`${detail('Name', item.requester)}${detail('Employee No.', item.employeeNumber)}${detail('Department', item.department)}`);
         const attendance = detailGrid(`${detail('Checked In', fmtDateTime(item.lifecycle?.checked_in_at))}${detail('Checked Out', fmtDateTime(item.lifecycle?.checked_out_at))}`);
         const approvalHistory = `${historyTimeline(item.history || [])}${participants.length ? `<h3 class="reservation-accordion-subhead">Participants</h3>${lines(participants, 'No participants recorded.')}` : ''}`;
@@ -414,6 +435,31 @@
         await openDetails(id);
         window.FAMModal?.showToast('Reservation updated.');
     }
+    async function submitRoomImage(form) {
+        const button = form.querySelector('[type="submit"]');
+        const reservationId = form.dataset.reservationId;
+        const spaceId = form.dataset.spaceId;
+        button.disabled = true;
+        try {
+            await window.FAMApi.request(`../api/reservations/room-image.php?space_id=${encodeURIComponent(spaceId)}`, { method: 'POST', body: new FormData(form) });
+            state.details.delete(String(reservationId));
+            await refreshFilteredViews();
+            await openDetails(reservationId);
+            window.FAMModal?.showToast('Room image saved.');
+        } catch (error) {
+            window.FAMModal?.showToast(error.message || 'Unable to save room image.');
+        } finally {
+            button.disabled = false;
+        }
+    }
+    async function removeRoomImage(spaceId, reservationId) {
+        if (!await window.FAMModal.confirm('Remove the image for this room?', { title: 'Remove Room Image', confirmLabel: 'Remove Image' })) return;
+        await window.FAMApi.request(`../api/reservations/room-image.php?space_id=${encodeURIComponent(spaceId)}`, { method: 'DELETE' });
+        state.details.delete(String(reservationId));
+        await refreshFilteredViews();
+        await openDetails(reservationId);
+        window.FAMModal?.showToast('Room image removed.');
+    }
     function shift(amount) {
         if (state.view === 'month') state.anchor.setMonth(state.anchor.getMonth() + amount);
         if (state.view === 'week') state.anchor.setDate(state.anchor.getDate() + amount * 7);
@@ -490,11 +536,19 @@
         }
         const action = event.target.closest('[data-reservation-action]');
         if (action) return processReservation(action.dataset.reservationAction, action.dataset.actionId).catch(error => window.FAMModal?.showToast(error.message || 'Unable to update reservation.'));
+        const removeImage = event.target.closest('[data-remove-room-image]');
+        if (removeImage) return removeRoomImage(removeImage.dataset.removeRoomImage, removeImage.dataset.reservationId).catch(error => window.FAMModal?.showToast(error.message || 'Unable to remove room image.'));
         if (event.target.closest('[data-close-reservation-drawer]')) return closeDetails();
         if (event.target === qs('reservation-details-drawer')) return closeDetails();
         const retry = event.target.closest('[data-reservation-retry]');
         if (retry) return openDetails(retry.dataset.reservationRetry);
         if (event.target.closest('[data-calendar-retry]')) return loadCalendar();
+    });
+    document.addEventListener('submit', event => {
+        const form = event.target.closest('[data-room-image-form]');
+        if (!form) return;
+        event.preventDefault();
+        submitRoomImage(form);
     });
     document.addEventListener('keydown', event => {
         trapDetailsFocus(event);

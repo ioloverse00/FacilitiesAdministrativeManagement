@@ -5,8 +5,10 @@ requireMethod('GET');
 $user = currentApiUser();
 requirePermission($user, 'visitors.view');
 requirePermission($user, 'visitors.export');
+$service = visitorService();
+try { $service->validateListFilters($_GET); } catch(Throwable $e) { visitorValidation($e); }
 header('Content-Type: text/csv; charset=utf-8');
 header('Content-Disposition: attachment; filename="visitor-management-export-' . date('Ymd-His') . '.csv"');
 echo "\xEF\xBB\xBF";
 $handle = fopen('php://output', 'w');
-visitorService()->streamCsv($_GET, $handle);
+$service->streamCsv($_GET, $handle);

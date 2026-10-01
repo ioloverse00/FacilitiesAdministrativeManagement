@@ -16,15 +16,6 @@ final class MailService
         );
     }
 
-    public function sendDocumentOtp(string $email, string $otp, DateTimeImmutable $expiresAt): void
-    {
-        $this->sendOtpMessage(
-            $email,
-            'FAM secure document verification code',
-            "Your FAM secure document access code is:\n\n{$otp}\n\nThis code expires at {$expiresAt->format('Y-m-d H:i:s')}.\nIf you did not request this code, contact the administrator."
-        );
-    }
-
     public function sendAccountSetupLink(string $email, string $setupUrl, DateTimeImmutable $expiresAt): void
     {
         $this->sendOtpMessage(

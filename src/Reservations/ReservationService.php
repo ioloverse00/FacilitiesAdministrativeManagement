@@ -40,6 +40,9 @@ final class ReservationService
     private const REQUEST_LETTER_MAX_SIZE = 10485760;
     private const REQUEST_LETTER_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg'];
     private const REQUEST_LETTER_MIME = ['application/pdf', 'image/png', 'image/jpeg'];
+    private const ROOM_IMAGE_MAX_SIZE = 5242880;
+    private const ROOM_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+    private const ROOM_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 
     public function __construct(private readonly PDO $pdo) {}
 
@@ -87,7 +90,7 @@ final class ReservationService
 
     public function options(): array
     {
-        return ['statuses'=>self::STATUSES,'approval_statuses'=>self::APPROVAL_STATUSES,'reservation_types'=>$this->distinct('facility_reservation','reservation_type'),'facility_spaces'=>$this->query("SELECT fs.facility_space_id id, fs.space_code code, fs.space_name name, fs.space_type type, fs.capacity, b.building_name FROM facility_space fs INNER JOIN building b ON b.building_id=fs.building_id WHERE fs.status='ACTIVE' AND fs.is_reservable=1 AND fs.deleted_at IS NULL ORDER BY b.building_name, fs.space_name"),'buildings'=>$this->query("SELECT building_id id, building_code code, building_name name FROM building WHERE status='ACTIVE' AND deleted_at IS NULL ORDER BY building_name"),'requesters'=>$this->query("SELECT employee_reference_id id, employee_number, full_name, department_reference_id FROM employee_reference WHERE employment_status='ACTIVE' AND deleted_at IS NULL ORDER BY full_name")];
+        return ['statuses'=>self::STATUSES,'approval_statuses'=>self::APPROVAL_STATUSES,'reservation_types'=>$this->distinct('facility_reservation','reservation_type'),'facility_spaces'=>array_map(fn($row)=>$this->shapeRoom($row), $this->query("SELECT fs.facility_space_id id, fs.space_code code, fs.space_name name, fs.space_type type, fs.capacity, fs.location_description, fs.primary_image_original_file_name, fs.primary_image_storage_path, fs.primary_image_mime_type, fs.primary_image_file_size, fs.primary_image_uploaded_at, b.building_name FROM facility_space fs INNER JOIN building b ON b.building_id=fs.building_id WHERE fs.status='ACTIVE' AND fs.is_reservable=1 AND fs.deleted_at IS NULL ORDER BY b.building_name, fs.space_name")),'buildings'=>$this->query("SELECT building_id id, building_code code, building_name name FROM building WHERE status='ACTIVE' AND deleted_at IS NULL ORDER BY building_name"),'requesters'=>$this->query("SELECT employee_reference_id id, employee_number, full_name, department_reference_id FROM employee_reference WHERE employment_status='ACTIVE' AND deleted_at IS NULL ORDER BY full_name")];
     }
 
     public function details(int|string $idOrNumber): ?array
@@ -112,6 +115,68 @@ final class ReservationService
         $absolute = StoragePath::resolveExistingWithin('reservations', (string)$letter['storage_path']);
         if ($absolute === null) return null;
         return ['absolute_path'=>$absolute,'download_name'=>(string)$letter['original_file_name'],'mime_type'=>(string)$letter['mime_type'],'file_size'=>(int)$letter['file_size']];
+    }
+
+    public function roomImageFile(int $spaceId): ?array
+    {
+        $room = $this->roomImageRow($spaceId);
+        if ($room === null || empty($room['primary_image_storage_path'])) return null;
+        $absolute = StoragePath::resolveExistingWithin('facility-spaces', (string)$room['primary_image_storage_path']);
+        if ($absolute === null) return null;
+        return [
+            'absolute_path'=>$absolute,
+            'download_name'=>(string)($room['primary_image_original_file_name'] ?: 'room-image'),
+            'mime_type'=>(string)$room['primary_image_mime_type'],
+            'file_size'=>(int)$room['primary_image_file_size'],
+        ];
+    }
+
+    public function uploadRoomImage(int $spaceId, array $file, array $user): array
+    {
+        ReservationPolicy::requireAnyPermission($user, ['reservations.manage','reservations.edit']);
+        $upload = $this->validateRoomImage($file);
+        $stored = $this->storeRoomImage($upload, $spaceId);
+        $previous = '';
+        $this->pdo->beginTransaction();
+        try {
+            $room = $this->lockRoomForImage($spaceId);
+            if ($room === null) throw new InvalidArgumentException(json_encode(['facility_space_id'=>'Active reservable room is required.']));
+            $previous = (string)($room['primary_image_storage_path'] ?? '');
+            $this->pdo->prepare("UPDATE facility_space SET primary_image_original_file_name=:original, primary_image_storage_path=:path, primary_image_mime_type=:mime, primary_image_file_size=:size, primary_image_uploaded_by_user_id=:user_id, primary_image_uploaded_at=NOW(), updated_at=NOW() WHERE facility_space_id=:id AND status='ACTIVE' AND is_reservable=1 AND deleted_at IS NULL")->execute([
+                'original'=>$upload['original_name'],
+                'path'=>$stored['relative_path'],
+                'mime'=>$upload['mime_type'],
+                'size'=>$upload['size'],
+                'user_id'=>(int)$user['id'],
+                'id'=>$spaceId,
+            ]);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            if (is_file($stored['absolute_path'])) @unlink($stored['absolute_path']);
+            throw $e;
+        }
+        if ($previous !== '' && $previous !== $stored['relative_path']) $this->deleteRoomImageFile($previous);
+        return $this->shapeRoom($this->roomImageRow($spaceId) ?? []);
+    }
+
+    public function removeRoomImage(int $spaceId, array $user): array
+    {
+        ReservationPolicy::requireAnyPermission($user, ['reservations.manage','reservations.edit']);
+        $previous = '';
+        $this->pdo->beginTransaction();
+        try {
+            $room = $this->lockRoomForImage($spaceId);
+            if ($room === null) throw new InvalidArgumentException(json_encode(['facility_space_id'=>'Active reservable room is required.']));
+            $previous = (string)($room['primary_image_storage_path'] ?? '');
+            $this->pdo->prepare("UPDATE facility_space SET primary_image_original_file_name=NULL, primary_image_storage_path=NULL, primary_image_mime_type=NULL, primary_image_file_size=NULL, primary_image_uploaded_by_user_id=NULL, primary_image_uploaded_at=NULL, updated_at=NOW() WHERE facility_space_id=:id")->execute(['id'=>$spaceId]);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+        if ($previous !== '') $this->deleteRoomImageFile($previous);
+        return $this->shapeRoom($this->roomImageRow($spaceId) ?? []);
     }
 
     public function canView(array $item, array $user): bool
@@ -413,6 +478,28 @@ final class ReservationService
         return ['tmp_name'=>$tmp,'original_name'=>$this->safeFileName($original),'extension'=>$extension,'mime_type'=>$mime,'size'=>$size];
     }
 
+    private function validateRoomImage(array $file): array
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new InvalidArgumentException(json_encode(['room_image'=>'Upload a room image.']));
+        }
+        $size = (int)($file['size'] ?? 0);
+        if ($size <= 0 || $size > self::ROOM_IMAGE_MAX_SIZE) {
+            throw new InvalidArgumentException(json_encode(['room_image'=>'Room image must be 5 MB or smaller.']));
+        }
+        $original = basename((string)($file['name'] ?? 'room-image'));
+        $extension = strtolower(pathinfo($original, PATHINFO_EXTENSION));
+        if (!in_array($extension, self::ROOM_IMAGE_EXTENSIONS, true)) {
+            throw new InvalidArgumentException(json_encode(['room_image'=>'Upload a JPEG, PNG, or WebP image.']));
+        }
+        $tmp = (string)($file['tmp_name'] ?? '');
+        $mime = $tmp !== '' ? ((new finfo(FILEINFO_MIME_TYPE))->file($tmp) ?: '') : '';
+        if (!in_array($mime, self::ROOM_IMAGE_MIME, true)) {
+            throw new InvalidArgumentException(json_encode(['room_image'=>'Room image file type is not supported.']));
+        }
+        return ['tmp_name'=>$tmp,'original_name'=>$this->safeFileName($original),'extension'=>$extension,'mime_type'=>$mime,'size'=>$size];
+    }
+
     private function storeRequestLetter(array $upload, int $reservationId): array
     {
         $relativeDir = 'reservations/' . $reservationId . '/request-letter';
@@ -429,6 +516,24 @@ final class ReservationService
             throw new RuntimeException('Unable to store request letter.');
         }
         return ['relative_path'=>$relativeDir . '/' . $storedName,'absolute_path'=>$absolutePath,'stored_name'=>$storedName,'hash'=>hash_file('sha256', $absolutePath) ?: ''];
+    }
+
+    private function storeRoomImage(array $upload, int $spaceId): array
+    {
+        $relativeDir = 'facility-spaces/' . $spaceId . '/primary-image';
+        $absoluteDir = StoragePath::resolveWithin('facility-spaces', $relativeDir);
+        if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0775, true) && !is_dir($absoluteDir)) {
+            throw new RuntimeException('Unable to prepare room image storage.');
+        }
+        $storedName = bin2hex(random_bytes(16)) . '.' . $upload['extension'];
+        $absolutePath = $absoluteDir . DIRECTORY_SEPARATOR . $storedName;
+        $stored = is_uploaded_file($upload['tmp_name'])
+            ? move_uploaded_file($upload['tmp_name'], $absolutePath)
+            : (PHP_SAPI === 'cli' && copy($upload['tmp_name'], $absolutePath));
+        if (!$stored) {
+            throw new RuntimeException('Unable to store room image.');
+        }
+        return ['relative_path'=>$relativeDir . '/' . $storedName,'absolute_path'=>$absolutePath];
     }
 
     private function insertRequestLetter(int $reservationId, array $upload, array $stored, int $userId): void
@@ -459,6 +564,56 @@ final class ReservationService
         $stmt->execute(['id'=>$reservationId]);
         $row = $stmt->fetch();
         return is_array($row) ? $row : null;
+    }
+
+    private function shapeRoom(array $row): array
+    {
+        $id = (int)($row['id'] ?? $row['facility_space_id'] ?? 0);
+        return [
+            'id'=>$id,
+            'code'=>$row['code'] ?? $row['space_code'] ?? null,
+            'name'=>$row['name'] ?? $row['space_name'] ?? null,
+            'type'=>$row['type'] ?? $row['space_type'] ?? null,
+            'capacity'=>($row['capacity'] ?? null) === null ? null : (int)$row['capacity'],
+            'building_name'=>$row['building_name'] ?? null,
+            'location_description'=>$row['location_description'] ?? null,
+            'image'=>$this->roomImageMetadata($row, $id),
+        ];
+    }
+
+    private function roomImageMetadata(array $row, int $spaceId): array
+    {
+        $hasImage = !empty($row['primary_image_storage_path']) && !empty($row['primary_image_mime_type']);
+        return [
+            'has_image'=>$hasImage,
+            'url'=>$hasImage ? 'reservations/room-image.php?space_id=' . $spaceId : null,
+            'fileName'=>$hasImage ? (string)($row['primary_image_original_file_name'] ?? '') : null,
+            'mimeType'=>$hasImage ? (string)($row['primary_image_mime_type'] ?? '') : null,
+            'fileSize'=>$hasImage ? (int)($row['primary_image_file_size'] ?? 0) : null,
+            'uploadedAt'=>$hasImage ? ($row['primary_image_uploaded_at'] ?? null) : null,
+        ];
+    }
+
+    private function roomImageRow(int $spaceId): ?array
+    {
+        $stmt = $this->pdo->prepare("SELECT fs.facility_space_id id, fs.space_code code, fs.space_name name, fs.space_type type, fs.capacity, fs.location_description, fs.primary_image_original_file_name, fs.primary_image_storage_path, fs.primary_image_mime_type, fs.primary_image_file_size, fs.primary_image_uploaded_at, b.building_name FROM facility_space fs LEFT JOIN building b ON b.building_id=fs.building_id WHERE fs.facility_space_id=:id AND fs.status='ACTIVE' AND fs.is_reservable=1 AND fs.deleted_at IS NULL LIMIT 1");
+        $stmt->execute(['id'=>$spaceId]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $row : null;
+    }
+
+    private function lockRoomForImage(int $spaceId): ?array
+    {
+        $stmt = $this->pdo->prepare("SELECT * FROM facility_space WHERE facility_space_id=:id AND status='ACTIVE' AND is_reservable=1 AND deleted_at IS NULL FOR UPDATE");
+        $stmt->execute(['id'=>$spaceId]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $row : null;
+    }
+
+    private function deleteRoomImageFile(string $relativePath): void
+    {
+        $absolute = StoragePath::resolveExistingWithin('facility-spaces', $relativePath);
+        if ($absolute !== null && is_file($absolute)) @unlink($absolute);
     }
 
     private function safeFileName(string $name): string
@@ -542,7 +697,7 @@ final class ReservationService
 
     private function baseSelect(): string
     {
-        return "SELECT r.*, fs.space_code, fs.space_name, fs.space_type, fs.floor_number, fs.capacity, b.building_id, b.building_name, e.full_name requester_name, e.employee_number requester_number, d.department_name FROM facility_reservation r INNER JOIN facility_space fs ON fs.facility_space_id=r.facility_space_id LEFT JOIN building b ON b.building_id=fs.building_id LEFT JOIN employee_reference e ON e.employee_reference_id=r.requested_by_employee_reference_id LEFT JOIN department_reference d ON d.department_reference_id=r.department_reference_id";
+        return "SELECT r.*, fs.space_code, fs.space_name, fs.space_type, fs.floor_number, fs.capacity, fs.location_description, fs.primary_image_original_file_name, fs.primary_image_storage_path, fs.primary_image_mime_type, fs.primary_image_file_size, fs.primary_image_uploaded_at, b.building_id, b.building_name, e.full_name requester_name, e.employee_number requester_number, d.department_name FROM facility_reservation r INNER JOIN facility_space fs ON fs.facility_space_id=r.facility_space_id LEFT JOIN building b ON b.building_id=fs.building_id LEFT JOIN employee_reference e ON e.employee_reference_id=r.requested_by_employee_reference_id LEFT JOIN department_reference d ON d.department_reference_id=r.department_reference_id";
     }
 
     private function filters(array $q): array
@@ -558,7 +713,7 @@ final class ReservationService
 
     private function shape(array $r, bool $details = false): array
     {
-        $item = ['id'=>(int)$r['facility_reservation_id'],'requesterId'=>(int)$r['requested_by_employee_reference_id'],'reservationNo'=>$r['reservation_number'],'purpose'=>$r['purpose'],'reservationType'=>$r['reservation_type'],'room'=>$r['space_name'],'roomType'=>$r['space_type'],'building'=>$r['building_name'],'floor'=>$r['floor_number'],'capacity'=>$r['capacity']===null?null:(int)$r['capacity'],'requester'=>$r['requester_name'],'employeeNumber'=>$r['requester_number'],'department'=>$r['department_name'],'attendees'=>(int)$r['expected_attendees'],'approval'=>$r['approval_status'],'status'=>$r['status'],'start'=>$r['start_datetime'],'end'=>$r['end_datetime'],'createdAt'=>$r['created_at'],'ai_request_summary'=>['summary'=>$r['ai_request_summary'] ?? null,'status'=>$r['ai_request_summary_status'] ?? 'NOT_REQUESTED','generatedAt'=>$r['ai_request_summary_generated_at'] ?? null,'provider'=>$r['ai_request_summary_provider'] ?? null,'model'=>$r['ai_request_summary_model'] ?? null,'failureReason'=>$r['ai_request_summary_failure_reason'] ?? null]];
+        $item = ['id'=>(int)$r['facility_reservation_id'],'facilitySpaceId'=>(int)$r['facility_space_id'],'requesterId'=>(int)$r['requested_by_employee_reference_id'],'reservationNo'=>$r['reservation_number'],'purpose'=>$r['purpose'],'reservationType'=>$r['reservation_type'],'room'=>$r['space_name'],'roomType'=>$r['space_type'],'building'=>$r['building_name'],'floor'=>$r['floor_number'],'capacity'=>$r['capacity']===null?null:(int)$r['capacity'],'locationDescription'=>$r['location_description'] ?? null,'roomImage'=>$this->roomImageMetadata($r, (int)$r['facility_space_id']),'requester'=>$r['requester_name'],'employeeNumber'=>$r['requester_number'],'department'=>$r['department_name'],'attendees'=>(int)$r['expected_attendees'],'approval'=>$r['approval_status'],'status'=>$r['status'],'start'=>$r['start_datetime'],'end'=>$r['end_datetime'],'createdAt'=>$r['created_at'],'ai_request_summary'=>['summary'=>$r['ai_request_summary'] ?? null,'status'=>$r['ai_request_summary_status'] ?? 'NOT_REQUESTED','generatedAt'=>$r['ai_request_summary_generated_at'] ?? null,'provider'=>$r['ai_request_summary_provider'] ?? null,'model'=>$r['ai_request_summary_model'] ?? null,'failureReason'=>$r['ai_request_summary_failure_reason'] ?? null]];
         if ($details) $item['lifecycle'] = ['setup_requirements'=>$r['setup_requirements'],'setup_buffer_minutes'=>(int)$r['setup_buffer_minutes'],'cleanup_buffer_minutes'=>(int)$r['cleanup_buffer_minutes'],'approved_at'=>$r['approved_at'],'checked_in_at'=>$r['checked_in_at'],'checked_out_at'=>$r['checked_out_at'],'cancellation_reason'=>$r['cancellation_reason'],'remarks'=>$r['remarks']];
         $item['allowed_actions'] = $this->allowedActions($item, ['employee_id'=>$item['requesterId'], 'permissions'=>[]]);
         return $item;

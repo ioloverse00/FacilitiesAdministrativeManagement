@@ -4,6 +4,7 @@
         ['organization', 'Organization & Facilities', 'apartment'],
         ['users', 'Users & Roles', 'admin_panel_settings'],
         ['workflow', 'Workflow & Approvals', 'account_tree'],
+        ['visitor_blacklist', 'Visitor Blacklist', 'block'],
         ['sla', 'SLA Policies', 'timer'],
         ['reference', 'Reference Data', 'list_alt'],
         ['notifications', 'Notifications', 'notifications'],
@@ -13,7 +14,7 @@
         ['system', 'System Information', 'info']
     ];
 
-    const state = { active: 'general', dirty: false, ref: 'Facility Request Categories', userTab: 'users', selectedRole: 'FAM Super Administrator', auditSearch: '', auditResult: 'all', organizationTab: 'Departments' };
+    const state = { active: 'general', dirty: false, ref: 'Facility Request Categories', userTab: 'users', selectedRole: 'FAM Super Administrator', auditSearch: '', auditResult: 'all', organizationTab: 'Departments', blacklist: { search: '', loading: false, items: [], candidates: [], candidateSearch: '', selectedVisitor: null, reason: '', removalReason: '', error: '' } };
     const editableSections = new Set(['general', 'users', 'workflow', 'sla', 'reference', 'notifications', 'ai', 'integrations']);
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 
@@ -79,6 +80,15 @@
 
     function sectionGroup(title, content) {
         return `<section class="admin-form-section"><h3>${escapeHtml(title)}</h3>${content}</section>`;
+    }
+
+    function isBlacklistAdmin() {
+        const user = window.FAMApi?.currentUser || {};
+        return (user.permissions || []).includes('administration.view') && (user.roles || []).some(role => role.code === 'FAM_SUPER_ADMIN');
+    }
+
+    function visibleCategories() {
+        return categories.filter(item => item[0] !== 'visitor_blacklist' || isBlacklistAdmin());
     }
 
     function compactTable(headers, rows, options = {}) {
@@ -234,6 +244,25 @@
             const flows = [['Facility Requests', ['Requester', 'Department Approver', 'Facility Manager', 'Approved']], ['Maintenance Completion Verification', ['Technician', 'Maintenance Supervisor', 'Facility Manager', 'Verified']], ['Room Reservations', ['Requester', 'Reservation Officer', 'Approver', 'Approved']], ['Procurement Requests', ['Requester', 'Department Approver', 'FAM Administrator', 'Supply Chain Forwarding']], ['Records Disposition', ['Records Officer', 'Department Head', 'Auditor', 'Archived']]];
             return `${sectionHeader('Workflow & Approvals', 'Configure approval routing for operational transactions.')}<div class="admin-workflow-grid">${flows.map(flow => `<article class="fam-card admin-workflow-card"><h3>${flow[0]}</h3><div>${flow[1].map(step => `<span>${escapeHtml(step)}</span>`).join('<b>→</b>')}</div><footer><button class="facility-text-button" data-admin-hook>Edit Workflow</button><button class="facility-text-button" data-admin-hook>Preview</button></footer></article>`).join('')}</div>`;
         },
+        visitor_blacklist() {
+            const bl = state.blacklist;
+            const rows = bl.items.map(item => {
+                const v = item.visitor || {};
+                const info = [v.email_address, v.mobile_number, v.identification_last4 ? `ID ${v.identification_last4}` : ''].filter(Boolean).join(' / ');
+                return `<tr><td><strong>${escapeHtml(v.full_name || 'Unnamed visitor')}</strong><small>${escapeHtml([v.visitor_type, v.organization_name].filter(Boolean).join(' - ') || 'Visitor')}</small></td><td>${escapeHtml(info || 'Not available')}</td><td>${escapeHtml(item.reason)}</td><td>${escapeHtml(item.blacklisted_by || 'System')}</td><td>${escapeHtml(item.blacklisted_at || 'Not available')}</td><td><button class="facility-text-button" type="button" data-unblacklist="${escapeHtml(item.id)}" data-visitor-name="${escapeHtml(v.full_name || 'this visitor')}">Unblacklist</button></td></tr>`;
+            }).join('');
+            const candidates = bl.candidates.map(visitor => {
+                const selected = bl.selectedVisitor?.id === visitor.id;
+                const info = [visitor.email_address, visitor.mobile_number, visitor.identification_last4 ? `ID ${visitor.identification_last4}` : ''].filter(Boolean).join(' / ');
+                return `<button class="${selected ? 'selected' : ''}" type="button" data-blacklist-select-visitor="${escapeHtml(visitor.id)}" ${visitor.is_blacklisted ? 'disabled' : ''}><span>${escapeHtml(visitor.full_name || 'Unnamed visitor')}${visitor.is_blacklisted ? ' - already blacklisted' : ''}</span><small>${escapeHtml(info || visitor.organization_name || visitor.visitor_type || 'Existing visitor record')}</small></button>`;
+            }).join('');
+            return `${sectionHeader('Visitor Blacklist', 'Manage active visitor blacklist records from authoritative visitor profiles.')}
+                <div class="admin-management-grid">
+                    <article class="fam-card admin-mini-section"><h3>Add to Blacklist</h3><label class="facility-field"><span>Find Existing Visitor</span><input id="blacklist-candidate-search" value="${escapeHtml(bl.candidateSearch)}" placeholder="Search name, email, contact, or ID last 4"></label><div class="admin-org-record-list visitor-blacklist-candidates" role="listbox">${candidates || '<p>Search for an existing visitor record.</p>'}</div><label class="facility-field"><span>Reason</span><textarea id="blacklist-reason" rows="4" placeholder="Required reason">${escapeHtml(bl.reason)}</textarea></label><button class="btn-primary dashboard-action-button" type="button" data-blacklist-add ${bl.selectedVisitor && bl.reason.trim() ? '' : 'disabled'}>Add to Blacklist</button></article>
+                    <article class="fam-card admin-mini-section"><h3>Active Blacklist</h3><label class="facility-field facility-search-field"><span class="sr-only">Search blacklist</span><input id="blacklist-search" value="${escapeHtml(bl.search)}" placeholder="Search blacklist..."></label>${bl.error ? `<p class="admin-advisory">${escapeHtml(bl.error)}</p>` : ''}</article>
+                </div>
+                <div class="facility-table-scroll"><table class="facility-requests-table admin-compact-table"><thead><tr><th>Visitor</th><th>Identity / Contact</th><th>Reason</th><th>Blacklisted By</th><th>Blacklisted At</th><th>Actions</th></tr></thead><tbody>${rows || `<tr><td colspan="6">${escapeHtml(bl.loading ? 'Loading blacklist...' : 'No active blacklisted visitors.')}</td></tr>`}</tbody></table></div>`;
+        },
         sla() {
             const rows = [['Critical Electrical Issue', 'Electrical', 'Critical', '15 min', '30 min', '4 hrs', 'Manager alert', 'Active'], ['High Plumbing Issue', 'Plumbing', 'High', '30 min', '1 hr', '8 hrs', 'Supervisor alert', 'Active'], ['Standard Facility Request', 'General', 'Medium', '2 hrs', '4 hrs', '2 days', 'Daily digest', 'Active']];
             return `${sectionHeader('SLA Policies', 'Configure target response and completion times for facility requests.')}<button class="facility-text-button admin-add-button" data-admin-hook>Add Policy</button>${compactTable(['Policy', 'Request Category', 'Priority', 'Acknowledgement Target', 'Assignment Target', 'Resolution Target', 'Escalation', 'Status'], rows)}`;
@@ -283,14 +312,83 @@
         </div>`;
     }
 
+    async function loadBlacklist() {
+        if (!isBlacklistAdmin()) return;
+        const bl = state.blacklist;
+        bl.loading = true;
+        bl.error = '';
+        renderPanel();
+        try {
+            const params = new URLSearchParams();
+            if (bl.search.trim()) params.set('search', bl.search.trim());
+            const payload = await window.FAMApi.request(`../api/settings/visitor-blacklist.php?${params}`);
+            bl.items = payload.data?.items || [];
+        } catch (error) {
+            bl.error = error.message || 'Unable to load visitor blacklist.';
+        } finally {
+            bl.loading = false;
+            renderPanel();
+        }
+    }
+
+    async function searchBlacklistCandidates() {
+        const query = state.blacklist.candidateSearch.trim();
+        if (!query) {
+            state.blacklist.candidates = [];
+            state.blacklist.selectedVisitor = null;
+            renderPanel();
+            return;
+        }
+        try {
+            const payload = await window.FAMApi.request(`../api/settings/visitor-search.php?search=${encodeURIComponent(query)}`);
+            state.blacklist.candidates = payload.data?.items || [];
+        } catch (error) {
+            state.blacklist.error = error.message || 'Unable to search visitor records.';
+        }
+        renderPanel();
+    }
+
+    async function addBlacklistEntry() {
+        const bl = state.blacklist;
+        if (!bl.selectedVisitor || !bl.reason.trim()) return;
+        try {
+            await window.FAMApi.request('../api/settings/visitor-blacklist.php', { method: 'POST', body: { visitor_id: bl.selectedVisitor.id, reason: bl.reason.trim() } });
+            bl.candidateSearch = '';
+            bl.candidates = [];
+            bl.selectedVisitor = null;
+            bl.reason = '';
+            window.FAMModal?.showToast('Visitor blacklisted.');
+            await loadBlacklist();
+        } catch (error) {
+            window.FAMModal?.showToast(error.message || 'Unable to blacklist visitor.');
+        }
+    }
+
+    async function removeBlacklistEntry(id, visitorName) {
+        const reason = await window.FAMModal.prompt(`Reason for removing ${visitorName || 'this visitor'} from blacklist`, '', { title: 'Unblacklist Visitor', confirmLabel: 'Unblacklist' });
+        if (reason === null) return;
+        if (!reason.trim()) {
+            window.FAMModal?.showToast('Removal reason is required.');
+            return;
+        }
+        try {
+            await window.FAMApi.request('../api/settings/visitor-blacklist.php', { method: 'DELETE', body: { blacklist_id: Number(id), removal_reason: reason.trim() } });
+            window.FAMModal?.showToast('Visitor removed from blacklist.');
+            await loadBlacklist();
+        } catch (error) {
+            window.FAMModal?.showToast(error.message || 'Unable to remove blacklist entry.');
+        }
+    }
+
     function renderNavigation() {
-        document.getElementById('admin-category-nav').innerHTML = categories.map(item => `
+        const navItems = visibleCategories();
+        document.getElementById('admin-category-nav').innerHTML = navItems.map(item => `
             <button class="${state.active === item[0] ? 'active' : ''}" type="button" data-admin-category="${item[0]}" aria-current="${state.active === item[0] ? 'page' : 'false'}">
                 <span class="material-symbols-outlined" aria-hidden="true">${item[2]}</span>
                 <span>${escapeHtml(item[1])}</span>
             </button>
         `).join('');
-        document.getElementById('admin-category-select').innerHTML = categories.map(item => `<option value="${item[0]}" ${state.active === item[0] ? 'selected' : ''}>${escapeHtml(item[1])}</option>`).join('');
+        document.getElementById('admin-category-select').innerHTML = navItems.map(item => `<option value="${item[0]}" ${state.active === item[0] ? 'selected' : ''}>${escapeHtml(item[1])}</option>`).join('');
     }
 
     function renderPanel() {
@@ -412,14 +510,34 @@
             setDirty(false);
             renderNavigation();
             renderPanel();
+            if (state.active === 'visitor_blacklist') loadBlacklist();
         });
         document.getElementById('admin-category-select')?.addEventListener('change', event => {
             state.active = event.target.value;
             setDirty(false);
             renderNavigation();
             renderPanel();
+            if (state.active === 'visitor_blacklist') loadBlacklist();
         });
         document.getElementById('admin-panel-card')?.addEventListener('input', event => {
+            if (event.target.id === 'blacklist-search') {
+                state.blacklist.search = event.target.value;
+                clearTimeout(state.blacklistTimer);
+                state.blacklistTimer = setTimeout(loadBlacklist, 300);
+                return;
+            }
+            if (event.target.id === 'blacklist-candidate-search') {
+                state.blacklist.candidateSearch = event.target.value;
+                state.blacklist.selectedVisitor = null;
+                clearTimeout(state.blacklistCandidateTimer);
+                state.blacklistCandidateTimer = setTimeout(searchBlacklistCandidates, 300);
+                return;
+            }
+            if (event.target.id === 'blacklist-reason') {
+                state.blacklist.reason = event.target.value;
+                document.querySelector('[data-blacklist-add]')?.toggleAttribute('disabled', !(state.blacklist.selectedVisitor && state.blacklist.reason.trim()));
+                return;
+            }
             const cardSearch = event.target.closest('[data-org-card-search]');
             if (cardSearch) {
                 orgSearches[cardSearch.dataset.orgCardSearch] = cardSearch.value;
@@ -507,6 +625,22 @@
                 }
                 return;
             }
+            const blacklistVisitor = event.target.closest('[data-blacklist-select-visitor]');
+            if (blacklistVisitor) {
+                const id = Number(blacklistVisitor.dataset.blacklistSelectVisitor);
+                state.blacklist.selectedVisitor = state.blacklist.candidates.find(visitor => visitor.id === id) || null;
+                renderPanel();
+                return;
+            }
+            if (event.target.closest('[data-blacklist-add]')) {
+                addBlacklistEntry();
+                return;
+            }
+            const unblacklist = event.target.closest('[data-unblacklist]');
+            if (unblacklist) {
+                removeBlacklistEntry(unblacklist.dataset.unblacklist, unblacklist.dataset.visitorName);
+                return;
+            }
             const tab = event.target.closest('[data-admin-tab]');
             if (tab) {
                 state.userTab = tab.dataset.adminTab;
@@ -586,10 +720,12 @@
             window.location.replace('../errors/403.html');
             return;
         }
+        if (!visibleCategories().some(item => item[0] === state.active)) state.active = 'general';
         document.getElementById('admin-updated').textContent = formatUpdatedAt();
         renderNavigation();
         renderPanel();
         bindEvents();
+        if (state.active === 'visitor_blacklist') loadBlacklist();
     }
 
     document.addEventListener('fam:layout-ready', initializeSettings);

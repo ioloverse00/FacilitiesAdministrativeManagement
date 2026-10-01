@@ -9,7 +9,7 @@
     perPage: 10,
     total: 0,
     totalPages: 1,
-    filters: { search: '', visitor_type: 'all', visit_status: 'all' },
+    filters: { search: '', visitor_type: 'all', visit_status: 'all', date_from: '', date_to: '' },
     sort: 'scheduled_start_at',
     direction: 'desc',
     timer: null,
@@ -36,9 +36,13 @@
     const search = qs('#visitor-search');
     const type = qs('#visitor-type-filter');
     const status = qs('#visitor-status-filter');
+    const dateFrom = qs('#visitor-date-from');
+    const dateTo = qs('#visitor-date-to');
     if (search) search.value = state.filters.search || '';
     if (type) type.value = state.filters.visitor_type || 'all';
     if (status) status.value = state.filters.visit_status || 'all';
+    if (dateFrom) dateFrom.value = state.filters.date_from || '';
+    if (dateTo) dateTo.value = state.filters.date_to || '';
   }
   function renderSummary(summary = {}) { qs('#visitor-summary').innerHTML = [["Today's Visitors", summary.today], ['Currently Checked In', summary.checked_in], ['Checked Out Today', summary.checked_out_today], ['Available Badges', summary.available_badges], ['Legacy Pending Review', summary.pending_review]].map(([k, v]) => `<span><strong>${Number(v || 0)}</strong>${esc(k)}</span>`).join(''); }
   function renderLoading(initial) {
@@ -79,7 +83,7 @@
     body.innerHTML = state.rows.map(row => rowHtml(row)).join('');
     window.FAMTableAudit?.check(body.closest('table'), 'visitor-management-table');
   }
-  function rowHtml(row) { const visitor = row.visitor || {}, dest = row.destination_department?.name || row.facility_space?.name || 'Not assigned', actions = rowActions(row), name = clean(visitor.full_name) || 'Unnamed visitor', secondary = visitor.organization_name || visitor.email_address || visitor.mobile_number || 'External visitor'; return `<tr><td class="facility-request-number"><button class="facility-link-button" type="button" data-open-visitor="${row.id}">${trunc(row.visitor_reference_number, 'table-cell-primary')}</button></td><td><div class="facility-subject-cell visitor-name-cell table-cell-stack">${trunc(name, 'table-cell-primary')}${trunc(secondary, 'table-cell-secondary')}</div></td><td>${badge(visitor.visitor_type || row.visitor_type, 'status')}</td><td>${trunc(dest)}</td><td class="facility-date-cell">${trunc(fmt(row.actual_check_in_at))}</td><td class="facility-date-cell">${trunc(fmt(row.actual_check_out_at))}</td><td>${badge(row.visit_status, 'status')}</td><td class="facility-actions-cell"><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-open-visitor-menu="${row.id}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${esc(row.visitor_reference_number)}">&#8942;</button><div class="facility-action-dropdown hidden" data-visitor-menu="${row.id}" role="menu">${actions.map(a => `<button type="button" role="menuitem" data-visitor-action="${a.key}" data-visitor-id="${row.id}">${esc(a.label)}</button>`).join('')}</div></div></td></tr>`; }
+  function rowHtml(row) { const visitor = row.visitor || {}, dest = row.destination_department?.name || row.facility_space?.name || 'Not assigned', actions = rowActions(row), name = clean(visitor.full_name) || 'Unnamed visitor', secondary = visitor.organization_name || visitor.email_address || visitor.mobile_number || 'External visitor', blacklist = visitor.blacklist?.active ? '<span class="facility-badge facility-status-rejected">Blacklisted</span>' : ''; return `<tr><td class="facility-request-number"><button class="facility-link-button" type="button" data-open-visitor="${row.id}">${trunc(row.visitor_reference_number, 'table-cell-primary')}</button></td><td><div class="facility-subject-cell visitor-name-cell table-cell-stack">${trunc(name, 'table-cell-primary')}${blacklist}${trunc(secondary, 'table-cell-secondary')}</div></td><td>${badge(visitor.visitor_type || row.visitor_type, 'status')}</td><td>${trunc(dest)}</td><td class="facility-date-cell">${trunc(fmt(row.actual_check_in_at))}</td><td class="facility-date-cell">${trunc(fmt(row.actual_check_out_at))}</td><td>${badge(row.visit_status, 'status')}</td><td class="facility-actions-cell"><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-open-visitor-menu="${row.id}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${esc(row.visitor_reference_number)}">&#8942;</button><div class="facility-action-dropdown hidden" data-visitor-menu="${row.id}" role="menu">${actions.map(a => `<button type="button" role="menuitem" data-visitor-action="${a.key}" data-visitor-id="${row.id}">${esc(a.label)}</button>`).join('')}</div></div></td></tr>`; }
   function rowActions(row) { const a = [{ key:'view', label:'View Details' }]; if (can('visitors.approve') && ['PENDING_REVIEW', 'PRE_REGISTERED'].includes(row.visit_status)) { a.push({ key:'approve', label:'Approve' }); a.push({ key:'reject', label:'Reject' }); } if (can('visitors.checkin') && ['APPROVED', 'ARRIVED'].includes(row.visit_status)) a.push({ key:'checkin', label:'Check In' }); if (can('visitors.checkout') && row.visit_status === 'CHECKED_IN') a.push({ key:'checkout', label:'Check Out' }); if (can('visitors.review') && !['CHECKED_IN', 'CHECKED_OUT', 'CANCELLED', 'REJECTED'].includes(row.visit_status)) a.push({ key:'cancel', label:'Cancel' }); return a; }
   async function load() {
     if (state.loading) return;
@@ -142,16 +146,37 @@
     const identityDetails = detailGrid(`${detail('Verified', idv.verified ? 'Yes' : 'No')}${detail('ID Type', idv.identification_type)}${detail('ID Last Four', idv.identification_last4)}${detail('Verified At', fmt(idv.verified_at))}`);
     const registrationDetails = detailGrid(`${detail('Registration Source', title(item.registration_source))}${detail('Applicant Reference', item.applicant_reference)}${detail('Company / School', item.company_or_school)}`);
     const historyHtml = h.length ? `<ol class="facility-history-list visitor-activity-timeline">${h.map(x => `<li><strong>${esc(historyLabel(x.event_type))}</strong><span>${esc(fmt(x.timestamp))} by ${esc(x.actor || 'System')}</span><p>${esc(x.remarks || 'No remarks')}</p></li>`).join('')}</ol>` : '<p>No activity history recorded.</p>';
+    const blacklistWarning = v.blacklist?.active ? `<div class="facility-form-error" role="status">BLACKLISTED visitor. Approval and check-in workflows are blocked by policy.</div>` : '';
     const badgeSection = hasBadge ? `<details class="visitor-detail-disclosure"><summary>Badge Information</summary>${badgeDetails}</details>` : '';
     const remarksSection = hasRemarks ? `<details class="visitor-detail-disclosure" open><summary>Remarks</summary><p>${esc(item.remarks)}</p></details>` : '';
-    return `<div class="facility-details-modal-panel visitor-details-panel"><div class="facility-details-modal-header visitor-details-header"><div><p>Visitor Reference Number</p><span class="facility-details-modal-request-number">${esc(item.visitor_reference_number)}</span><h2>${esc(clean(v.full_name))}</h2></div><button class="facility-details-modal-close" type="button" data-close-drawer aria-label="Close visitor details">&times;</button></div><div class="facility-details-modal-body visitor-details-body"><div class="visitor-detail-accordion"><details class="visitor-detail-disclosure" open><summary>Visitor Information</summary>${visitorInfo}</details><details class="visitor-detail-disclosure" open><summary>Visit Details</summary>${visitDetails}</details><details class="visitor-detail-disclosure" open><summary>Schedule and Attendance</summary>${timeline}</details>${badgeSection}${remarksSection}<details class="visitor-detail-disclosure"><summary>Identity Verification</summary>${identityDetails}</details><details class="visitor-detail-disclosure"><summary>Registration Details</summary>${registrationDetails}</details><details class="visitor-detail-disclosure"><summary>Activity History</summary>${historyHtml}</details></div></div></div>`;
+    return `<div class="facility-details-modal-panel visitor-details-panel"><div class="facility-details-modal-header visitor-details-header"><div><p>Visitor Reference Number</p><span class="facility-details-modal-request-number">${esc(item.visitor_reference_number)}</span><h2>${esc(clean(v.full_name))}</h2></div><button class="facility-details-modal-close" type="button" data-close-drawer aria-label="Close visitor details">&times;</button></div><div class="facility-details-modal-body visitor-details-body">${blacklistWarning}<div class="visitor-detail-accordion"><details class="visitor-detail-disclosure" open><summary>Visitor Information</summary>${visitorInfo}</details><details class="visitor-detail-disclosure" open><summary>Visit Details</summary>${visitDetails}</details><details class="visitor-detail-disclosure" open><summary>Schedule and Attendance</summary>${timeline}</details>${badgeSection}${remarksSection}<details class="visitor-detail-disclosure"><summary>Identity Verification</summary>${identityDetails}</details><details class="visitor-detail-disclosure"><summary>Registration Details</summary>${registrationDetails}</details><details class="visitor-detail-disclosure"><summary>Activity History</summary>${historyHtml}</details></div></div></div>`;
   }
   function closeDrawer() { const d = qs('#visitor-details-drawer'); window.FAMModal?.closeElement?.(d, () => { d.innerHTML = ''; document.body.classList.remove('facility-details-modal-open'); state.lastFocus?.focus?.(); }); }
   function closeDialog() { const d = qs('#visitor-dialog'); window.FAMModal?.closeElement?.(d, () => { d.innerHTML = ''; }); }
   async function action(key, id) { if (key === 'view') return openDetails(id); if (key === 'approve' || key === 'reject' || key === 'cancel') { const act = { approve:'APPROVE', reject:'REJECT', cancel:'CANCEL' }[key]; const remarks = key === 'approve' ? 'Approved from Visitor Management.' : await window.FAMModal.prompt(`${title(key)} remarks`, '', { title: `${title(key)} Visitor`, confirmLabel: title(key) }); if (remarks === null) return; await window.FAMApi.request(`../api/visitors/review.php?id=${id}`, { method:'POST', body:{ action:act, remarks } }); toast('Visitor action completed.'); return load(); } if (key === 'checkin') return openCheckin(id); if (key === 'checkout') { if (!await window.FAMModal.confirm('Check this visitor out and return any issued badge?', { title: 'Check Out Visitor', confirmLabel: 'Check Out' })) return; await window.FAMApi.request(`../api/visitors/check-out.php?id=${id}`, { method:'POST', body:{ remarks:'Checked out from Visitor Management.' } }); toast('Visitor checked out.'); return load(); } }
   function openCheckin(id) { const d = moveToTopLayer(qs('#visitor-dialog')); d.hidden = false; d.innerHTML = `<form class="facility-dialog-panel" data-checkin-form data-id="${id}"><div class="facility-details-modal-header"><div><p>Visitor Management</p><h2>Check In Visitor</h2></div><button class="facility-details-modal-close" type="button" data-close-dialog aria-label="Close form">&times;</button></div><label class="visitor-check-filter"><input name="identity_verified" type="checkbox" value="1" checked> Identity verified</label><div class="facility-form-grid">${selectField('identification_type', 'Identification Type', state.options.identity_document_types, 'Optional')}${field('identification_last4', 'ID Last Four')}${selectField('badge_id', 'Badge / Pass', state.options.available_badges, 'No badge')}</div><label class="facility-field"><span>Remarks</span><textarea name="remarks" rows="3">Verified at reception.</textarea></label><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-close-dialog>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Check In</button></div></form>`; }
   async function submitCheckin(form) { const data = Object.fromEntries(new FormData(form).entries()); data.identity_verified = Boolean(data.identity_verified); await window.FAMApi.request(`../api/visitors/check-in.php?id=${form.dataset.id}`, { method:'POST', body:data }); closeDialog(); toast('Visitor checked in.'); await load(); openDetails(form.dataset.id); }
-  function resetFilters() { state.filters = { search:'', visitor_type:'all', visit_status:'all' }; state.sort = 'scheduled_start_at'; state.direction = 'desc'; state.page = 1; state.openColumnMenu = null; syncToolbar(); load(); }
+  function validDateRange(from, to) { return !from || !to || from <= to; }
+  function applyDateFilters() {
+    const from = qs('#visitor-date-from')?.value || '';
+    const to = qs('#visitor-date-to')?.value || '';
+    if (!validDateRange(from, to)) {
+      toast('Date From must be earlier than or the same as Date To.');
+      return;
+    }
+    state.filters.date_from = from;
+    state.filters.date_to = to;
+    state.page = 1;
+    load();
+  }
+  function clearDateFilters() {
+    state.filters.date_from = '';
+    state.filters.date_to = '';
+    state.page = 1;
+    syncToolbar();
+    load();
+  }
+  function resetFilters() { state.filters = { search:'', visitor_type:'all', visit_status:'all', date_from:'', date_to:'' }; state.sort = 'scheduled_start_at'; state.direction = 'desc'; state.page = 1; state.openColumnMenu = null; syncToolbar(); load(); }
   function bind() {
     qs('#visitor-export')?.addEventListener('click', () => { window.location.href = exportUrl(); });
     qs('#visitor-prev-page')?.addEventListener('click', () => { state.page = Math.max(1, state.page - 1); load(); });
@@ -159,6 +184,10 @@
     qs('#visitor-search')?.addEventListener('input', e => { state.filters.search = e.target.value; state.page = 1; clearTimeout(state.timer); state.timer = setTimeout(load, 300); });
     qs('#visitor-type-filter')?.addEventListener('change', e => { state.filters.visitor_type = e.target.value || 'all'; state.page = 1; load(); });
     qs('#visitor-status-filter')?.addEventListener('change', e => { state.filters.visit_status = e.target.value || 'all'; state.page = 1; load(); });
+    qs('#visitor-apply-dates')?.addEventListener('click', applyDateFilters);
+    qs('#visitor-clear-dates')?.addEventListener('click', clearDateFilters);
+    qs('#visitor-date-from')?.addEventListener('keydown', e => { if (e.key === 'Enter') applyDateFilters(); });
+    qs('#visitor-date-to')?.addEventListener('keydown', e => { if (e.key === 'Enter') applyDateFilters(); });
     qsa('[data-visitor-sort]').forEach(b => b.addEventListener('click', () => { state.sort = b.dataset.visitorSort; state.direction = state.direction === 'asc' ? 'desc' : 'asc'; state.page = 1; load(); }));
     document.addEventListener('click', e => {
       const open = e.target.closest('[data-open-visitor]');

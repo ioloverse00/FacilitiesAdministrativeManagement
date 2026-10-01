@@ -1,5 +1,5 @@
 (function () {
-    const state = { context: null, options: null, rows: [], calendarEvents: [], calendarRoom: '', calendarView: 'month', calendarAnchor: new Date(), selectedDate: new Date(), calendarError: '', search: '', status: '', timer: null, resizeTimer: null, availabilityTimer: null, detailsTimer: null, currentDetailsId: null, lastFocus: null, aiJobs: new Set() };
+    const state = { context: null, options: null, rows: [], selectedRoom: '', search: '', status: '', timer: null, availabilityTimer: null, detailsTimer: null, currentDetailsId: null, lastFocus: null, aiJobs: new Set() };
     const qs = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const title = value => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -18,29 +18,9 @@
         const path = `employee/reservations/request-letter.php?id=${encodeURIComponent(id)}&mode=${encodeURIComponent(mode)}`;
         return window.FAMApi?.apiUrl?.(path) || window.FAMNavigation?.apiUrl?.(path) || `/api/${path}`;
     };
-    const isoDate = value => {
-        const d = toDate(value);
-        if (!d || Number.isNaN(d.getTime())) return '';
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    };
-    const dateKey = value => isoDate(value);
-    const sameDay = (a, b) => dateKey(a) === dateKey(b);
-    const addDays = (date, amount) => { const next = new Date(date); next.setDate(next.getDate() + amount); return next; };
-    const startOfWeek = date => { const d = new Date(date); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - d.getDay()); return d; };
-    const startOfDay = date => { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; };
-    const bookableDate = date => startOfDay(date).getTime() >= startOfDay(new Date()).getTime();
-    const daysBetween = (start, end) => {
-        const days = [];
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) days.push(new Date(d));
-        return days;
-    };
-    const mobileCalendar = () => window.matchMedia('(max-width: 640px)').matches;
-    const alignMobileSelectedDate = () => {
-        if (mobileCalendar() && state.calendarView === 'month') {
-            state.selectedDate = new Date(state.calendarAnchor.getFullYear(), state.calendarAnchor.getMonth(), 1);
-        }
-    };
-
+    const roomImageUrl = room => room?.image?.has_image && room.image.url
+        ? (window.FAMApi?.apiUrl?.(room.image.url) || window.FAMNavigation?.apiUrl?.(room.image.url) || `/api/${room.image.url}`)
+        : '';
     function statusLabel(item) {
         const status = String(item.status || '').toUpperCase();
         const approval = String(item.approval || '').toUpperCase();
@@ -57,144 +37,59 @@
         return `<tr><td colspan="7">${window.FAMEmployeePortal.emptyState('event_busy', titleText, copy, '')}</td></tr>`;
     }
 
-    function calendarRange() {
-        const anchor = new Date(state.calendarAnchor);
-        anchor.setHours(0, 0, 0, 0);
-        if (state.calendarView === 'week' || mobileCalendar()) {
-            const start = startOfWeek(anchor);
-            const end = addDays(start, 6);
-            return {
-                start,
-                end,
-                label: `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
-            };
-        }
-        const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-        const start = startOfWeek(first);
-        const end = addDays(start, 41);
-        return { start, end, label: anchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) };
+    function selectedRoom() {
+        return (state.options?.facility_spaces || []).find(room => String(room.id) === String(state.selectedRoom));
     }
 
-    function blockingEventsForDay(day) {
-        return state.calendarEvents.filter(event => sameDay(event.start, day)).sort((a, b) => (toDate(a.start)?.getTime() || 0) - (toDate(b.start)?.getTime() || 0));
+    function roomMeta(room) {
+        return [room?.building_name, room?.capacity ? `${room.capacity} capacity` : '', room?.location_description].filter(Boolean).join(' - ');
     }
 
-    function ownCalendarEvent(event) {
-        return String(event.ownership || '').toUpperCase() === 'SELF';
+    function roomMedia(room) {
+        const image = roomImageUrl(room);
+        if (image) return `<img src="${esc(image)}" alt="${esc(room.name || room.code || 'Room image')}" loading="lazy">`;
+        return `<div class="employee-room-card-placeholder"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><span>No image yet</span></div>`;
     }
 
-    function eventLabel(event) {
-        return ownCalendarEvent(event) ? 'My Reservation' : 'Reserved';
-    }
-
-    function calendarEventButton(event, compact = false) {
-        const own = ownCalendarEvent(event);
-        const label = eventLabel(event);
-        const status = own ? statusLabel({ status: event.status, approval: event.approval_status }) : '';
-        const content = compact
-            ? `<span>${esc(label)}</span>`
-            : `<strong>${esc(label)}</strong><span>${esc(fmtTime(event.start))} - ${esc(fmtTime(event.end))}</span>${own ? `<small>${esc(status)}</small>` : ''}`;
-        if (own) {
-            return `<button class="employee-calendar-event self" type="button" data-open-reservation="${esc(event.reservation_id)}">${content}</button>`;
-        }
-        return `<div class="employee-calendar-event other" aria-label="${esc(`${fmtTime(event.start)} to ${fmtTime(event.end)} reserved`)}">${content}</div>`;
-    }
-
-    function renderMobileCalendar(panel, range) {
-        const stripStart = startOfWeek(state.calendarAnchor);
-        const days = daysBetween(stripStart, addDays(stripStart, 6));
-        panel.className = 'employee-availability-calendar employee-calendar-mobile-agenda';
-        panel.innerHTML = `
-            <div class="employee-calendar-week-strip" role="list" aria-label="Week dates">
-                ${days.map(day => {
-                    const events = blockingEventsForDay(day);
-                    const bookable = bookableDate(day);
-                    return `<button class="employee-calendar-strip-day ${sameDay(day, state.selectedDate) ? 'selected' : ''} ${sameDay(day, new Date()) ? 'today' : ''} ${bookable ? 'bookable' : 'disabled'}" type="button" ${bookable ? `data-calendar-request-date="${esc(isoDate(day))}"` : 'disabled'} aria-pressed="${sameDay(day, state.selectedDate)}" role="listitem">
-                        <span>${esc(day.toLocaleDateString(undefined, { weekday: 'short' }))}</span>
-                        <strong>${esc(String(day.getDate()))}</strong>
-                        ${events.length ? '<i aria-hidden="true"></i>' : ''}
-                    </button>`;
-                }).join('')}
-            </div>
-            <div class="employee-calendar-mobile-selected">
-                <h4>${esc(state.selectedDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }))}</h4>
-                ${(() => {
-                    const events = blockingEventsForDay(state.selectedDate);
-                    return events.length
-                        ? `<div class="employee-calendar-mobile-agenda-list">${events.map(event => calendarEventButton(event)).join('')}</div>`
-                        : window.FAMEmployeePortal.emptyState('event_available', 'No approved reservations of yours shown for this date.', 'Pick a date to start a request. Time conflicts are checked before submission.');
-                })()}
-            </div>
-        `;
-        return range;
-    }
-
-    function renderCalendar() {
-        const panel = qs('#employee-calendar-panel');
-        const heading = qs('#employee-calendar-heading');
-        const message = qs('#employee-calendar-message');
-        if (!panel) return;
-        const range = calendarRange();
-        if (heading) heading.textContent = range.label;
-        document.querySelectorAll('[data-employee-calendar-view]').forEach(button => {
-            const active = button.dataset.employeeCalendarView === state.calendarView;
-            button.classList.toggle('active', active);
-            button.setAttribute('aria-pressed', String(active));
-        });
-        if (!state.calendarRoom) {
-            panel.innerHTML = window.FAMEmployeePortal.emptyState('meeting_room', 'Select a room', 'Choose a room to pick a request date.');
+    function renderRoomCards() {
+        const grid = qs('#employee-room-card-grid');
+        if (!grid) return;
+        const rooms = state.options?.facility_spaces || [];
+        const count = qs('#employee-room-selection-count');
+        if (count) count.textContent = rooms.length ? `${rooms.length} room${rooms.length === 1 ? '' : 's'} available` : 'No reservable rooms';
+        const message = qs('#employee-room-selection-message');
+        const headerButton = qs('#employee-request-room');
+        if (headerButton) headerButton.disabled = !state.selectedRoom;
+        if (!rooms.length) {
+            grid.innerHTML = window.FAMEmployeePortal.emptyState('meeting_room', 'No rooms available', 'Please contact Facilities Administrative Management.');
             if (message) message.textContent = '';
             return;
         }
-        if (mobileCalendar()) {
-            renderMobileCalendar(panel, range);
-            if (message) message.textContent = state.calendarError || '';
-            return;
-        }
-        const days = daysBetween(range.start, range.end);
-        panel.className = `employee-availability-calendar employee-calendar-${state.calendarView}`;
-        panel.innerHTML = '<div class="reservation-calendar-weekdays">' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day => `<span>${day}</span>`).join('') + '</div>' +
-            `<div class="employee-calendar-grid">${days.map(day => {
-                const events = blockingEventsForDay(day);
-                const outside = state.calendarView === 'month' && day.getMonth() !== state.calendarAnchor.getMonth();
-                const bookable = bookableDate(day);
-                return `<section class="employee-calendar-day ${outside ? 'outside' : ''} ${sameDay(day, new Date()) ? 'today' : ''} ${sameDay(day, state.selectedDate) ? 'selected' : ''} ${bookable ? 'bookable' : 'disabled'}" ${bookable ? `data-calendar-request-date="${esc(isoDate(day))}"` : ''}>
-                    <button class="employee-calendar-date-button" type="button" ${bookable ? `data-calendar-request-date="${esc(isoDate(day))}"` : 'disabled'}><span class="employee-calendar-day-number">${esc(String(day.getDate()))}</span></button>
-                    <span class="employee-calendar-day-events">${events.length ? (state.calendarView === 'month' ? events.slice(0, 2).map(event => calendarEventButton(event, true)).join('') + (events.length > 2 ? `<span class="employee-calendar-more">${events.length - 2} more</span>` : '') : events.map(event => calendarEventButton(event)).join('')) : ''}</span>
-                </section>`;
-            }).join('')}</div>`;
-        if (message) message.textContent = state.calendarError || (state.calendarEvents.length ? `${state.calendarEvents.length} approved reservation time${state.calendarEvents.length === 1 ? '' : 's'} of yours shown for this room.` : 'No approved reservations of yours shown in this period. Time conflicts are checked before submission.');
+        grid.innerHTML = rooms.map(room => {
+            const selected = String(room.id) === String(state.selectedRoom);
+            return `<article class="employee-room-card${selected ? ' selected' : ''}" data-room-card="${esc(room.id)}">
+                <div class="employee-room-card-media">${roomMedia(room)}</div>
+                <div class="employee-room-card-body">
+                    <div>
+                        <h3>${esc(room.name || room.code || 'Room')}</h3>
+                        <p>${esc(roomMeta(room) || 'Room details unavailable')}</p>
+                    </div>
+                    <div class="employee-room-card-actions">
+                        <button class="${selected ? 'btn-primary' : 'btn-secondary'} dashboard-action-button" type="button" data-select-room="${esc(room.id)}">${selected ? 'Selected' : 'Select'}</button>
+                        <button class="facility-page-button" type="button" data-request-room="${esc(room.id)}">Request</button>
+                    </div>
+                </div>
+            </article>`;
+        }).join('');
+        if (message) message.textContent = state.selectedRoom ? `${selectedRoom()?.name || 'Selected room'} is ready for scheduling.` : 'Select a room to enable the request form.';
     }
 
-    function selectedRoom() {
-        return (state.options?.facility_spaces || []).find(room => String(room.id) === String(state.calendarRoom));
-    }
-
-    async function loadCalendar() {
-        if (!qs('#employee-calendar-panel')) return;
-        const room = state.calendarRoom || state.options?.facility_spaces?.[0]?.id;
-        if (!room) {
-            renderCalendar();
-            return;
-        }
-        state.calendarRoom = String(room);
-        sessionStorage.setItem('fam_employee_calendar_room', state.calendarRoom);
-        const select = qs('#employee-calendar-room');
-        if (select) select.value = state.calendarRoom;
-        const metaRoom = selectedRoom();
-        const meta = [metaRoom?.building_name, metaRoom?.capacity ? `${metaRoom.capacity} capacity` : ''].filter(Boolean).join(' - ');
-        const metaNode = qs('#employee-calendar-room-meta');
-        if (metaNode) metaNode.textContent = meta || 'Room schedule for the selected space.';
-        const range = calendarRange();
-        try {
-            const payload = await window.FAMApi.request(api(`calendar.php?${new URLSearchParams({ facility_space_id: state.calendarRoom, date_from: isoDate(range.start), date_to: isoDate(range.end) })}`));
-            state.calendarEvents = payload.data?.events || [];
-            state.calendarError = '';
-        } catch (error) {
-            state.calendarEvents = [];
-            state.calendarError = error.message || 'Unable to load room availability.';
-        }
-        renderCalendar();
+    function selectRoom(id, openRequest = false) {
+        if (!id) return;
+        state.selectedRoom = String(id);
+        sessionStorage.setItem('fam_employee_selected_room', state.selectedRoom);
+        renderRoomCards();
+        if (openRequest) openForm({ facility_space_id: state.selectedRoom });
     }
 
     function rowHtml(item) {
@@ -304,6 +199,12 @@
     }
 
     function openForm(prefill = {}) {
+        const roomId = prefill.facility_space_id || state.selectedRoom;
+        if (!roomId) {
+            window.FAMModal?.showToast('Select a room before starting a request.');
+            qs('#employee-room-card-grid')?.focus?.();
+            return;
+        }
         const dialog = ensureDialog();
         state.lastFocus = document.activeElement;
         dialog.hidden = false;
@@ -318,11 +219,9 @@
             </div>
             <div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-close-dialog>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Submit Reservation</button></div>
         </form>`;
-        if (prefill.facility_space_id) {
-            const roomField = dialog.querySelector('[name="facility_space_id"]');
-            roomField.value = String(prefill.facility_space_id);
-            roomField.dispatchEvent(new Event('input', { bubbles: true }));
-        }
+        const roomField = dialog.querySelector('[name="facility_space_id"]');
+        roomField.value = String(roomId);
+        roomField.dispatchEvent(new Event('input', { bubbles: true }));
         if (prefill.date) dialog.querySelector('[name="date"]').value = prefill.date;
         dialog.querySelector('select, input, textarea, button')?.focus();
     }
@@ -556,30 +455,7 @@
     }
 
     function bind() {
-        qs('#employee-request-room')?.addEventListener('click', openForm);
-        qs('#employee-calendar-room')?.addEventListener('change', event => {
-            state.calendarRoom = event.target.value;
-            loadCalendar().catch(console.error);
-        });
-        qs('#employee-calendar-today')?.addEventListener('click', () => {
-            state.calendarAnchor = new Date();
-            state.selectedDate = new Date();
-            loadCalendar().catch(console.error);
-        });
-        qs('#employee-calendar-prev')?.addEventListener('click', () => {
-            state.calendarAnchor = state.calendarView === 'month' && !mobileCalendar() ? new Date(state.calendarAnchor.getFullYear(), state.calendarAnchor.getMonth() - 1, 1) : addDays(state.calendarAnchor, -7);
-            alignMobileSelectedDate();
-            loadCalendar().catch(console.error);
-        });
-        qs('#employee-calendar-next')?.addEventListener('click', () => {
-            state.calendarAnchor = state.calendarView === 'month' && !mobileCalendar() ? new Date(state.calendarAnchor.getFullYear(), state.calendarAnchor.getMonth() + 1, 1) : addDays(state.calendarAnchor, 7);
-            alignMobileSelectedDate();
-            loadCalendar().catch(console.error);
-        });
-        document.querySelectorAll('[data-employee-calendar-view]').forEach(button => button.addEventListener('click', () => {
-            state.calendarView = button.dataset.employeeCalendarView || 'month';
-            loadCalendar().catch(console.error);
-        }));
+        qs('#employee-request-room')?.addEventListener('click', () => openForm());
         qs('#employee-reservation-search')?.addEventListener('input', event => { state.search = event.target.value.trim(); clearTimeout(state.timer); state.timer = setTimeout(() => load().catch(console.error), 250); });
         qs('#employee-reservation-status')?.addEventListener('change', event => { state.status = event.target.value; load().catch(console.error); });
         document.addEventListener('input', event => {
@@ -587,29 +463,25 @@
             if (!form) return;
             if (event.target.name === 'facility_space_id') {
                 const room = state.options?.facility_spaces?.find(item => String(item.id) === String(event.target.value));
-                form.querySelector('[data-room-summary]').textContent = room ? [room.building_name, room.capacity ? `${room.capacity} capacity` : ''].filter(Boolean).join(' - ') : 'Select a room to view capacity and location.';
+                form.querySelector('[data-room-summary]').textContent = room ? roomMeta(room) : 'Select a room to view capacity and location.';
+                state.selectedRoom = event.target.value;
+                sessionStorage.setItem('fam_employee_selected_room', state.selectedRoom);
+                renderRoomCards();
             }
             clearTimeout(state.availabilityTimer);
             state.availabilityTimer = setTimeout(() => checkAvailability(form), 400);
         });
         document.addEventListener('click', event => {
             if (event.target.closest('[data-open-room-form]')) return openForm();
+            const selectRoomButton = event.target.closest('[data-select-room]');
+            if (selectRoomButton) return selectRoom(selectRoomButton.dataset.selectRoom);
+            const requestRoomButton = event.target.closest('[data-request-room]');
+            if (requestRoomButton) return selectRoom(requestRoomButton.dataset.requestRoom, true);
             if (event.target.closest('[data-close-dialog]') || event.target === qs('#employee-reservation-dialog')) return closeDialog();
             const menuToggle = event.target.closest('[data-employee-menu]');
             if (menuToggle) return window.FAMTableMenus?.toggle(menuToggle, qs(`[data-employee-menu-panel="${CSS.escape(menuToggle.dataset.employeeMenu)}"]`));
             const open = event.target.closest('[data-open-reservation]');
             if (open) return openDetails(open.dataset.openReservation);
-            const calendarDate = event.target.closest('[data-calendar-request-date]');
-            if (calendarDate) {
-                event.preventDefault();
-                event.stopPropagation();
-                const date = calendarDate.dataset.calendarRequestDate;
-                const parsed = toDate(`${date}T00:00:00`);
-                if (!date || !parsed || !bookableDate(parsed) || !state.calendarRoom) return;
-                state.selectedDate = parsed;
-                renderCalendar();
-                return openForm({ facility_space_id: state.calendarRoom, date });
-            }
             const checkIn = event.target.closest('[data-check-in-reservation]');
             if (checkIn) return checkInReservation(checkIn.dataset.checkInReservation).catch(error => window.FAMModal?.showToast(error.message || 'Unable to check in.'));
             const checkOut = event.target.closest('[data-check-out-reservation]');
@@ -628,26 +500,20 @@
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && state.currentDetailsId && !qs('#employee-reservation-dialog')?.hidden) refreshDetails(state.currentDetailsId).catch(console.error);
         });
-        window.addEventListener('resize', () => {
-            clearTimeout(state.resizeTimer);
-            state.resizeTimer = setTimeout(renderCalendar, 150);
-        });
     }
 
     async function init(event) {
         state.context = event.detail?.context || await window.FAMEmployeePortal.context();
         const options = await window.FAMApi.request(api('options.php'));
         state.options = options.data || {};
-        const storedRoom = sessionStorage.getItem('fam_employee_calendar_room');
-        state.calendarRoom = storedRoom && (state.options.facility_spaces || []).some(room => String(room.id) === String(storedRoom))
+        const storedRoom = sessionStorage.getItem('fam_employee_selected_room');
+        state.selectedRoom = storedRoom && (state.options.facility_spaces || []).some(room => String(room.id) === String(storedRoom))
             ? String(storedRoom)
-            : String(state.options.facility_spaces?.[0]?.id || '');
-        const roomSelect = qs('#employee-calendar-room');
-        if (roomSelect) roomSelect.innerHTML = (state.options.facility_spaces || []).map(room => `<option value="${esc(room.id)}">${esc(room.name || room.code || 'Room')}</option>`).join('');
+            : '';
         const statusSelect = qs('#employee-reservation-status');
         if (statusSelect) statusSelect.innerHTML = '<option value="">All Statuses</option>' + (state.options.statuses || []).map(status => `<option value="${esc(status)}">${esc(title(status))}</option>`).join('');
         bind();
-        await loadCalendar();
+        renderRoomCards();
         await load();
         const reservationId = new URLSearchParams(window.location.search).get('reservation');
         if (reservationId && /^\d+$/.test(reservationId)) openDetails(reservationId);

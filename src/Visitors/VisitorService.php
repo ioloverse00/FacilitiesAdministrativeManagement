@@ -39,15 +39,21 @@ final class VisitorService
         $sorts = ['visitor_reference_number'=>'vi.visit_number','full_name'=>'v.last_name','visitor_type'=>'COALESCE(vi.visitor_type,v.visitor_type)','scheduled_start_at'=>'vi.scheduled_arrival','visit_status'=>'vi.visit_status','approval_status'=>'vi.approval_status','created_at'=>'vi.created_at'];
         $sort = $sorts[(string)($q['sort'] ?? '')] ?? 'vi.scheduled_arrival';
         $dir = strtolower((string)($q['direction'] ?? 'desc')) === 'asc' ? 'ASC' : 'DESC';
-        fputcsv($handle, ['Visit / Visitor Reference No.', 'Visitor Name', 'Visitor Type', 'Host', 'Host Department', 'Facility / Location', 'Visit Purpose', 'Scheduled / Expected Date-Time', 'Check-In Date-Time', 'Check-Out Date-Time', 'Visit Status', 'Registration Source', 'Created', 'Updated']);
+        fputcsv($handle, ['Visit / Visitor Reference No.', 'Visitor Name', 'Visitor Type', 'Host', 'Host Department', 'Facility / Location', 'Visit Purpose', 'Scheduled / Expected Date-Time', 'Check-In Date-Time', 'Check-Out Date-Time', 'Visit Status', 'Registration Source', 'Blacklist Status', 'Created', 'Updated']);
         $statement = $this->pdo->prepare($this->baseSql() . ' WHERE ' . implode(' AND ', $where) . " ORDER BY $sort $dir");
         foreach ($params as $key => $value) $statement->bindValue($key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
         $statement->execute();
         while ($row = $statement->fetch()) {
             $name = trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
             $location = trim(($row['building_name'] ?? '') . ' / ' . ($row['space_name'] ?? ''), ' /');
-            fputcsv($handle, array_map(fn($value) => $this->csvCell($value), [$row['visit_number'], $name, $row['export_visitor_type'], $row['host_full_name'], $row['host_department_name'], $location, $row['purpose'], $row['scheduled_arrival'], $row['actual_time_in'], $row['actual_time_out'], $row['visit_status'], $row['registration_source'], $row['created_at'], $row['updated_at']]));
+            $blacklistStatus = !empty($row['active_blacklist_id']) ? 'Blacklisted' : 'Not Blacklisted';
+            fputcsv($handle, array_map(fn($value) => $this->csvCell($value), [$row['visit_number'], $name, $row['export_visitor_type'], $row['host_full_name'], $row['host_department_name'], $location, $row['purpose'], $row['scheduled_arrival'], $row['actual_time_in'], $row['actual_time_out'], $row['visit_status'], $row['registration_source'], $blacklistStatus, $row['created_at'], $row['updated_at']]));
         }
+    }
+
+    public function validateListFilters(array $q): void
+    {
+        $this->filters($q);
     }
 
     public function show(int $id): ?array
@@ -102,6 +108,7 @@ final class VisitorService
         try {
             $visitorType = (string)$data['visitor_type'];
             $visitorId = $this->resolveVisitor($data);
+            $this->assertVisitorNotBlacklisted($visitorId, 'reception');
             $this->assertNoActiveVisitForIdentity($visitorId, $data);
             $reference = $this->nextReference();
             $badgeId = (int)$data['badge_id'];
@@ -174,6 +181,7 @@ final class VisitorService
         $this->pdo->beginTransaction();
         try {
             $visitorId = $this->resolveVisitor($data);
+            $this->assertVisitorNotBlacklisted($visitorId, 'walk-in');
             $this->assertNoActiveVisitForIdentity($visitorId, $data);
             $reference = $this->nextReference();
             $status = (($data['approval_status'] ?? '') === 'PENDING') ? 'PENDING_REVIEW' : 'ARRIVED';
@@ -193,6 +201,11 @@ final class VisitorService
         $map = ['APPROVE'=>['APPROVED','APPROVED','VISITOR_APPROVED'],'REJECT'=>['REJECTED','REJECTED','VISITOR_REJECTED'],'MARK_NO_SHOW'=>['NO_SHOW','PENDING','VISITOR_MARKED_NO_SHOW'],'CANCEL'=>['CANCELLED','PENDING','VISITOR_CANCELLED']];
         if (!isset($map[$action])) throw new InvalidArgumentException(json_encode(['action'=>'Unsupported review action.']));
         [$status,$approval,$event] = $map[$action];
+        if ($action === 'APPROVE') {
+            $row = $this->findRaw($id);
+            if (!$row) throw new RuntimeException('NOT_FOUND');
+            $this->assertVisitorNotBlacklisted((int)$row['visitor_id'], 'approval');
+        }
         return $this->transition($id, $status, $approval, $event, $remarks, $user, ['PRE_REGISTERED','PENDING_REVIEW','APPROVED','ARRIVED']);
     }
 
@@ -203,6 +216,7 @@ final class VisitorService
             $row = $this->lockedVisit($id);
             if (!$row) throw new RuntimeException('NOT_FOUND');
             if (!in_array($row['visit_status'], ['APPROVED','ARRIVED'], true)) throw new DomainException('Visit is not eligible for check-in.');
+            $this->assertVisitorNotBlacklisted((int)$row['visitor_id'], 'check-in');
             $badgeId = $this->nullableInt($data['badge_id'] ?? null);
             if ($badgeId) $this->issueBadge($badgeId, $id, $user);
             $this->pdo->prepare("UPDATE visitor SET id_type=COALESCE(:id_type,id_type), identification_last4=COALESCE(:last4,identification_last4), updated_at=NOW() WHERE visitor_id=:visitor_id")->execute(['id_type'=>$this->blankNull($data['identification_type'] ?? null),'last4'=>$this->blankNull($data['identification_last4'] ?? null),'visitor_id'=>(int)$row['visitor_id']]);
@@ -254,6 +268,95 @@ final class VisitorService
         return $this->rows("SELECT h.changed_at timestamp,h.event_type,h.old_status,h.new_status,h.remarks,u.username actor FROM visitor_visit_history h LEFT JOIN user_account u ON u.user_account_id=h.changed_by_user_id WHERE h.visit_id=:id ORDER BY h.changed_at DESC,h.visitor_visit_history_id DESC", ['id'=>$id]);
     }
 
+    public function blacklistEntries(array $q): array
+    {
+        $search = trim((string)($q['search'] ?? ''));
+        $where = ["bl.status='ACTIVE'"];
+        $params = [];
+        if ($search !== '') {
+            $where[] = "(CONCAT(v.first_name,' ',v.last_name) LIKE :search OR v.email_address LIKE :search OR v.contact_number LIKE :search OR v.organization_name LIKE :search OR v.identification_last4 LIKE :search OR bl.reason LIKE :search)";
+            $params['search'] = '%' . $search . '%';
+        }
+        return [
+            'items' => array_map(fn(array $row): array => $this->shapeBlacklist($row), $this->rows($this->blacklistSql() . ' WHERE ' . implode(' AND ', $where) . ' ORDER BY bl.blacklisted_at DESC, bl.visitor_blacklist_id DESC LIMIT 100', $params)),
+        ];
+    }
+
+    public function activeBlacklistForIdentity(array $data): ?array
+    {
+        $visitorId = $this->findVisitorByIdentity($data, false) ?? 0;
+        if ($visitorId < 1) return null;
+        $row = $this->activeBlacklist($visitorId, false);
+        if (!$row) return null;
+        return [
+            'is_blacklisted' => true,
+        ];
+    }
+
+    public function visitorBlacklistCandidates(string $search): array
+    {
+        $search = trim($search);
+        if ($search === '') {
+            return ['items' => []];
+        }
+        $stmt = $this->pdo->prepare("SELECT v.visitor_id, v.first_name, v.middle_name, v.last_name, v.organization_name, v.visitor_type, v.email_address, v.contact_number, v.identification_last4, active_bl.visitor_blacklist_id active_blacklist_id FROM visitor v LEFT JOIN visitor_blacklist active_bl ON active_bl.visitor_id=v.visitor_id AND active_bl.status='ACTIVE' WHERE v.deleted_at IS NULL AND (CONCAT(v.first_name,' ',v.last_name) LIKE :search OR v.email_address LIKE :search OR v.contact_number LIKE :search OR v.organization_name LIKE :search OR v.identification_last4 LIKE :search) ORDER BY v.updated_at DESC, v.visitor_id DESC LIMIT 20");
+        $stmt->execute(['search' => '%' . $search . '%']);
+        return [
+            'items' => array_map(function (array $row): array {
+                $full = trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+                return [
+                    'id' => (int)$row['visitor_id'],
+                    'full_name' => $full,
+                    'visitor_type' => $row['visitor_type'],
+                    'organization_name' => $row['organization_name'],
+                    'email_address' => $row['email_address'],
+                    'mobile_number' => $row['contact_number'],
+                    'identification_last4' => $row['identification_last4'],
+                    'is_blacklisted' => !empty($row['active_blacklist_id']),
+                ];
+            }, $stmt->fetchAll()),
+        ];
+    }
+
+    public function blacklistVisitor(int $visitorId, string $reason, array $actor): array
+    {
+        $reason = trim($reason);
+        if ($visitorId < 1) throw new InvalidArgumentException(json_encode(['visitor_id' => 'Select a valid visitor.']));
+        if ($reason === '') throw new InvalidArgumentException(json_encode(['reason' => 'Blacklist reason is required.']));
+        if (strlen($reason) > 2000) throw new InvalidArgumentException(json_encode(['reason' => 'Use 2000 characters or fewer.']));
+        $this->pdo->beginTransaction();
+        try {
+            $visitor = $this->lockVisitor($visitorId);
+            if (!$visitor) throw new InvalidArgumentException(json_encode(['visitor_id' => 'Select an existing visitor record.']));
+            if ($this->activeBlacklist($visitorId, true)) throw new DomainException('This visitor is already actively blacklisted.');
+            $stmt = $this->pdo->prepare("INSERT INTO visitor_blacklist (visitor_id, reason, status, blacklisted_by_user_id, blacklisted_at, created_at, updated_at) VALUES (:visitor_id, :reason, 'ACTIVE', :user_id, NOW(), NOW(), NOW())");
+            $stmt->execute(['visitor_id' => $visitorId, 'reason' => $reason, 'user_id' => (int)$actor['id']]);
+            $blacklistId = (int)$this->pdo->lastInsertId();
+            $this->pdo->commit();
+            $this->telemetryEntity('VISITOR_BLACKLISTED', 'visitor_blacklist', $blacklistId, 'BL-' . $blacklistId, $actor, 'Visitor blacklisted.');
+            return $this->blacklistById($blacklistId) ?? ['id' => $blacklistId];
+        } catch (Throwable $e) { $this->pdo->rollBack(); throw $e; }
+    }
+
+    public function unblacklistVisitor(int $blacklistId, string $removalReason, array $actor): array
+    {
+        $removalReason = trim($removalReason);
+        if ($blacklistId < 1) throw new InvalidArgumentException(json_encode(['blacklist_id' => 'Select a valid blacklist record.']));
+        if ($removalReason === '') throw new InvalidArgumentException(json_encode(['removal_reason' => 'Removal reason is required.']));
+        if (strlen($removalReason) > 2000) throw new InvalidArgumentException(json_encode(['removal_reason' => 'Use 2000 characters or fewer.']));
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare("SELECT * FROM visitor_blacklist WHERE visitor_blacklist_id=:id AND status='ACTIVE' FOR UPDATE");
+            $stmt->execute(['id' => $blacklistId]);
+            $row = $stmt->fetch();
+            if (!is_array($row)) throw new DomainException('Active blacklist record was not found.');
+            $this->pdo->prepare("UPDATE visitor_blacklist SET status='REMOVED', removed_by_user_id=:user_id, removed_at=NOW(), removal_reason=:reason, updated_at=NOW() WHERE visitor_blacklist_id=:id AND status='ACTIVE'")->execute(['user_id' => (int)$actor['id'], 'reason' => $removalReason, 'id' => $blacklistId]);
+            $this->pdo->commit();
+            $this->telemetryEntity('VISITOR_UNBLACKLISTED', 'visitor_blacklist', $blacklistId, 'BL-' . $blacklistId, $actor, 'Visitor unblacklisted.');
+            return ['id' => $blacklistId, 'status' => 'REMOVED'];
+        } catch (Throwable $e) { $this->pdo->rollBack(); throw $e; }
+    }
+
     private function validate(array $d, bool $creating): array
     {
         $e=[]; if (trim((string)($d['full_name'] ?? ''))==='') $e['full_name']='Full name is required.'; if (!in_array((string)($d['visitor_type'] ?? ''), self::TYPES, true)) $e['visitor_type']='Valid visitor type is required.'; if (trim((string)($d['visit_purpose'] ?? ''))==='') $e['visit_purpose']='Purpose is required.';
@@ -291,15 +394,18 @@ final class VisitorService
         $exact=['visitor_type'=>'COALESCE(vi.visitor_type,v.visitor_type)','visit_status'=>'vi.visit_status','approval_status'=>'vi.approval_status','department_id'=>'vi.destination_department_reference_id','host_employee_id'=>'vi.host_employee_reference_id','facility_space_id'=>'vi.destination_space_id','registration_source'=>'vi.registration_source'];
         foreach($exact as $k=>$col) if (($q[$k] ?? '') !== '' && ($q[$k] ?? 'all') !== 'all') { $where[]="$col=:$k"; $params[$k]=$q[$k]; }
         if (($q['currently_checked_in'] ?? '') === '1') $where[]="vi.visit_status='CHECKED_IN'";
-        if (($q['date_from'] ?? '') !== '') { $where[]='vi.scheduled_arrival>=:date_from'; $params['date_from']=$this->dateValue($q['date_from']); }
-        if (($q['date_to'] ?? '') !== '') { $where[]='vi.scheduled_arrival<=:date_to'; $params['date_to']=$this->dateValue($q['date_to']); }
+        $dateFrom=$this->dateFilterValue($q['date_from'] ?? null, 'date_from');
+        $dateTo=$this->dateFilterValue($q['date_to'] ?? null, 'date_to');
+        if ($dateFrom && $dateTo && $dateFrom > $dateTo) throw new InvalidArgumentException(json_encode(['date_from'=>'Date From must be earlier than or the same as Date To.']));
+        if ($dateFrom) { $where[]='vi.scheduled_arrival>=:date_from'; $params['date_from']=$dateFrom->format('Y-m-d 00:00:00'); }
+        if ($dateTo) { $where[]='vi.scheduled_arrival<:date_to'; $params['date_to']=$dateTo->modify('+1 day')->format('Y-m-d 00:00:00'); }
         if (($q['search'] ?? '') !== '') { $where[]="(vi.visit_number LIKE :search OR CONCAT(v.first_name,' ',v.last_name) LIKE :search OR v.email_address LIKE :search OR v.contact_number LIKE :search OR v.organization_name LIKE :search OR vi.purpose LIKE :search OR vi.applicant_reference LIKE :search)"; $params['search']='%'.trim((string)$q['search']).'%'; }
         return [$where,$params];
     }
 
     private function baseSql(): string
     {
-        return "SELECT vi.*, v.first_name,v.middle_name,v.last_name,v.organization_name,v.email_address,v.contact_number,v.id_type,v.identification_last4,v.status visitor_profile_status, COALESCE(vi.visitor_type,v.visitor_type) export_visitor_type, d.department_code,d.department_name, h.employee_number host_employee_number,h.full_name host_full_name, hd.department_name host_department_name, fs.space_name, b.building_name, bg.badge_number,bg.badge_status,u.username verified_by_username FROM visit vi INNER JOIN visitor v ON v.visitor_id=vi.visitor_id LEFT JOIN department_reference d ON d.department_reference_id=vi.destination_department_reference_id LEFT JOIN employee_reference h ON h.employee_reference_id=vi.host_employee_reference_id LEFT JOIN department_reference hd ON hd.department_reference_id=h.department_reference_id LEFT JOIN facility_space fs ON fs.facility_space_id=vi.destination_space_id LEFT JOIN building b ON b.building_id=fs.building_id LEFT JOIN visitor_badge bg ON bg.visitor_badge_id=vi.visitor_badge_id LEFT JOIN user_account u ON u.user_account_id=vi.identity_verified_by_user_id";
+        return "SELECT vi.*, v.first_name,v.middle_name,v.last_name,v.organization_name,v.email_address,v.contact_number,v.id_type,v.identification_last4,v.status visitor_profile_status, COALESCE(vi.visitor_type,v.visitor_type) export_visitor_type, d.department_code,d.department_name, h.employee_number host_employee_number,h.full_name host_full_name, hd.department_name host_department_name, fs.space_name, b.building_name, bg.badge_number,bg.badge_status,u.username verified_by_username, active_bl.visitor_blacklist_id active_blacklist_id FROM visit vi INNER JOIN visitor v ON v.visitor_id=vi.visitor_id LEFT JOIN visitor_blacklist active_bl ON active_bl.visitor_id=v.visitor_id AND active_bl.status='ACTIVE' LEFT JOIN department_reference d ON d.department_reference_id=vi.destination_department_reference_id LEFT JOIN employee_reference h ON h.employee_reference_id=vi.host_employee_reference_id LEFT JOIN department_reference hd ON hd.department_reference_id=h.department_reference_id LEFT JOIN facility_space fs ON fs.facility_space_id=vi.destination_space_id LEFT JOIN building b ON b.building_id=fs.building_id LEFT JOIN visitor_badge bg ON bg.visitor_badge_id=vi.visitor_badge_id LEFT JOIN user_account u ON u.user_account_id=vi.identity_verified_by_user_id";
     }
 
     private function findByQrToken(string $token): ?array
@@ -330,6 +436,9 @@ final class VisitorService
             if ($expiresAt === false || $expiresAt < time()) throw new DomainException('This visitor pass has expired.');
         }
         $item = $this->shape($row);
+        $blacklist = [
+            'active' => !empty($item['visitor']['blacklist']['active']),
+        ];
         $status = (string)$row['visit_status'];
         $idv = ['verified'=>(bool)$row['identity_verified'],'identification_type'=>$row['id_type'],'identification_last4'=>$row['identification_last4'],'verified_by'=>$row['verified_by_username'],'verified_at'=>$row['identity_verified_at']];
         return [
@@ -353,8 +462,9 @@ final class VisitorService
             ],
             'identity_verification'=>$idv,
             'badge'=>$item['badge'],
-            'allowed_actions'=>$this->allowedScannerActions($status, $idv, $user),
-            'state_message'=>$this->scannerStateMessage($status),
+            'blacklist'=>$blacklist,
+            'allowed_actions'=>$blacklist['active'] ? [] : $this->allowedScannerActions($status, $idv, $user),
+            'state_message'=>$blacklist['active'] ? 'Visitor is blacklisted' : $this->scannerStateMessage($status),
         ];
     }
 
@@ -412,10 +522,76 @@ final class VisitorService
         ];
     }
 
+    public function activeBlacklist(int $visitorId, bool $lock = false): ?array
+    {
+        $suffix = $lock ? ' FOR UPDATE' : '';
+        $stmt = $this->pdo->prepare('SELECT * FROM visitor_blacklist WHERE visitor_id=:visitor_id AND status=\'ACTIVE\' ORDER BY visitor_blacklist_id DESC LIMIT 1' . $suffix);
+        $stmt->execute(['visitor_id' => $visitorId]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $row : null;
+    }
+
+    public function isVisitorBlacklisted(int $visitorId): bool
+    {
+        return $this->activeBlacklist($visitorId) !== null;
+    }
+
+    public function assertVisitorNotBlacklisted(int $visitorId, string $context = 'visit'): void
+    {
+        if ($this->activeBlacklist($visitorId) !== null) {
+            throw new DomainException('This visitor is blacklisted and cannot proceed with this visitor workflow.');
+        }
+    }
+
     private function shape(array $r): array
     {
         $full = trim(($r['first_name'] ?? '').' '.($r['middle_name'] ?? '').' '.($r['last_name'] ?? ''));
-        return ['id'=>(int)$r['visit_id'],'visitor_reference_number'=>$r['visit_number'],'visitor'=>['id'=>(int)$r['visitor_id'],'full_name'=>$full,'email_address'=>$r['email_address'],'mobile_number'=>$r['contact_number'],'organization_name'=>$r['organization_name'],'visitor_type'=>$r['visitor_type'] ?: $r['visitor_type']],'visit_purpose'=>$r['purpose'],'destination_department'=>$r['destination_department_reference_id']===null?null:['id'=>(int)$r['destination_department_reference_id'],'code'=>$r['department_code'],'name'=>$r['department_name']],'host'=>$r['host_employee_reference_id']===null?null:['employee_id'=>(int)$r['host_employee_reference_id'],'employee_number'=>$r['host_employee_number'],'full_name'=>$r['host_full_name']],'facility_space'=>$r['destination_space_id']===null?null:['id'=>(int)$r['destination_space_id'],'name'=>$r['space_name'],'building_name'=>$r['building_name']],'scheduled_start_at'=>$r['scheduled_arrival'],'scheduled_end_at'=>$r['scheduled_departure'],'actual_check_in_at'=>$r['actual_time_in'],'actual_check_out_at'=>$r['actual_time_out'],'visit_status'=>$r['visit_status'],'approval_status'=>$r['approval_status'],'registration_source'=>$r['registration_source'],'applicant_reference'=>$r['applicant_reference'],'company_or_school'=>$r['company_or_school'],'badge'=>$r['visitor_badge_id']===null?null:['id'=>(int)$r['visitor_badge_id'],'badge_number'=>$r['badge_number'],'status'=>$r['badge_status']],'created_at'=>$r['created_at']];
+        return ['id'=>(int)$r['visit_id'],'visitor_reference_number'=>$r['visit_number'],'visitor'=>['id'=>(int)$r['visitor_id'],'full_name'=>$full,'email_address'=>$r['email_address'],'mobile_number'=>$r['contact_number'],'organization_name'=>$r['organization_name'],'visitor_type'=>$r['visitor_type'] ?: $r['visitor_type'],'blacklist'=>['active'=>!empty($r['active_blacklist_id'])]],'visit_purpose'=>$r['purpose'],'destination_department'=>$r['destination_department_reference_id']===null?null:['id'=>(int)$r['destination_department_reference_id'],'code'=>$r['department_code'],'name'=>$r['department_name']],'host'=>$r['host_employee_reference_id']===null?null:['employee_id'=>(int)$r['host_employee_reference_id'],'employee_number'=>$r['host_employee_number'],'full_name'=>$r['host_full_name']],'facility_space'=>$r['destination_space_id']===null?null:['id'=>(int)$r['destination_space_id'],'name'=>$r['space_name'],'building_name'=>$r['building_name']],'scheduled_start_at'=>$r['scheduled_arrival'],'scheduled_end_at'=>$r['scheduled_departure'],'actual_check_in_at'=>$r['actual_time_in'],'actual_check_out_at'=>$r['actual_time_out'],'visit_status'=>$r['visit_status'],'approval_status'=>$r['approval_status'],'registration_source'=>$r['registration_source'],'applicant_reference'=>$r['applicant_reference'],'company_or_school'=>$r['company_or_school'],'badge'=>$r['visitor_badge_id']===null?null:['id'=>(int)$r['visitor_badge_id'],'badge_number'=>$r['badge_number'],'status'=>$r['badge_status']],'created_at'=>$r['created_at']];
+    }
+
+    private function blacklistSql(): string
+    {
+        return "SELECT bl.*, v.first_name, v.middle_name, v.last_name, v.organization_name, v.visitor_type, v.email_address, v.contact_number, v.identification_last4, by_user.username blacklisted_by_username, removed_user.username removed_by_username FROM visitor_blacklist bl INNER JOIN visitor v ON v.visitor_id=bl.visitor_id LEFT JOIN user_account by_user ON by_user.user_account_id=bl.blacklisted_by_user_id LEFT JOIN user_account removed_user ON removed_user.user_account_id=bl.removed_by_user_id";
+    }
+
+    private function blacklistById(int $id): ?array
+    {
+        $stmt = $this->pdo->prepare($this->blacklistSql() . ' WHERE bl.visitor_blacklist_id=:id LIMIT 1');
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $this->shapeBlacklist($row) : null;
+    }
+
+    private function shapeBlacklist(array $row): array
+    {
+        $full = trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+        return [
+            'id' => (int)$row['visitor_blacklist_id'],
+            'visitor' => [
+                'id' => (int)$row['visitor_id'],
+                'full_name' => $full,
+                'visitor_type' => $row['visitor_type'],
+                'organization_name' => $row['organization_name'],
+                'email_address' => $row['email_address'],
+                'mobile_number' => $row['contact_number'],
+                'identification_last4' => $row['identification_last4'],
+            ],
+            'reason' => $row['reason'],
+            'status' => $row['status'],
+            'blacklisted_by' => $row['blacklisted_by_username'],
+            'blacklisted_at' => $row['blacklisted_at'],
+            'removed_by' => $row['removed_by_username'],
+            'removed_at' => $row['removed_at'],
+            'removal_reason' => $row['removal_reason'],
+        ];
+    }
+
+    private function lockVisitor(int $visitorId): ?array
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM visitor WHERE visitor_id=:id AND deleted_at IS NULL FOR UPDATE');
+        $stmt->execute(['id' => $visitorId]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $row : null;
     }
 
     private function createVisitor(array $d): int { $this->pdo->prepare("INSERT INTO visitor (visitor_uuid, first_name, middle_name, last_name, organization_name, visitor_type, email_address, contact_number, id_type, identification_last4, status, created_at, updated_at) VALUES (UUID(),:first,NULL,:last,:org,:type,:email,:mobile,:id_type,:last4,'ACTIVE',NOW(),NOW())")->execute($this->visitorParams($d)); return (int)$this->pdo->lastInsertId(); }
@@ -446,13 +622,24 @@ final class VisitorService
             $audit = $this->pdo->prepare("INSERT INTO audit_log (audit_uuid,actor_user_id,actor_username,action_code,module_code,entity_type,entity_id,entity_reference,result_status,request_method,request_path,metadata_json,created_at) VALUES (:audit_uuid,:audit_user,:audit_username,:audit_event,'VISITORS','visit',:audit_id,:audit_ref,'SUCCESS',:audit_method,:audit_path,'{}',NOW())");
             $audit->execute(['audit_uuid'=>$this->uuid(),'audit_user'=>(int)$user['id'],'audit_username'=>$user['username'] ?? null,'audit_event'=>$event,'audit_id'=>$id,'audit_ref'=>$ref,'audit_method'=>$_SERVER['REQUEST_METHOD'] ?? 'CLI','audit_path'=>$_SERVER['REQUEST_URI'] ?? '']);
         } catch(Throwable $e) { error_log('Visitor telemetry failed: '.$e->getMessage()); }
-    }    private function exists(string $table,string $key,int $id): bool { $s=$this->pdo->prepare("SELECT COUNT(*) FROM `$table` WHERE `$key`=:id"); $s->execute(['id'=>$id]); return (int)$s->fetchColumn()>0; }
+    }
+    private function telemetryEntity(string $event,string $entityType,int $id,string $ref,array $user,string $title): void
+    {
+        try {
+            $activity = $this->pdo->prepare("INSERT INTO activity_event (event_uuid,module_code,entity_type,entity_id,entity_reference,event_type,event_title,event_description,actor_user_id,actor_employee_reference_id,visibility_scope,metadata_json,occurred_at,created_at) VALUES (:activity_uuid,'VISITORS',:entity_type,:activity_id,:activity_ref,:activity_event,:activity_title,:activity_description,:activity_user,:activity_employee,'INTERNAL','{}',NOW(),NOW())");
+            $activity->execute(['activity_uuid'=>$this->uuid(),'entity_type'=>$entityType,'activity_id'=>$id,'activity_ref'=>$ref,'activity_event'=>$event,'activity_title'=>$title,'activity_description'=>$title,'activity_user'=>(int)$user['id'],'activity_employee'=>$user['employee_id'] ?? null]);
+            $audit = $this->pdo->prepare("INSERT INTO audit_log (audit_uuid,actor_user_id,actor_username,action_code,module_code,entity_type,entity_id,entity_reference,result_status,request_method,request_path,metadata_json,created_at) VALUES (:audit_uuid,:audit_user,:audit_username,:audit_event,'VISITORS',:entity_type,:audit_id,:audit_ref,'SUCCESS',:audit_method,:audit_path,'{}',NOW())");
+            $audit->execute(['audit_uuid'=>$this->uuid(),'audit_user'=>(int)$user['id'],'audit_username'=>$user['username'] ?? null,'audit_event'=>$event,'entity_type'=>$entityType,'audit_id'=>$id,'audit_ref'=>$ref,'audit_method'=>$_SERVER['REQUEST_METHOD'] ?? 'CLI','audit_path'=>$_SERVER['REQUEST_URI'] ?? '']);
+        } catch(Throwable $e) { error_log('Visitor blacklist telemetry failed: '.$e->getMessage()); }
+    }
+    private function exists(string $table,string $key,int $id): bool { $s=$this->pdo->prepare("SELECT COUNT(*) FROM `$table` WHERE `$key`=:id"); $s->execute(['id'=>$id]); return (int)$s->fetchColumn()>0; }
     private function rows(string $sql,array $params=[]): array { $s=$this->pdo->prepare($sql); $s->execute($params); return $s->fetchAll(); }
     private function scalar(string $sql,array $params=[]): mixed { $s=$this->pdo->prepare($sql); $s->execute($params); return $s->fetchColumn(); }
     private function csvCell(mixed $value): string { $cell = trim((string)($value ?? '')); return $cell !== '' && preg_match('/^[=+\-@]/', $cell) === 1 ? "'" . $cell : $cell; }
     private function nullableInt(mixed $v): ?int { return ($v === null || $v === '' || $v === 'all') ? null : (int)$v; }
     private function blankNull(mixed $v): ?string { $v=trim((string)($v ?? '')); return $v===''?null:$v; }
     private function dateValue(mixed $v): ?string { if ($v === null || trim((string)$v)==='') return null; $t=strtotime((string)$v); return $t ? date('Y-m-d H:i:s',$t) : null; }
+    private function dateFilterValue(mixed $v, string $field): ?DateTimeImmutable { $v=trim((string)($v ?? '')); if ($v==='') return null; $d=DateTimeImmutable::createFromFormat('!Y-m-d', $v); $errors=DateTimeImmutable::getLastErrors(); if (!$d || ($errors !== false && (($errors['warning_count'] ?? 0) > 0 || ($errors['error_count'] ?? 0) > 0)) || $d->format('Y-m-d') !== $v) throw new InvalidArgumentException(json_encode([$field=>'Enter a valid date.'])); return $d; }
     private function uuid(): string { $d=random_bytes(16); $d[6]=chr((ord($d[6])&0x0f)|0x40); $d[8]=chr((ord($d[8])&0x3f)|0x80); return vsprintf('%s%s-%s-%s-%s-%s%s%s',str_split(bin2hex($d),4)); }
 }
 

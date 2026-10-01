@@ -10,9 +10,11 @@ $user = reportsUser();
 try {
     $report = preg_replace('/[^a-z0-9_]+/', '', (string) ($_GET['report'] ?? 'report'));
     $filename = ($report !== '' ? $report : 'report') . '-report-' . date('Ymd-His') . '.csv';
+    $service = reportsService();
+    $service->validateCsvExport($_GET, $user);
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
-    reportsService()->streamCsv($_GET, $user);
+    $service->streamCsv($_GET, $user);
 } catch (Throwable $e) {
     reportsValidation($e);
 }

@@ -53,6 +53,12 @@
                                         <label class="facility-field facility-search-field"><span class="sr-only">Search visitors</span><input id="visitor-search" type="search" placeholder="Search visitors..."></label>
                                         <label class="facility-field document-filter-field"><span class="sr-only">Visitor type</span><select id="visitor-type-filter"><option value="all">All Types</option></select></label>
                                         <label class="facility-field document-filter-field"><span class="sr-only">Status</span><select id="visitor-status-filter"><option value="all">All Statuses</option></select></label>
+                                        <label class="facility-field document-filter-field visitor-date-filter"><span>Date From</span><input id="visitor-date-from" type="date"></label>
+                                        <label class="facility-field document-filter-field visitor-date-filter"><span>Date To</span><input id="visitor-date-to" type="date"></label>
+                                        <div class="visitor-date-actions">
+                                            <button id="visitor-apply-dates" class="btn-primary dashboard-action-button" type="button">Apply</button>
+                                            <button id="visitor-clear-dates" class="btn-secondary dashboard-action-button" type="button">Clear</button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="facility-table-scroll">

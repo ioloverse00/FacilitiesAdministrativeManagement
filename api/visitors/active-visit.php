@@ -31,10 +31,14 @@ try {
         ], 422);
     }
 
-    $visit = visitorService()->activeVisitForIdentity($identity);
+    $service = visitorService();
+    $visit = $service->activeVisitForIdentity($identity);
+    $blacklist = $service->activeBlacklistForIdentity($identity);
     jsonResponse(true, 'Active visit lookup complete.', [
         'has_active_visit' => $visit !== null,
+        'has_blacklist' => $blacklist !== null,
         'visit' => $visit,
+        'blacklist' => $blacklist,
     ]);
 } catch (Throwable $e) {
     visitorValidation($e);

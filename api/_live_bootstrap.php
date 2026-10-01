@@ -62,7 +62,7 @@ function documentService(): DocumentService
 
 function documentStepUpService(): DocumentStepUpService
 {
-    return new DocumentStepUpService(Database::connection(), new MailService());
+    return new DocumentStepUpService(Database::connection());
 }
 
 function documentTemplateService(): DocumentTemplateService

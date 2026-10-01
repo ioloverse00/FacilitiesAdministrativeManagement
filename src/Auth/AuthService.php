@@ -238,6 +238,39 @@ final class AuthService
         clearAuthSession();
     }
 
+    public function verifyCurrentUserPassword(int $userId, string $password): void
+    {
+        $account = $this->findAccountById($userId);
+        if ($account === null) {
+            $this->safeAudit('AUTH_REAUTH_FAILED', null, ['result' => 'unknown_account']);
+            throw new DomainException('Password verification failed.');
+        }
+
+        if ($this->isLocked($account)) {
+            $this->safeAudit('AUTH_REAUTH_FAILED', $userId, ['result' => 'locked']);
+            throw new DomainException('Password verification failed.');
+        }
+
+        if (!$this->hasAvailableAccountState($account)) {
+            $this->safeAudit('AUTH_REAUTH_FAILED', $userId, ['result' => 'unavailable']);
+            throw new DomainException('Password verification failed.');
+        }
+
+        $passwordHash = (string) ($account['password_hash'] ?? '');
+        if ($passwordHash === '' || !password_verify($password, $passwordHash)) {
+            $this->registerFailedLogin($account, $this->authoritativeEmail($account) ?? '');
+            $this->safeAudit('AUTH_REAUTH_FAILED', $userId, ['result' => 'invalid_credentials']);
+            throw new DomainException('Password verification failed.');
+        }
+
+        if (password_needs_rehash($passwordHash, PASSWORD_DEFAULT)) {
+            $this->updatePasswordHash($userId, password_hash($password, PASSWORD_DEFAULT));
+        }
+
+        $this->resetFailedPasswordAttempts($userId);
+        $this->safeAudit('AUTH_REAUTH_SUCCESS', $userId, ['result' => 'success']);
+    }
+
     private function pendingLoginMfa(): ?array
     {
         $pending = $_SESSION['pending_login_mfa'] ?? null;
@@ -414,6 +447,16 @@ final class AuthService
         $statement = $this->pdo->prepare(
             'UPDATE user_account
              SET last_login_at = NOW(), failed_login_count = 0, locked_until = NULL
+             WHERE user_account_id = :user_account_id'
+        );
+        $statement->execute(['user_account_id' => $userId]);
+    }
+
+    private function resetFailedPasswordAttempts(int $userId): void
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE user_account
+             SET failed_login_count = 0, locked_until = NULL
              WHERE user_account_id = :user_account_id'
         );
         $statement->execute(['user_account_id' => $userId]);
@@ -646,10 +689,10 @@ SQL);
     private static function auditResultStatus(string $action): string
     {
         return match ($action) {
-            'AUTH_LOGIN_SUCCESS', 'AUTH_LOGOUT' => 'SUCCESS',
+            'AUTH_LOGIN_SUCCESS', 'AUTH_LOGOUT', 'AUTH_REAUTH_SUCCESS' => 'SUCCESS',
             'AUTH_ACCOUNT_LOCKED' => 'LOCKED',
             'AUTH_SESSION_EXPIRED' => 'EXPIRED',
-            'AUTH_LOGIN_FAILED', 'AUTH_MFA_FAILED', 'AUTH_MFA_DELIVERY_FAILED' => 'FAILED',
+            'AUTH_LOGIN_FAILED', 'AUTH_MFA_FAILED', 'AUTH_MFA_DELIVERY_FAILED', 'AUTH_REAUTH_FAILED' => 'FAILED',
             'AUTH_MFA_CHALLENGE_ISSUED' => 'SUCCESS',
             default => 'DENIED',
         };

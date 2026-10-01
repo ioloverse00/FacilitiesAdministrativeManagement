@@ -45,7 +45,7 @@
   }
 
   function initialActiveVisitState() {
-    return { token: 0, checking: false, blocked: false, stale: false, visit: null, error: '' };
+    return { token: 0, checking: false, blocked: false, blacklisted: false, stale: false, visit: null, error: '' };
   }
 
   function optionRows(items, placeholder, labeler) {
@@ -133,6 +133,7 @@
   }
 
   function activeVisitMessage() {
+    if (state.activeVisitCheck.blacklisted) return 'This visitor is blacklisted and cannot be checked in.';
     const visit = state.activeVisitCheck.visit || {};
     const ref = visit.visitor_reference || 'the existing visit';
     return `This visitor already has an active visit (${ref}). Check out the existing visit before creating another.`;
@@ -218,16 +219,16 @@
       return;
     }
     const token = state.activeVisitCheck.token + 1;
-    state.activeVisitCheck = { token, checking: true, blocked: false, stale: false, visit: null, error: '' };
+    state.activeVisitCheck = { token, checking: true, blocked: false, blacklisted: false, stale: false, visit: null, error: '' };
     syncEntryBlockedState();
     try {
       const payload = await window.FAMApi.request('../api/visitors/active-visit.php', { method:'POST', body:data });
       if (state.activeVisitCheck.token !== token) return;
       const visit = payload.data?.visit || null;
-      state.activeVisitCheck = { token, checking: false, blocked: Boolean(payload.data?.has_active_visit && visit), stale: false, visit, error: '' };
+      state.activeVisitCheck = { token, checking: false, blocked: Boolean(payload.data?.has_active_visit && visit) || Boolean(payload.data?.has_blacklist), blacklisted: Boolean(payload.data?.has_blacklist), stale: false, visit, error: '' };
     } catch (error) {
       if (state.activeVisitCheck.token !== token) return;
-      state.activeVisitCheck = { token, checking: false, blocked: false, stale: true, visit: null, error: 'Active visit could not be verified. The system will verify again when you check in.' };
+      state.activeVisitCheck = { token, checking: false, blocked: false, blacklisted: false, stale: true, visit: null, error: 'Active visit could not be verified. The system will verify again when you check in.' };
     } finally {
       if (state.activeVisitCheck.token === token) syncEntryBlockedState();
     }
