@@ -370,7 +370,6 @@
             state.events = payload.data?.items || [];
             renderCalendar();
             renderFocusPanels();
-            qs('reservation-updated').textContent = `Last updated: ${new Date().toLocaleString()}`;
         } catch (error) {
             state.events = [];
             renderCalendar();

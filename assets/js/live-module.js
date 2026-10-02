@@ -81,7 +81,6 @@
                 const payload = await window.FAMApi.request(`${config.apiBase}/index.php?${params(state)}`);
                 state.rows = payload.data?.items || []; state.pagination = payload.data?.pagination || state.pagination;
                 renderRows(config, state.rows, state); renderPagination(config, state);
-                const updated = qs(config.updatedId); if (updated) updated.textContent = `Last updated: ${new Date().toLocaleString()}`;
             } catch (error) {
                 const body = qs(config.tableBodyId);
                 if (!state.hasLoaded && body) body.innerHTML = tableStateRow(config, `Unable to load ${config.recordLabel}. Try again.`, 'error');

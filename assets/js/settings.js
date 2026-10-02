@@ -658,7 +658,6 @@
                 window.location.replace('../errors/403.html');
                 return;
             }
-            qs('#admin-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
             if (maintenanceMode()) return;
             render();
             bind();

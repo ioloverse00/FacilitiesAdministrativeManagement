@@ -166,7 +166,6 @@
             renderSummary(data.summary || {});
             renderRows(data.items || []);
             renderPagination(data.pagination || {});
-            qs('#contract-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
         } catch (error) {
             renderError();
             window.FAMModal?.showToast('Unable to load contracts. Try again.');

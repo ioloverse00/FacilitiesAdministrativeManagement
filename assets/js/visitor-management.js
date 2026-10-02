@@ -96,7 +96,6 @@
       state.total = Number(r.data?.pagination?.total || 0);
       state.totalPages = Number(r.data?.pagination?.total_pages || 1);
       renderSummary(r.data?.summary || {});
-      qs('#visitor-updated').textContent = `Last updated: ${new Date().toLocaleString()}`;
     } catch (e) {
       if (e.status === 401) return window.location.href = window.FAMApi.pageLoginUrl();
       state.error = e.message || 'Unable to load visitors.';

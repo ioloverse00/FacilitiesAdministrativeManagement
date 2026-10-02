@@ -168,7 +168,6 @@
       const payload = await window.FAMApi.request(`../api/reports/overview.php?${params()}`);
       state.data = payload.data || {};
       state.report = state.data.key || state.report;
-      updateTimestamp();
       renderReport();
     } catch (error) {
       state.data = state.data || { available_reports: [] };
@@ -307,12 +306,6 @@
     pdf.disabled = !pdfEnabled;
     pdf.classList.toggle('is-disabled', !pdfEnabled);
     pdf.title = pdfEnabled ? '' : 'PDF export is not available for this report yet.';
-  }
-
-  function updateTimestamp() {
-    const updated = qs('#reports-updated');
-    if (!updated) return;
-    updated.textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
   }
 
   function createConfiguredCharts(def, ctx) {

@@ -110,7 +110,6 @@
             renderSummary(data.summary || {});
             renderRows(data.items || []);
             renderPagination(data.pagination || {});
-            qs('#records-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
         } catch (error) {
             if (initial) qs('#records-table').innerHTML = tableStateRow(7, 'Unable to load documents. Try again.', 'error');
             qs('#records-table-count').textContent = 'Documents unavailable';

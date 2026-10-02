@@ -4,9 +4,13 @@
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>Administrative Settings</title>
+
     <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
+
     <script src="../assets/js/theme.js"></script>
+
     <link href="../assets/css/app.css?v=20260919-requester-postfix" rel="stylesheet">
+
     <script src="../assets/js/navigation.js" defer></script>
     <script src="../assets/js/sidebar.js" defer></script>
     <script src="../assets/js/profile-dropdown.js?v=20260919-root-login" defer></script>
@@ -14,6 +18,7 @@
     <script src="../assets/js/layout.js?v=20260919-clock-subtext-format" defer></script>
     <script src="../assets/js/table-audit.js" defer></script>
     <script src="../assets/js/settings.js" defer></script>
+
     <style>
         body[data-settings-maintenance="true"] .admin-settings-live {
             display: none;
@@ -22,64 +27,141 @@
         body:not([data-settings-maintenance="true"]) .admin-settings-maintenance {
             display: none;
         }
-
-        .admin-maintenance-panel {
-            display: grid;
-            gap: 0.75rem;
-            max-width: 42rem;
-            padding: 2rem;
-        }
-
-        .admin-maintenance-panel p {
-            margin: 0;
-        }
     </style>
 </head>
-<body class="app-body bg-background text-on-background font-body"
+
+<body
+    class="app-body bg-background text-on-background font-body"
     data-page-title="Administrative Settings"
     data-requires-permission="administration.view"
     data-breadcrumb-title="Administrative Settings"
     data-active-nav="settings"
     data-settings-maintenance="true"
     data-page-heading="Administrative Settings"
-    data-page-description="Manage FAM administrative records and configuration.">
+    data-page-description="Manage FAM administrative records and configuration."
+>
     <div id="app-shell" class="app-shell">
+
         <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
+
         <div class="app-main-panel">
+
             <div id="app-header-slot" class="shrink-0"></div>
-            <main id="app-content" class="app-main bg-surface-container-lowest">
-                <div id="page-content" class="app-page-content facility-requests-workspace admin-workspace">
+
+            <main
+                id="app-content"
+                class="app-main bg-surface-container-lowest"
+            >
+                <div
+                    id="page-content"
+                    class="app-page-content facility-requests-workspace admin-workspace"
+                >
                     <div class="facility-requests-shell">
+
+                        <!-- Page Header -->
                         <header class="facility-page-header">
                             <div class="facility-title-block">
                                 <h1>Administrative Settings</h1>
-                                <p>Manage FAM administrative records and configuration.</p>
-                                <span id="admin-updated" class="fam-last-updated">Last updated: Loading...</span>
+                                <p>
+                                    Manage FAM administrative records and configuration.
+                                </p>
                             </div>
+
                             <div class="facility-header-actions"></div>
                         </header>
 
-                        <section class="facility-section admin-settings-maintenance" aria-labelledby="admin-maintenance-title">
-                            <div class="admin-maintenance-panel">
-                                <p class="facility-section-eyebrow">Administrative Settings</p>
-                                <h2 id="admin-maintenance-title">Under Maintenance</h2>
-                                <p>Administrative configuration is temporarily unavailable while system settings are being finalized.</p>
-                            </div>
+                        <!-- Temporary Defense Maintenance State -->
+                        <section
+                            class="facility-section admin-settings-maintenance"
+                            aria-labelledby="admin-maintenance-title"
+                        >
+                            <article
+                                class="fam-card admin-maintenance-card"
+                                role="status"
+                                aria-live="polite"
+                            >
+                                <span
+                                    class="admin-maintenance-icon material-symbols-outlined"
+                                    aria-hidden="true"
+                                >
+                                    construction
+                                </span>
+
+                                <div class="admin-maintenance-copy">
+                                    <h2 id="admin-maintenance-title">
+                                        Under Maintenance
+                                    </h2>
+
+                                    <p>
+                                        Administrative configuration is temporarily
+                                        unavailable while system settings are being
+                                        finalized.
+                                    </p>
+
+                                    <p class="fam-muted">
+                                        Other FAM modules remain available from the sidebar.
+                                    </p>
+                                </div>
+
+                                <a
+                                    class="btn-primary dashboard-action-button"
+                                    href="dashboard.html"
+                                    data-clean-route="dashboard"
+                                >
+                                    <span
+                                        class="material-symbols-outlined"
+                                        aria-hidden="true"
+                                    >
+                                        dashboard
+                                    </span>
+
+                                    Back to Dashboard
+                                </a>
+                            </article>
                         </section>
 
-                        <section class="facility-section admin-settings-live" aria-label="Administrative settings">
+                        <!--
+                            Existing Administrative Settings implementation.
+
+                            This section is intentionally preserved and hidden while
+                            data-settings-maintenance="true" is active.
+                        -->
+                        <section
+                            class="facility-section admin-settings-live"
+                            aria-label="Administrative settings"
+                        >
                             <label class="facility-field admin-mobile-picker">
                                 <span>Settings Section</span>
                                 <select id="admin-category-select"></select>
                             </label>
-                            <nav id="admin-category-nav" class="reports-tabs" aria-label="Administrative settings modules"></nav>
-                            <div id="admin-panel-card" class="admin-panel-card"></div>
+
+                            <nav
+                                id="admin-category-nav"
+                                class="reports-tabs"
+                                aria-label="Administrative settings modules"
+                            ></nav>
+
+                            <div
+                                id="admin-panel-card"
+                                class="admin-panel-card"
+                            ></div>
                         </section>
-                        <aside id="admin-dialog" class="facility-dialog legal-dialog" hidden></aside>
+
+                        <aside
+                            id="admin-dialog"
+                            class="facility-dialog legal-dialog"
+                            hidden
+                        ></aside>
+
                     </div>
                 </div>
-                <div id="app-footer-slot" class="app-footer-slot"></div>
+
+                <div
+                    id="app-footer-slot"
+                    class="app-footer-slot"
+                ></div>
             </main>
+
         </div>
     </div>
 </body>

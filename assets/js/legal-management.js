@@ -71,7 +71,6 @@
             renderSummary(data.summary || {});
             renderRows(data.items || []);
             renderPagination(data.pagination || {});
-            qs('#legal-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
         } catch (error) {
             const body = qs('#legal-table');
             if (body && !body.querySelector('tr:not(.fam-table-state-row)')) body.innerHTML = tableStateRow('Unable to load legal matters. Try again.', 'error');

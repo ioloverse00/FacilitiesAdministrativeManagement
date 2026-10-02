@@ -115,11 +115,6 @@
     }
 
     function setLoading() {
-        const updated = document.getElementById('dashboard-last-updated');
-        if (updated) {
-            updated.hidden = true;
-            updated.textContent = '';
-        }
         const kpis = document.getElementById('dashboard-kpis');
         if (kpis) {
             kpis.setAttribute('aria-busy', 'true');
@@ -173,11 +168,6 @@
             target.innerHTML = `<div class="fam-dashboard-skeleton-list" aria-hidden="true">${Array.from({ length: id === 'recent-activity' ? 4 : 3 }, () => `<div class="fam-dashboard-skeleton-row"><div><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-lg"></span><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-md"></span></div><span class="fam-skeleton fam-skeleton-line fam-skeleton-line-sm"></span></div>`).join('')}</div><span class="sr-only">Loading dashboard content...</span>`;
         });
         applyDashboardComposition();
-    }
-
-    function formatUpdatedAt(value) {
-        const date = value ? new Date(value) : new Date();
-        return `Last updated: ${date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}, ${date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
     }
 
     function renderKpis(kpis) {
@@ -361,11 +351,6 @@
         try {
             const data = await service.getDashboardPayload();
             applyDashboardComposition(data.modules, data.charts);
-            const updated = document.getElementById('dashboard-last-updated');
-            if (updated) {
-                updated.textContent = formatUpdatedAt(data.generatedAt);
-                updated.hidden = false;
-            }
             renderKpis(data.kpis);
             renderCharts(data.charts);
             renderTodaySchedule(data.todaySchedule);
@@ -383,11 +368,6 @@
                 container.removeAttribute('aria-busy');
                 container.innerHTML = stateMessage('Unable to load dashboard activity.', 'error');
             });
-            const updated = document.getElementById('dashboard-last-updated');
-            if (updated) {
-                updated.textContent = 'Last updated unavailable';
-                updated.hidden = false;
-            }
         }
     }
 

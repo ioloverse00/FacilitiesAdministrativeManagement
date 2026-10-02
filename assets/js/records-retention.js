@@ -119,7 +119,6 @@
             renderSummary(data.summary || {});
             renderRows(data.items || []);
             renderPagination(data.pagination || {});
-            qs('#retention-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
         } catch (error) {
             if (initial) qs('#retention-table').innerHTML = tableStateRow('Unable to load retention records. Try again.', 'error');
             qs('#retention-table-count').textContent = 'Retention records unavailable';

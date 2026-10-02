@@ -3797,7 +3797,6 @@ div[role="group"] button:active {
   max-width: 760px;
 }
 
-.fam-last-updated,
 .fam-muted {
   color: var(--text-dim);
   font-size: 0.8125rem;
@@ -9112,7 +9111,6 @@ html[data-theme='dark'] p,
 html[data-theme='dark'] .text-on-surface-variant,
 html[data-theme='dark'] .text-outline-variant,
 html[data-theme='dark'] .fam-muted,
-html[data-theme='dark'] .fam-last-updated,
 html[data-theme='dark'] .facility-title-block p,
 html[data-theme='dark'] .fam-title-block p,
 html[data-theme='dark'] .facility-subject-cell span,
