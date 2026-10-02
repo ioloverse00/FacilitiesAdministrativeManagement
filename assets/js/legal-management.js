@@ -1,5 +1,5 @@
 ﻿(function () {
-    const state = { page: 1, totalPages: 1, sort: 'updated_at', direction: 'desc', options: {}, rules: { items: [], categories: [], statuses: [] }, activeItem: null, lastFocus: null, bound: false, aiInitialJobs: new Set(), loading: false, hasLoaded: false };
+    const state = { page: 1, totalPages: 1, sort: 'updated_at', direction: 'desc', options: {}, activeItem: null, lastFocus: null, bound: false, aiInitialJobs: new Set(), loading: false, hasLoaded: false };
     const qs = selector => document.querySelector(selector);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const api = path => `../api/${path}`;
@@ -84,62 +84,8 @@
         }
     }
 
-    function ruleParams() {
-        const p = new URLSearchParams({ action: 'list' });
-        const search = qs('#legal-rules-search')?.value.trim();
-        if (search) p.set('search', search);
-        const category = qs('#legal-rules-category-filter')?.value;
-        const status = qs('#legal-rules-status-filter')?.value;
-        if (category && category !== 'all') p.set('category', category);
-        if (status && status !== 'all') p.set('status', status);
-        return p;
-    }
-
-    async function loadRules() {
-        const body = qs('#legal-rules-table');
-        if (!body) return;
-        body.innerHTML = rulesStateRow('Loading policies...', 'progress_activity', true);
-        try {
-            const payload = await window.FAMApi.request(api(`legal/rules.php?${ruleParams()}`));
-            const data = payload.data || {};
-            state.rules = { items: data.items || [], categories: data.categories || [], statuses: data.statuses || [] };
-            renderRules(state.rules.items);
-            fillSimple(qs('#legal-rules-category-filter'), state.rules.categories || [], 'All Categories');
-            fillSimple(qs('#legal-rules-status-filter'), state.rules.statuses || [], 'All Statuses');
-        } catch (error) {
-            body.innerHTML = rulesStateRow('Unable to load Rules & Regulations.', 'error');
-            window.FAMModal?.showToast(error.message || 'Unable to load Rules & Regulations.');
-        }
-    }
-
     function tableStateRow(message, icon, spinning = false) {
         return `<tr class="fam-table-state-row"><td class="fam-table-state-cell" colspan="7"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
-    }
-
-    function rulesStateRow(message, icon, spinning = false) {
-        return `<tr class="fam-table-state-row"><td class="fam-table-state-cell" colspan="6"><div class="fam-state" role="status"><span class="material-symbols-outlined${spinning ? ' fam-spinner' : ''}" aria-hidden="true">${icon}</span><span>${esc(message)}</span></div></td></tr>`;
-    }
-
-    function renderRules(items) {
-        const body = qs('#legal-rules-table');
-        if (!body) return;
-        qs('#legal-rules-count').textContent = `Showing ${items.length} ${items.length === 1 ? 'policy' : 'policies'}`;
-        if (!items.length) {
-            body.innerHTML = rulesStateRow('No Rules & Regulations match the current filters.', 'policy');
-            return;
-        }
-        const canManageRules = can('legal.manage');
-        body.innerHTML = items.map(policy => `<tr>
-            <td><button class="document-primary-cell legal-primary-cell" type="button" data-rule-action="view-policy" data-policy-id="${esc(policy.id)}"><span class="material-symbols-outlined document-file-icon" aria-hidden="true">policy</span><span><strong>${esc(policy.policyCode)}</strong><small>${esc(policy.title)}</small></span></button></td>
-            <td>${esc(policy.category || 'Uncategorized')}</td>
-            <td>${badge(policy.status, 'status')}</td>
-            <td>${esc(policy.provisionCount || 0)}${policy.latestVersion ? ` / latest v${esc(policy.latestVersion)}` : ''}</td>
-            <td>${esc(fmt(policy.updatedAt))}</td>
-            <td><div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-rule-menu-toggle="rule-menu-${esc(policy.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${esc(policy.policyCode)}">&#8942;</button><div id="rule-menu-${esc(policy.id)}" class="facility-action-dropdown hidden" role="menu">
-                <button type="button" role="menuitem" data-rule-action="view-policy" data-policy-id="${esc(policy.id)}">View</button>
-                ${canManageRules ? `<button type="button" role="menuitem" data-rule-action="edit-policy" data-policy-id="${esc(policy.id)}">Edit</button><button type="button" role="menuitem" data-rule-action="add-provision" data-policy-id="${esc(policy.id)}">Add Provision</button><button type="button" role="menuitem" class="document-danger-action" data-rule-action="deactivate-policy" data-policy-id="${esc(policy.id)}">Deactivate</button>` : ''}
-            </div></div></td>
-        </tr>`).join('');
     }
 
     async function loadOptions() {
@@ -809,70 +755,6 @@
         modal.querySelector('input[name="title"]')?.focus();
     }
 
-    async function openPolicyDetails(policyId) {
-        const payload = await window.FAMApi.request(api(`legal/rules.php?action=show&policy_id=${policyId}`));
-        const policy = payload.data?.item;
-        if (!policy) return;
-        const modal = moveToTopLayer(qs('#legal-dialog'));
-        state.lastFocus = document.activeElement;
-        modal.hidden = false;
-        modal.innerHTML = `<div class="facility-dialog-panel legal-form">
-            <div class="facility-details-modal-header"><div><p>Rules &amp; Regulations</p><span class="facility-details-modal-request-number">${esc(policy.policyCode)}</span><h2>${esc(policy.title)}</h2></div><button class="facility-details-modal-close" type="button" data-legal-dialog-close aria-label="Close form">&times;</button></div>
-            <div class="facility-dialog-body legal-form-body"><section class="document-form-section">
-                <div class="contract-detail-grid">${detail('Category', policy.category || 'Uncategorized')}${detail('Status', title(policy.status))}${detail('Source Document', policy.sourceDocument || 'Not linked')}${detail('Updated', fmt(policy.updatedAt))}</div>
-                <div class="legal-action-list">${(policy.provisions || []).map(provision => `<article class="legal-action-entry"><div class="legal-party-summary"><div class="legal-party-copy"><strong>${esc(provision.provisionCode)} v${esc(provision.versionNumber)}</strong><span>${esc(provision.sectionTitle || 'Untitled provision')} &middot; ${esc(title(provision.status))}</span><p>${esc(provision.provisionText)}</p><small>${provision.effectiveFrom ? `From ${esc(fmtDate(provision.effectiveFrom))}` : 'No start date'}${provision.effectiveUntil ? ` / Until ${esc(fmtDate(provision.effectiveUntil))}` : ''}</small></div>${can('legal.manage') ? `<div class="legal-party-actions"><button class="btn-secondary dashboard-action-button" type="button" data-rule-action="revise-provision" data-policy-id="${esc(policy.id)}" data-provision-id="${esc(provision.id)}">Revise</button><button class="btn-secondary dashboard-action-button document-danger-action" type="button" data-rule-action="deactivate-provision" data-policy-id="${esc(policy.id)}" data-provision-id="${esc(provision.id)}">Deactivate</button></div>` : ''}</div></article>`).join('') || '<p class="legal-empty-note">No provisions yet.</p>'}</div>
-            </section></div>
-            <div class="facility-dialog-actions">${can('legal.manage') ? `<button class="btn-secondary dashboard-action-button" type="button" data-rule-action="add-provision" data-policy-id="${esc(policy.id)}">Add Provision</button>` : ''}<button class="btn-primary dashboard-action-button" type="button" data-legal-dialog-close>Done</button></div>
-        </div>`;
-        document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
-    }
-
-    async function openPolicyForm(policyId = null) {
-        const policy = policyId ? (await window.FAMApi.request(api(`legal/rules.php?action=show&policy_id=${policyId}`))).data?.item : null;
-        const modal = moveToTopLayer(qs('#legal-dialog'));
-        state.lastFocus = document.activeElement;
-        modal.hidden = false;
-        modal.innerHTML = `<form class="facility-dialog-panel legal-form" data-legal-form="${policy ? 'update-policy' : 'create-policy'}" data-policy-id="${esc(policy?.id || '')}">
-            <div class="facility-details-modal-header"><div><p>Rules &amp; Regulations</p><h2>${policy ? 'Edit Policy' : 'Add Policy'}</h2></div><button class="facility-details-modal-close" type="button" data-legal-dialog-close aria-label="Close form">&times;</button></div>
-            <div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-legal-error></div><section class="document-form-section">
-                <div class="document-form-grid">
-                    ${field('policy_code', 'Policy Code *', policy?.policyCode || '', 'text', true)}
-                    ${field('title', 'Title *', policy?.title || '', 'text', true)}
-                    ${field('category', 'Category', policy?.category || '', 'text', false)}
-                    ${field('source_document_id', 'Source Document ID', policy?.sourceDocumentId || '', 'number', false)}
-                    ${field('source_document_version_id', 'Source Version ID', policy?.sourceDocumentVersionId || '', 'number', false)}
-                </div>
-            </section></div>
-            <div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-legal-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">${policy ? 'Save Policy' : 'Create Policy'}</button></div>
-        </form>`;
-        document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
-    }
-
-    async function openProvisionForm(policyId, provisionId = null) {
-        const policy = (await window.FAMApi.request(api(`legal/rules.php?action=show&policy_id=${policyId}`))).data?.item;
-        const provision = (policy?.provisions || []).find(item => Number(item.id) === Number(provisionId));
-        const revising = Boolean(provision);
-        const modal = moveToTopLayer(qs('#legal-dialog'));
-        state.lastFocus = document.activeElement;
-        modal.hidden = false;
-        modal.innerHTML = `<form class="facility-dialog-panel legal-form" data-legal-form="${revising ? 'revise-provision' : 'add-provision'}" data-policy-id="${esc(policyId)}" data-provision-id="${esc(provisionId || '')}">
-            <div class="facility-details-modal-header"><div><p>Rules &amp; Regulations</p><span class="facility-details-modal-request-number">${esc(policy?.policyCode || '')}</span><h2>${revising ? 'Revise Provision' : 'Add Provision'}</h2></div><button class="facility-details-modal-close" type="button" data-legal-dialog-close aria-label="Close form">&times;</button></div>
-            <div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-legal-error></div><section class="document-form-section">
-                <div class="document-form-grid">
-                    ${field('provision_code', 'Provision Code *', provision?.provisionCode || '', 'text', true)}
-                    ${field('section_title', 'Section / Title', provision?.sectionTitle || '', 'text', false)}
-                    ${field('effective_from', 'Effective From', '', 'date', false)}
-                    ${field('effective_until', 'Effective Until', '', 'date', false)}
-                    ${field('source_document_id', 'Source Document ID', provision?.sourceDocumentId || policy?.sourceDocumentId || '', 'number', false)}
-                    ${field('source_document_version_id', 'Source Version ID', provision?.sourceDocumentVersionId || policy?.sourceDocumentVersionId || '', 'number', false)}
-                </div>
-                <label class="facility-field document-full-field"><span>Provision Text *</span><textarea name="provision_text" rows="6" required>${esc(provision?.provisionText || '')}</textarea></label>
-            </section></div>
-            <div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-legal-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">${revising ? 'Create Revised Version' : 'Add Provision'}</button></div>
-        </form>`;
-        document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
-    }
-
     async function openLinkRuleForm(item) {
         const payload = await window.FAMApi.request(api('legal/rules.php?action=provisions'));
         const provisions = payload.data?.items || [];
@@ -1116,16 +998,11 @@
         const suggestionId = form.dataset.suggestionId;
         const partyId = form.dataset.partyId;
         const actionId = form.dataset.actionId;
-        const policyId = form.dataset.policyId;
         const provisionId = form.dataset.provisionId || form.querySelector('[name="provision_id"]')?.value || '';
         const partyPath = type === 'add-party' ? `legal/add-party.php?id=${id}` : type === 'update-party' ? `legal/update-party.php?matter_id=${id}&party_id=${partyId}` : type === 'accept-party-suggestion' ? `legal/accept-party-suggestion.php?suggestion_id=${suggestionId}&matter_id=${id}` : '';
         const actionPath = type === 'add-action' ? `legal/add-action.php?id=${id}` : type === 'update-action' ? `legal/update-action.php?matter_id=${id}&action_id=${actionId}` : type === 'accept-action-suggestion' ? `legal/accept-action-suggestion.php?matter_id=${id}&suggestion_id=${suggestionId}` : '';
         const metadataPath = type === 'confirm-contract-metadata' ? `legal/confirm-contract-metadata.php?document_id=${form.dataset.documentId}` : '';
         const rulePathMap = {
-            'create-policy': 'legal/rules.php?action=create-policy',
-            'update-policy': `legal/rules.php?action=update-policy&policy_id=${policyId}`,
-            'add-provision': `legal/rules.php?action=add-provision&policy_id=${policyId}`,
-            'revise-provision': `legal/rules.php?action=revise-provision&provision_id=${provisionId}`,
             'link-rule': `legal/rules.php?action=link-provision&matter_id=${id}&provision_id=${provisionId}`,
         };
         const rulePath = rulePathMap[type] || '';
@@ -1137,9 +1014,8 @@
             const createdId = Number(payload.data?.item?.id || 0);
             closeDialog();
             const partial = payload.data?.attachment_errors?.length;
-            window.FAMModal?.showToast?.(partial ? payload.message : type === 'create' ? 'Legal matter created.' : type === 'edit' ? 'Legal matter updated.' : type === 'attach-document' ? 'Supporting document attached.' : type === 'confirm-contract-metadata' ? 'Contract metadata confirmed.' : type.includes('policy') || type.includes('provision') || type === 'link-rule' ? 'Rules & Regulations updated.' : type.includes('party') ? 'Party updated.' : type.includes('action') ? 'Legal action updated.' : 'Legal matter assigned.');
+            window.FAMModal?.showToast?.(partial ? payload.message : type === 'create' ? 'Legal matter created.' : type === 'edit' ? 'Legal matter updated.' : type === 'attach-document' ? 'Supporting document attached.' : type === 'confirm-contract-metadata' ? 'Contract metadata confirmed.' : type === 'link-rule' ? 'Rules & Regulations updated.' : type.includes('party') ? 'Party updated.' : type.includes('action') ? 'Legal action updated.' : 'Legal matter assigned.');
             await load();
-            if (rulePath) await loadRules();
             if (type === 'create' && createdId) triggerInitialSummary(createdId);
             if (id && qs('#legal-details-modal')?.hidden === false) await openDetails(id);
         } catch (error) {
@@ -1177,10 +1053,6 @@
         if (state.bound) return;
         state.bound = true;
         qs('#legal-new-matter')?.addEventListener('click', () => openMatterForm());
-        qs('#legal-new-rule')?.addEventListener('click', () => {
-            if (!can('legal.manage')) return;
-            openPolicyForm().catch(console.error);
-        });
         qs('#legal-prev-page')?.addEventListener('click', () => { if (state.page > 1) { state.page--; load().catch(console.error); } });
         qs('#legal-next-page')?.addEventListener('click', () => { if (state.page < state.totalPages) { state.page++; load().catch(console.error); } });
         document.querySelectorAll('.legal-table [data-sort]').forEach(button => button.addEventListener('click', () => {
@@ -1193,32 +1065,11 @@
         ['#legal-search', '#legal-type-filter', '#legal-priority-filter', '#legal-status-filter', '#legal-department-filter', '#legal-assignee-filter'].forEach(selector => {
             qs(selector)?.addEventListener(selector === '#legal-search' ? 'input' : 'change', () => { state.page = 1; load().catch(console.error); });
         });
-        ['#legal-rules-search', '#legal-rules-category-filter', '#legal-rules-status-filter'].forEach(selector => {
-            qs(selector)?.addEventListener(selector === '#legal-rules-search' ? 'input' : 'change', () => loadRules().catch(console.error));
-        });
         document.addEventListener('click', event => {
             if (event.target.closest('[data-legal-dialog-close]')) closeDialog();
             if (event.target.closest('[data-legal-details-close]') || event.target === qs('#legal-details-modal')) closeDetails();
             const toggle = event.target.closest('[data-legal-menu-toggle]');
             if (toggle) window.FAMTableMenus?.toggle(toggle, document.getElementById(toggle.dataset.legalMenuToggle));
-            const ruleToggle = event.target.closest('[data-rule-menu-toggle]');
-            if (ruleToggle) window.FAMTableMenus?.toggle(ruleToggle, document.getElementById(ruleToggle.dataset.ruleMenuToggle));
-            const ruleAction = event.target.closest('[data-rule-action]');
-            if (ruleAction) {
-                window.FAMTableMenus?.close();
-                const policyId = Number(ruleAction.dataset.policyId || 0);
-                const provisionId = Number(ruleAction.dataset.provisionId || 0);
-                const ruleType = ruleAction.dataset.ruleAction;
-                const manageActions = ['edit-policy', 'add-provision', 'revise-provision', 'deactivate-policy', 'deactivate-provision'];
-                if (manageActions.includes(ruleType) && !can('legal.manage')) return;
-                if (ruleType === 'view-policy') openPolicyDetails(policyId).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to open policy.'));
-                if (ruleType === 'edit-policy') openPolicyForm(policyId).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to edit policy.'));
-                if (ruleType === 'add-provision') openProvisionForm(policyId).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to add provision.'));
-                if (ruleType === 'revise-provision') openProvisionForm(policyId, provisionId).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to revise provision.'));
-                if (ruleType === 'deactivate-policy') deactivatePolicy(policyId).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to deactivate policy.'));
-                if (ruleType === 'deactivate-provision') deactivateProvision(provisionId, policyId).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to deactivate provision.'));
-                return;
-            }
             const action = event.target.closest('[data-legal-action]');
             if (!action) return;
             window.FAMTableMenus?.close();
@@ -1295,21 +1146,6 @@
         } finally {
             state.aiInitialJobs.delete(id);
         }
-    }
-
-    async function deactivatePolicy(policyId) {
-        if (!await window.FAMModal.confirm('Deactivate this policy? Historical Legal Matter snapshots will remain unchanged.', { title: 'Deactivate Policy', confirmLabel: 'Deactivate' })) return;
-        await window.FAMApi.request(api(`legal/rules.php?action=deactivate-policy&policy_id=${policyId}`), { method: 'POST', body: {} });
-        window.FAMModal?.showToast?.('Policy deactivated.');
-        await loadRules();
-    }
-
-    async function deactivateProvision(provisionId, policyId) {
-        if (!await window.FAMModal.confirm('Deactivate this provision? Historical Legal Matter snapshots will remain unchanged.', { title: 'Deactivate Provision', confirmLabel: 'Deactivate' })) return;
-        await window.FAMApi.request(api(`legal/rules.php?action=deactivate-provision&provision_id=${provisionId}`), { method: 'POST', body: {} });
-        window.FAMModal?.showToast?.('Provision deactivated.');
-        await loadRules();
-        if (policyId) await openPolicyDetails(policyId);
     }
 
     async function unlinkRule(matterId, basisId) {
@@ -1395,10 +1231,9 @@
     async function init() {
         await window.FAMApi.me();
         if (!can('legal.create')) qs('#legal-new-matter')?.classList.add('hidden');
-        qs('#legal-new-rule')?.classList.toggle('hidden', !can('legal.manage'));
         await loadOptions();
         bind();
-        await Promise.all([load(), loadRules()]);
+        await load();
         const directId = new URLSearchParams(window.location.search).get('matter_id');
         if (directId) openDetails(Number(directId)).catch(console.error);
     }

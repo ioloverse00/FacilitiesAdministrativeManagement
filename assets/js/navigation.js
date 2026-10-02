@@ -28,6 +28,7 @@
         'legal-management.html': 'legal-management',
         'records.html': 'records',
         'records-retention.html': 'records-retention',
+        'settings.html': 'settings',
         'fam-administration-maintenance.html': 'settings',
         'under-maintenance.html': 'under-maintenance'
     };

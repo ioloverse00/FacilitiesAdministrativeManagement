@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>FAM Administration</title>
+    <title>Administrative Settings</title>
     <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
     <script src="../assets/js/theme.js"></script>
     <link href="../assets/css/app.css?v=20260919-requester-postfix" rel="stylesheet">
@@ -16,12 +16,12 @@
     <script src="../assets/js/settings.js" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body"
-    data-page-title="FAM Administration"
+    data-page-title="Administrative Settings"
     data-requires-permission="administration.view"
-    data-breadcrumb-title="FAM Administration"
+    data-breadcrumb-title="Administrative Settings"
     data-active-nav="settings"
-    data-page-heading="FAM Administration"
-    data-page-description="Configure operational settings, roles, workflows, AI services, notifications, reference data, and subsystem integrations.">
+    data-page-heading="Administrative Settings"
+    data-page-description="Maintain visitor blacklist records and company Rules & Regulations.">
     <div id="app-shell" class="app-shell">
         <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
         <div class="app-main-panel">
@@ -31,23 +31,24 @@
                     <div class="facility-requests-shell">
                         <header class="facility-page-header">
                             <div class="facility-title-block">
-                                <h1>FAM Administration</h1>
-                                <p>Configure operational settings, roles, workflows, AI services, notifications, reference data, and subsystem integrations.</p>
+                                <h1>Administrative Settings</h1>
+                                <p>Maintain visitor blacklist records and company Rules & Regulations.</p>
                                 <span id="admin-updated" class="fam-last-updated">Last updated: Loading...</span>
                             </div>
                             <div class="facility-header-actions"></div>
                         </header>
 
-                        <section class="admin-layout" aria-label="FAM administration settings">
+                        <section class="admin-layout" aria-label="Administrative settings">
                             <label class="facility-field admin-mobile-picker">
-                                <span>Administration Category</span>
+                                <span>Settings Section</span>
                                 <select id="admin-category-select"></select>
                             </label>
-                            <aside class="admin-nav-card" aria-label="Administration categories">
+                            <aside class="admin-nav-card" aria-label="Administrative settings sections">
                                 <nav id="admin-category-nav" class="admin-category-nav"></nav>
                             </aside>
                             <div id="admin-panel-card" class="admin-panel-card"></div>
                         </section>
+                        <aside id="admin-dialog" class="facility-dialog legal-dialog" hidden></aside>
                     </div>
                 </div>
                 <div id="app-footer-slot" class="app-footer-slot"></div>
