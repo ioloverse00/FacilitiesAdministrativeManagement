@@ -8,10 +8,10 @@ use Dompdf\Options;
 final class ReportsService
 {
     private const REPORTS = [
-        'facility_requests' => [
-            'title' => 'Facility Requests Report',
-            'permission' => 'facility_requests.view',
-            'date_semantics' => 'Date range uses facility request created_at.',
+        'facility_reservations' => [
+            'title' => 'Facility Reservations Report',
+            'permission' => 'reservations.view',
+            'date_semantics' => 'Date range uses reservation start/end schedule overlap.',
         ],
         'documents_records' => [
             'title' => 'Documents & Records Report',
@@ -84,8 +84,8 @@ final class ReportsService
         }
         $handle = fopen('php://output', 'w');
         fwrite($handle, "\xEF\xBB\xBF");
-        if ($report === 'facility_requests') {
-            $this->streamFacilityRequestsCsv($filters, $handle);
+        if ($report === 'facility_reservations') {
+            $this->streamFacilityReservationsCsv($filters, $handle);
             return;
         }
         if ($report === 'contracts') {
@@ -134,6 +134,7 @@ final class ReportsService
         $options = new Options();
         $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);
+        $options->set('chroot', dirname(__DIR__, 2));
         $dompdf = new Dompdf($options);
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->loadHtml($this->pdfHtml($report, $filters, $data));
@@ -252,103 +253,116 @@ final class ReportsService
         return $options;
     }
 
-    private function facilityRequestsReport(array $filters): array
+    private function facilityReservationsReport(array $filters): array
     {
-        [$where, $params] = $this->baseWhere('fr.deleted_at IS NULL', 'fr.created_at', $filters);
-        $this->exact($where, $params, 'status', 'fr.status', $filters);
-        $this->exact($where, $params, 'priority', 'fr.priority', $filters);
-        $this->exact($where, $params, 'department_id', 'fr.department_reference_id', $filters);
-        $this->exact($where, $params, 'category_id', 'fr.request_category_id', $filters);
-        $this->search($where, $params, 'facility_search', $filters['search'], ['fr.request_number', 'fr.subject', 'fr.description']);
-        $rows = $this->facilityRequestRows($where, $params, 500);
+        [$where, $params] = $this->reservationWhere($filters);
+        $rows = $this->reservationRows($where, $params, 500);
         $whereSql = implode(' AND ', $where);
-        $total = $this->scalar("SELECT COUNT(*) FROM facility_request fr WHERE $whereSql", $params);
+        $total = $this->scalar("SELECT COUNT(*) FROM facility_reservation r INNER JOIN facility_space fs ON fs.facility_space_id = r.facility_space_id LEFT JOIN building b ON b.building_id = fs.building_id LEFT JOIN employee_reference e ON e.employee_reference_id = r.requested_by_employee_reference_id LEFT JOIN department_reference d ON d.department_reference_id = r.department_reference_id WHERE $whereSql", $params);
         return [
             'record_count' => $total,
             'displayed_count' => count($rows),
             'display_limit' => 500,
             'is_truncated' => $total > count($rows),
             'kpis' => [
-                'Total Requests' => $total,
-                'Open' => $this->scalar("SELECT COUNT(*) FROM facility_request fr WHERE $whereSql AND fr.status IN ('SUBMITTED','PENDING_APPROVAL','APPROVED','ASSIGNED')", $params),
-                'In Progress' => $this->scalar("SELECT COUNT(*) FROM facility_request fr WHERE $whereSql AND fr.status = 'IN_PROGRESS'", $params),
-                'Completed' => $this->scalar("SELECT COUNT(*) FROM facility_request fr WHERE $whereSql AND fr.status IN ('COMPLETED','VERIFIED','CLOSED')", $params),
-                'Due Soon / Past Due' => $this->scalar("SELECT COUNT(*) FROM facility_request fr WHERE $whereSql AND fr.requested_completion_at IS NOT NULL AND fr.status NOT IN ('COMPLETED','VERIFIED','CLOSED','CANCELLED','REJECTED') AND fr.requested_completion_at <= DATE_ADD(NOW(), INTERVAL 3 DAY)", $params),
+                'Total Reservations' => $total,
+                'Approved' => $this->scalar("SELECT COUNT(*) FROM facility_reservation r INNER JOIN facility_space fs ON fs.facility_space_id = r.facility_space_id LEFT JOIN building b ON b.building_id = fs.building_id LEFT JOIN employee_reference e ON e.employee_reference_id = r.requested_by_employee_reference_id LEFT JOIN department_reference d ON d.department_reference_id = r.department_reference_id WHERE $whereSql AND r.status = 'APPROVED'", $params),
+                'Checked In' => $this->scalar("SELECT COUNT(*) FROM facility_reservation r INNER JOIN facility_space fs ON fs.facility_space_id = r.facility_space_id LEFT JOIN building b ON b.building_id = fs.building_id LEFT JOIN employee_reference e ON e.employee_reference_id = r.requested_by_employee_reference_id LEFT JOIN department_reference d ON d.department_reference_id = r.department_reference_id WHERE $whereSql AND r.status = 'CHECKED_IN'", $params),
+                'Completed' => $this->scalar("SELECT COUNT(*) FROM facility_reservation r INNER JOIN facility_space fs ON fs.facility_space_id = r.facility_space_id LEFT JOIN building b ON b.building_id = fs.building_id LEFT JOIN employee_reference e ON e.employee_reference_id = r.requested_by_employee_reference_id LEFT JOIN department_reference d ON d.department_reference_id = r.department_reference_id WHERE $whereSql AND r.status = 'COMPLETED'", $params),
+                'Pending Approval' => $this->scalar("SELECT COUNT(*) FROM facility_reservation r INNER JOIN facility_space fs ON fs.facility_space_id = r.facility_space_id LEFT JOIN building b ON b.building_id = fs.building_id LEFT JOIN employee_reference e ON e.employee_reference_id = r.requested_by_employee_reference_id LEFT JOIN department_reference d ON d.department_reference_id = r.department_reference_id WHERE $whereSql AND r.approval_status = 'PENDING'", $params),
             ],
             'charts' => [
-                'Status' => $this->group('facility_request fr', 'fr.status', $where, $params),
-                'Priority' => $this->group('facility_request fr', 'fr.priority', $where, $params),
-                'Request Activity Over Time' => $this->facilityRequestActivityTimeline($where, $params),
+                'Reservations by Status' => $this->group('facility_reservation r INNER JOIN facility_space fs ON fs.facility_space_id = r.facility_space_id LEFT JOIN building b ON b.building_id = fs.building_id LEFT JOIN employee_reference e ON e.employee_reference_id = r.requested_by_employee_reference_id LEFT JOIN department_reference d ON d.department_reference_id = r.department_reference_id', 'r.status', $where, $params),
+                'Reservations by Facility' => $this->group('facility_reservation r INNER JOIN facility_space fs ON fs.facility_space_id = r.facility_space_id LEFT JOIN building b ON b.building_id = fs.building_id LEFT JOIN employee_reference e ON e.employee_reference_id = r.requested_by_employee_reference_id LEFT JOIN department_reference d ON d.department_reference_id = r.department_reference_id', 'fs.space_name', $where, $params),
+                'Reservation Activity Over Time' => $this->reservationActivityTimeline($where, $params),
             ],
-            'columns' => $this->facilityRequestColumns(),
-            'rows' => array_map(fn($r) => $this->shapeFacilityRequestRow($r), $rows),
+            'columns' => $this->reservationColumns(),
+            'rows' => array_map(fn($r) => $this->shapeReservationRow($r), $rows),
         ];
     }
 
-    private function facilityRequestRows(array $where, array $params, ?int $limit): array
+    private function reservationWhere(array $filters): array
     {
-        $sql = "SELECT fr.request_number, fr.subject, rc.category_name, d.department_name, fs.space_name, fr.priority, fr.status, fr.approval_status, fr.created_at, fr.requested_completion_at
-            FROM facility_request fr
-            INNER JOIN request_category rc ON rc.request_category_id = fr.request_category_id
-            LEFT JOIN department_reference d ON d.department_reference_id = fr.department_reference_id
-            LEFT JOIN facility_space fs ON fs.facility_space_id = fr.facility_space_id
-            WHERE " . implode(' AND ', $where) . "
-            ORDER BY fr.created_at DESC, fr.facility_request_id DESC";
+        [$where, $params] = $this->baseWhere('r.deleted_at IS NULL', 'r.start_datetime', $filters);
+        if ($filters['date_from'] !== '') {
+            $where = array_values(array_filter($where, fn($clause) => !str_contains($clause, 'r.start_datetime >= :date_from')));
+            $where[] = '(r.end_datetime IS NULL OR r.end_datetime >= :date_from)';
+        }
+        if ($filters['date_to'] !== '') {
+            $where = array_values(array_filter($where, fn($clause) => !str_contains($clause, 'r.start_datetime <= :date_to')));
+            $where[] = 'r.start_datetime <= :date_to';
+        }
+        $this->exact($where, $params, 'status', 'r.status', $filters);
+        $this->exact($where, $params, 'facility_space_id', 'r.facility_space_id', $filters);
+        $this->search($where, $params, 'reservation_search', $filters['search'], ['r.reservation_number', 'r.purpose', 'fs.space_name', 'b.building_name', 'e.full_name', 'd.department_name']);
+        return [$where, $params];
+    }
+
+    private function reservationRows(array $where, array $params, ?int $limit): array
+    {
+        $sql = $this->reservationSelectSql($where) . " ORDER BY r.start_datetime DESC, r.facility_reservation_id DESC";
         if ($limit !== null) {
             $sql .= " LIMIT $limit";
         }
         return $this->rows($sql, $params);
     }
 
-    private function facilityRequestColumns(): array
+    private function reservationSelectSql(array $where): string
     {
-        return ['Request No.', 'Subject', 'Category', 'Department', 'Facility', 'Priority', 'Status', 'Approval', 'Created', 'Requested Completion'];
+        return "SELECT r.reservation_number, r.reservation_type, r.purpose, r.expected_attendees, r.start_datetime, r.end_datetime, r.status, r.approval_status, r.created_at, fs.space_name, b.building_name, e.full_name requester_name, d.department_name
+            FROM facility_reservation r
+            INNER JOIN facility_space fs ON fs.facility_space_id = r.facility_space_id
+            LEFT JOIN building b ON b.building_id = fs.building_id
+            LEFT JOIN employee_reference e ON e.employee_reference_id = r.requested_by_employee_reference_id
+            LEFT JOIN department_reference d ON d.department_reference_id = r.department_reference_id
+            WHERE " . implode(' AND ', $where);
     }
 
-    private function shapeFacilityRequestRow(array $row): array
+    private function reservationColumns(): array
+    {
+        return ['Reservation No.', 'Facility / Room', 'Building', 'Requester', 'Department', 'Type', 'Purpose', 'Attendees', 'Start', 'End', 'Status', 'Approval', 'Created'];
+    }
+
+    private function shapeReservationRow(array $row): array
     {
         return [
-            $row['request_number'],
-            $row['subject'],
-            $row['category_name'],
+            $row['reservation_number'],
+            $row['space_name'],
+            $row['building_name'] ?: 'Unassigned',
+            $row['requester_name'] ?: 'Unassigned',
             $row['department_name'] ?: 'Unassigned',
-            $row['space_name'] ?: 'Unassigned',
-            $this->statusLabel($row['priority']),
+            $this->statusLabel($row['reservation_type']),
+            $row['purpose'],
+            $row['expected_attendees'],
+            $this->reportDateTime($row['start_datetime']),
+            $this->reportDateTime($row['end_datetime']),
             $this->statusLabel($row['status']),
             $this->statusLabel($row['approval_status']),
             $this->reportDateTime($row['created_at']),
-            $this->reportDateTime($row['requested_completion_at']),
         ];
     }
 
-    private function streamFacilityRequestsCsv(array $filters, mixed $handle): void
+    private function streamFacilityReservationsCsv(array $filters, mixed $handle): void
     {
-        [$where, $params] = $this->baseWhere('fr.deleted_at IS NULL', 'fr.created_at', $filters);
-        $this->exact($where, $params, 'status', 'fr.status', $filters);
-        $this->exact($where, $params, 'priority', 'fr.priority', $filters);
-        $this->exact($where, $params, 'department_id', 'fr.department_reference_id', $filters);
-        $this->exact($where, $params, 'category_id', 'fr.request_category_id', $filters);
-        $this->search($where, $params, 'facility_search', $filters['search'], ['fr.request_number', 'fr.subject', 'fr.description']);
-        fputcsv($handle, $this->facilityRequestColumns());
-        $statement = $this->pdo->prepare("SELECT fr.request_number, fr.subject, rc.category_name, d.department_name, fs.space_name, fr.priority, fr.status, fr.approval_status, fr.created_at, fr.requested_completion_at
-            FROM facility_request fr
-            INNER JOIN request_category rc ON rc.request_category_id = fr.request_category_id
-            LEFT JOIN department_reference d ON d.department_reference_id = fr.department_reference_id
-            LEFT JOIN facility_space fs ON fs.facility_space_id = fr.facility_space_id
-            WHERE " . implode(' AND ', $where) . "
-            ORDER BY fr.created_at DESC, fr.facility_request_id DESC");
+        [$where, $params] = $this->reservationWhere($filters);
+        fputcsv($handle, $this->reservationColumns());
+        $statement = $this->pdo->prepare($this->reservationSelectSql($where) . " ORDER BY r.start_datetime DESC, r.facility_reservation_id DESC");
         $statement->execute($params);
         while ($row = $statement->fetch()) {
-            fputcsv($handle, array_map(fn($value) => $this->csvCell($value), $this->shapeFacilityRequestRow($row)));
+            fputcsv($handle, array_map(fn($value) => $this->csvCell($value), $this->shapeReservationRow($row)));
         }
     }
 
-    private function facilityRequestActivityTimeline(array $where, array $params): array
+    private function reservationActivityTimeline(array $where, array $params): array
     {
-        return $this->rows("SELECT DATE_FORMAT(fr.created_at, '%b %Y') label, DATE_FORMAT(fr.created_at, '%Y-%m') sort_key, COUNT(*) value
-            FROM facility_request fr
+        return $this->rows("SELECT DATE_FORMAT(r.start_datetime, '%b %Y') label, DATE_FORMAT(r.start_datetime, '%Y-%m') sort_key, COUNT(*) value
+            FROM facility_reservation r
+            INNER JOIN facility_space fs ON fs.facility_space_id = r.facility_space_id
+            LEFT JOIN building b ON b.building_id = fs.building_id
+            LEFT JOIN employee_reference e ON e.employee_reference_id = r.requested_by_employee_reference_id
+            LEFT JOIN department_reference d ON d.department_reference_id = r.department_reference_id
             WHERE " . implode(' AND ', $where) . "
-            GROUP BY DATE_FORMAT(fr.created_at, '%Y-%m'), DATE_FORMAT(fr.created_at, '%b %Y')
+            GROUP BY DATE_FORMAT(r.start_datetime, '%Y-%m'), DATE_FORMAT(r.start_datetime, '%b %Y')
             ORDER BY sort_key ASC", $params);
     }
 
@@ -672,20 +686,20 @@ final class ReportsService
                 'documents_records' => $this->distinct('document', 'document_status'),
                 'contracts' => $this->distinct('contract', 'contract_status'),
                 'legal_management' => $this->distinct('legal_matter', 'status'),
-                default => $this->distinct('facility_request', 'status'),
+                default => $this->distinct('facility_reservation', 'status'),
             },
-            'priorities' => $report === 'facility_requests' ? $this->distinct('facility_request', 'priority') : ($report === 'legal_management' ? $this->distinct('legal_matter', 'priority') : []),
+            'priorities' => $report === 'legal_management' ? $this->distinct('legal_matter', 'priority') : [],
             'types' => match ($report) {
                 'legal_management' => $this->distinct('legal_matter', 'matter_type'),
                 default => [],
             },
-            'departments' => in_array($report, ['facility_requests', 'documents_records', 'contracts', 'legal_management'], true) ? $this->rows("SELECT department_reference_id id, department_name name FROM department_reference WHERE status = 'ACTIVE' ORDER BY department_name") : [],
+            'departments' => in_array($report, ['documents_records', 'contracts', 'legal_management'], true) ? $this->rows("SELECT department_reference_id id, department_name name FROM department_reference WHERE status = 'ACTIVE' ORDER BY department_name") : [],
             'categories' => match ($report) {
-                'facility_requests' => $this->rows("SELECT request_category_id id, category_name name FROM request_category WHERE status = 'ACTIVE' ORDER BY category_name"),
                 'documents_records' => $this->rows("SELECT document_category_id id, category_name name FROM document_category WHERE status = 'ACTIVE' ORDER BY category_name"),
                 default => [],
             },
             'contract_types' => $report === 'contracts' ? $this->rows("SELECT contract_type_id id, type_name name FROM contract_type WHERE status = 'ACTIVE' ORDER BY type_name") : [],
+            'facility_spaces' => $report === 'facility_reservations' ? $this->rows("SELECT fs.facility_space_id id, CONCAT(fs.space_name, ' - ', COALESCE(b.building_name, 'No building')) name FROM facility_space fs LEFT JOIN building b ON b.building_id = fs.building_id WHERE fs.deleted_at IS NULL ORDER BY b.building_name, fs.space_name") : [],
             'sources' => $report === 'documents_records' ? $this->documentsRecordsSourceOptions($user) : [],
             'retention_schedules' => $report === 'documents_records' ? $this->rows("SELECT retention_schedule_id id, schedule_name name FROM retention_schedule WHERE status = 'ACTIVE' ORDER BY schedule_name") : [],
             'retention_states' => $report === 'documents_records' ? ['WAITING_FOR_TRIGGER', 'ACTIVE', 'DUE_FOR_REVIEW', 'OVERDUE', 'ON_HOLD', 'ARCHIVED', 'DISPOSED', 'PERMANENT'] : [],
@@ -1000,20 +1014,14 @@ final class ReportsService
 
     private function exportDataset(string $report, array $filters): array
     {
-        if ($report === 'facility_requests') {
-            [$where, $params] = $this->baseWhere('fr.deleted_at IS NULL', 'fr.created_at', $filters);
-            $this->exact($where, $params, 'status', 'fr.status', $filters);
-            $this->exact($where, $params, 'priority', 'fr.priority', $filters);
-            $this->exact($where, $params, 'department_id', 'fr.department_reference_id', $filters);
-            $this->exact($where, $params, 'category_id', 'fr.request_category_id', $filters);
-            $this->search($where, $params, 'facility_search', $filters['search'], ['fr.request_number', 'fr.subject', 'fr.description']);
+        if ($report === 'facility_reservations') {
+            [$where, $params] = $this->reservationWhere($filters);
             return [
                 'title' => self::REPORTS[$report]['title'],
-                'columns' => $this->facilityRequestColumns(),
-                'rows' => array_map(fn($row) => $this->shapeFacilityRequestRow($row), $this->facilityRequestRows($where, $params, null)),
+                'columns' => $this->reservationColumns(),
+                'rows' => array_map(fn($row) => $this->shapeReservationRow($row), $this->reservationRows($where, $params, null)),
             ];
         }
-
         if ($report === 'documents_records' && $filters['source'] === 'records') {
             [$where, $params] = $this->recordWhere($filters);
             return [
@@ -1059,26 +1067,12 @@ final class ReportsService
         $generated = (new DateTimeImmutable())->format('F j, Y g:i A');
         $totalRecords = count($rows);
 
-        /*
-     * Embed the local GSMS SVG logo directly into the PDF.
-     * Remote assets remain disabled in Dompdf.
-     */
         $logoPath = dirname(__DIR__, 2)
             . DIRECTORY_SEPARATOR . 'assets'
             . DIRECTORY_SEPARATOR . 'logo-full.svg';
-
-        $logoDataUri = '';
-
-        if (is_file($logoPath)) {
-            $logoData = file_get_contents($logoPath);
-
-            if ($logoData !== false) {
-                $logoDataUri = 'data:image/svg+xml;base64,' . base64_encode($logoData);
-            }
-        }
-
-        $logoHtml = $logoDataUri !== ''
-            ? '<img src="' . $this->html($logoDataUri) . '" alt="Great Solomon Manpower Services">'
+        $logoSrc = is_file($logoPath) ? realpath($logoPath) : false;
+        $logoHtml = $logoSrc !== false
+            ? '<img src="' . $this->html($logoSrc) . '" alt="Great Solomon Manpower Services">'
             : '<div class="logo-fallback">GREAT SOLOMON MANPOWER SERVICES INC.</div>';
 
         $headerCells = implode(
@@ -1451,7 +1445,7 @@ final class ReportsService
     private function pdfColumnWidths(string $report, array $columns): array
     {
         return match ($report) {
-            'facility_requests' => ['9%', '15%', '10%', '10%', '10%', '8%', '8%', '8%', '11%', '11%'],
+            'facility_reservations' => ['8%', '10%', '8%', '9%', '8%', '7%', '14%', '6%', '8%', '8%', '6%', '6%', '6%'],
             'legal_management' => ['9%', '17%', '10%', '10%', '10%', '8%', '8%', '9%', '9%', '10%'],
             default => [],
         };
@@ -1473,22 +1467,39 @@ final class ReportsService
 
     private function filterSummary(string $report, array $filters): string
     {
-        $labels = [
-            'source' => 'Source',
-            'status' => 'Status',
-            'priority' => 'Priority',
-            'type' => 'Matter Type',
-            'confidentiality' => 'Confidentiality',
-            'department_id' => 'Department',
-            'category_id' => 'Category',
-            'type_id' => 'Contract Type',
-            'retention_schedule_id' => 'Retention Schedule',
-            'retention_state' => 'Retention State',
-            'assignee_id' => 'Assignee',
-            'date_basis' => 'Date Basis',
-            'expiry_state' => 'Expiry State',
-            'search' => 'Search',
+        $labelSets = [
+            'facility_reservations' => [
+                'status' => 'Status',
+                'facility_space_id' => 'Facility / Room',
+                'search' => 'Search',
+            ],
+            'documents_records' => [
+                'source' => 'Source',
+                'status' => 'Status',
+                'confidentiality' => 'Confidentiality',
+                'department_id' => 'Department',
+                'category_id' => 'Category',
+                'retention_schedule_id' => 'Retention Schedule',
+                'retention_state' => 'Retention State',
+                'search' => 'Search',
+            ],
+            'contracts' => [
+                'date_basis' => 'Date Basis',
+                'search' => 'Search',
+                'status' => 'Lifecycle Status',
+                'type_id' => 'Contract Type',
+                'department_id' => 'Department',
+                'expiry_state' => 'Expiry State',
+            ],
+            'legal_management' => [
+                'status' => 'Status',
+                'priority' => 'Priority',
+                'type' => 'Matter Type',
+                'department_id' => 'Department',
+                'assignee_id' => 'Assignee',
+            ],
         ];
+        $labels = $labelSets[$report] ?? [];
         $optionKeys = [
             'source' => 'sources',
             'department_id' => 'departments',
@@ -1498,6 +1509,7 @@ final class ReportsService
             'assignee_id' => 'assignees',
             'date_basis' => 'date_basises',
             'expiry_state' => 'expiry_states',
+            'facility_space_id' => 'facility_spaces',
         ];
         $options = $this->filterOptions($report);
         $parts = [];

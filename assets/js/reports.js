@@ -1,16 +1,16 @@
 (function () {
   const REPORT_DEFINITIONS = {
-    facility_requests: {
-      tabTitle: 'Facility Requests',
-      eyebrow: 'Facility Requests Report',
-      fallbackTitle: 'Facility Requests Report',
-      filters: ['search', 'date_from', 'date_to', 'status', 'priority', 'department_id'],
+    facility_reservations: {
+      tabTitle: 'Facility Reservations',
+      eyebrow: 'Facility Reservations Report',
+      fallbackTitle: 'Facility Reservations Report',
+      filters: ['search', 'date_from', 'date_to', 'status', 'facility_space_id'],
       analysis: {
-        categorical: { dataset: 'charts.Priority', title: 'Requests by Priority', type: 'bar' },
-        distribution: { dataset: 'charts.Status', title: 'Request Status Distribution', type: 'doughnut' },
-        timeline: { dataset: 'charts.Request Activity Over Time', title: 'Request Activity Over Time', type: 'line' }
+        categorical: { dataset: 'charts.Reservations by Facility', title: 'Reservations by Facility / Room', type: 'horizontalBar' },
+        distribution: { dataset: 'charts.Reservations by Status', title: 'Reservation Status Distribution', type: 'doughnut' },
+        timeline: { dataset: 'charts.Reservation Activity Over Time', title: 'Reservation Activity Over Time', type: 'line' }
       },
-      table: { title: 'Facility Request Register', rows: 'rows', columns: 'columns', count: 'record_count', badgeColumns: ['Status', 'Approval'] },
+      table: { title: 'Facility Reservation Register', rows: 'rows', columns: 'columns', count: 'record_count', badgeColumns: ['Status', 'Approval'] },
       csv: true
     },
     documents_records: {
@@ -76,6 +76,7 @@
     date_to: { label: 'To', type: 'date' },
     status: { label: context => context.report === 'contracts' ? 'Lifecycle Status' : 'Status', type: 'select', options: context => context.report === 'documents_records' && context.source === 'records' ? 'record_statuses' : 'statuses' },
     priority: { label: 'Priority', type: 'select', options: 'priorities' },
+    facility_space_id: { label: 'Facility / Room', type: 'select', options: 'facility_spaces' },
     type: { label: context => context.report === 'legal_management' ? 'Matter Type' : 'Type', type: 'select', options: 'types' },
     confidentiality: { label: 'Confidentiality', type: 'select', options: 'confidentiality_levels' },
     department_id: { label: 'Department', type: 'select', options: 'departments' },
@@ -87,7 +88,7 @@
     assignee_id: { label: 'Assignee', type: 'select', options: 'assignees' }
   };
 
-  const REPORT_ORDER = ['facility_requests', 'documents_records', 'contracts', 'legal_management'];
+  const REPORT_ORDER = ['facility_reservations', 'documents_records', 'contracts', 'legal_management'];
   const state = { report: '', filtersByReport: {}, data: null, loading: false };
   const charts = {};
   const qs = selector => document.querySelector(selector);
@@ -477,7 +478,7 @@
     return ({
       contracts: 'contracts',
       documents_records: 'items',
-      facility_requests: 'requests',
+      facility_reservations: 'reservations',
       legal_management: 'matters'
     })[state.report] || 'records';
   }
