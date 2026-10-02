@@ -10,7 +10,7 @@
         distribution: { dataset: 'charts.Status', title: 'Request Status Distribution', type: 'doughnut' },
         timeline: { dataset: 'charts.Request Activity Over Time', title: 'Request Activity Over Time', type: 'line' }
       },
-      table: { title: 'Facility Request Register', rows: 'rows', columns: 'columns', count: 'rows.length', badgeColumns: ['Status', 'Approval'] },
+      table: { title: 'Facility Request Register', rows: 'rows', columns: 'columns', count: 'record_count', badgeColumns: ['Status', 'Approval'] },
       csv: true
     },
     documents_records: {
@@ -44,7 +44,7 @@
       eyebrow: 'Contracts Report',
       fallbackTitle: 'Contracts Report',
       fallbackDescription: 'Contract lifecycle, type, and expiry analysis',
-      filters: ['date_basis', 'search', 'date_from', 'date_to', 'status', 'type_id', 'department_id'],
+      filters: ['date_basis', 'search', 'date_from', 'date_to', 'status', 'type_id', 'department_id', 'expiry_state'],
       analysis: {
         categorical: { dataset: 'charts.Contracts by Type', title: 'Contracts by Type', type: 'horizontalBar' },
         distribution: { dataset: 'charts.Contracts by Lifecycle Status', title: 'Contracts by Lifecycle Status', type: 'doughnut' },
@@ -83,11 +83,12 @@
     type_id: { label: 'Contract Type', type: 'select', options: 'contract_types' },
     retention_schedule_id: { label: 'Retention Schedule', type: 'select', options: 'retention_schedules' },
     retention_state: { label: 'Retention State', type: 'select', options: 'retention_states' },
+    expiry_state: { label: 'Expiry', type: 'select', options: 'expiry_states' },
     assignee_id: { label: 'Assignee', type: 'select', options: 'assignees' }
   };
 
   const REPORT_ORDER = ['facility_requests', 'documents_records', 'contracts', 'legal_management'];
-  const state = { report: 'contracts', filtersByReport: {}, data: null, loading: false };
+  const state = { report: '', filtersByReport: {}, data: null, loading: false };
   const charts = {};
   const qs = selector => document.querySelector(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -128,7 +129,8 @@
   }
 
   function params() {
-    const query = new URLSearchParams({ report: state.report });
+    const query = new URLSearchParams();
+    if (state.report) query.set('report', state.report);
     Object.entries(currentFilters()).forEach(([key, value]) => { if (value) query.set(key, value); });
     return query.toString();
   }
@@ -138,7 +140,7 @@
     qs('#reports-tabs').innerHTML = REPORT_ORDER.map(key => {
       const report = REPORT_DEFINITIONS[key];
       const item = allowed.get(key);
-      const disabled = item && !item.available;
+      const disabled = available.length > 0 && (!item || !item.available);
       return `<button class="reports-tab ${state.report === key ? 'active' : ''}" type="button" role="tab" aria-selected="${state.report === key}" data-report="${esc(key)}" ${disabled ? 'disabled title="Permission required"' : ''}>${esc(report.tabTitle)}</button>`;
     }).join('');
   }
@@ -164,10 +166,13 @@
     try {
       const payload = await window.FAMApi.request(`../api/reports/overview.php?${params()}`);
       state.data = payload.data || {};
+      state.report = state.data.key || state.report;
       updateTimestamp();
       renderReport();
     } catch (error) {
+      state.data = state.data || { available_reports: [] };
       qs('#reports-panel').innerHTML = emptyState(error.message || 'Unable to load report data.', 'error');
+      renderTabs(state.data.available_reports || []);
       hideFilters();
       syncExportControls();
       showError(error.message || 'Unable to load report data.');
@@ -205,7 +210,10 @@
     const columns = getPath(state.data, config.columns) || [];
     const rows = getPath(state.data, config.rows) || [];
     const count = getCount(config.count, rows);
+    const truncated = state.data?.is_truncated === true || (typeof count === 'number' && rows.length < count && rows.length >= 500);
+    const limit = Number(state.data?.display_limit || rows.length || 500);
     const countHtml = typeof count === 'number' ? `<span class="reports-record-count">${esc(number(count))} matching records</span>` : '';
+    const truncationNote = truncated ? `<p class="reports-record-count">Showing first ${esc(number(limit))} matching records on screen. CSV and PDF exports include all ${esc(number(count))} matching records.</p>` : '';
     return `<section class="facility-table-card reports-analysis-card">
       <div class="facility-table-header">
         <div>
@@ -217,6 +225,7 @@
           ${exportActionsHtml()}
         </div>
       </div>
+      ${truncationNote}
       ${table(columns, rows, config)}
     </section>`;
   }
@@ -256,7 +265,8 @@
     if (labelText) labelText.textContent = valueOf(field.label, ctx) || field.name;
     const input = label.querySelector('input, select');
     if (!input) return;
-    input.value = currentFilters()[field.name] || field.defaultValue || '';
+    const selectedValue = currentFilters()[field.name] || (field.name === 'source' ? ctx.source : field.defaultValue) || '';
+    input.value = selectedValue;
     if (field.type !== 'select') return;
     const list = optionList(field, ctx, options);
     const emptyOption = field.requiredChoice ? '' : '<option value="">All</option>';
@@ -265,7 +275,7 @@
       const text = typeof item === 'object' ? item.name : title(item);
       return `<option value="${esc(value)}">${esc(text)}</option>`;
     }).join('');
-    input.value = currentFilters()[field.name] || field.defaultValue || '';
+    input.value = selectedValue;
   }
 
   function hideFilters() {

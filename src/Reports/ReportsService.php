@@ -15,7 +15,7 @@ final class ReportsService
         ],
         'documents_records' => [
             'title' => 'Documents & Records Report',
-            'permission' => 'records.view',
+            'permission' => null,
             'date_semantics' => 'Date range uses document created_at and record created_at within their own metadata sets.',
         ],
         'contracts' => [
@@ -36,15 +36,16 @@ final class ReportsService
 
     public function overview(array $query, array $user): array
     {
-        $report = $this->reportKey($query['report'] ?? 'contracts');
         $this->authorize($user, 'reports.view');
-        $this->authorize($user, self::REPORTS[$report]['permission']);
+        $report = $this->resolveReport($query['report'] ?? '', $user);
         $filters = $this->filters($query);
+        $this->resolveReportFilters($report, $filters, $query, $user);
+        $this->authorizeReport($user, $report, $filters);
         return array_merge(self::REPORTS[$report], [
             'key' => $report,
             'filters' => $filters,
             'available_reports' => $this->availableReports($user),
-            'filter_options' => $this->filterOptions($report),
+            'filter_options' => $this->filterOptions($report, $user),
             'export' => [
                 'csv' => $this->csvAvailable($report),
                 'pdf' => true,
@@ -57,11 +58,13 @@ final class ReportsService
         $report = $this->reportKey($query['report'] ?? '');
         $this->authorize($user, 'reports.view');
         $this->authorize($user, 'reports.export');
-        $this->authorize($user, self::REPORTS[$report]['permission']);
+        $filters = $this->filters($query);
+        $this->resolveReportFilters($report, $filters, $query, $user);
+        $this->authorizeReport($user, $report, $filters);
         if (!$this->csvAvailable($report)) {
             throw new InvalidArgumentException('CSV export is not available for this report yet.');
         }
-        $data = $this->exportDataset($report, $this->filters($query));
+        $data = $this->exportDataset($report, $filters);
         return [
             'filename' => $report . '-report-' . date('Ymd-His') . '.csv',
             'csv' => $this->makeCsv($data['columns'], $data['rows']),
@@ -73,11 +76,12 @@ final class ReportsService
         $report = $this->reportKey($query['report'] ?? '');
         $this->authorize($user, 'reports.view');
         $this->authorize($user, 'reports.export');
-        $this->authorize($user, self::REPORTS[$report]['permission']);
+        $filters = $this->filters($query);
+        $this->resolveReportFilters($report, $filters, $query, $user);
+        $this->authorizeReport($user, $report, $filters);
         if (!$this->csvAvailable($report)) {
             throw new InvalidArgumentException('CSV export is not available for this report yet.');
         }
-        $filters = $this->filters($query);
         $handle = fopen('php://output', 'w');
         fwrite($handle, "\xEF\xBB\xBF");
         if ($report === 'facility_requests') {
@@ -103,11 +107,12 @@ final class ReportsService
         $report = $this->reportKey($query['report'] ?? '');
         $this->authorize($user, 'reports.view');
         $this->authorize($user, 'reports.export');
-        $this->authorize($user, self::REPORTS[$report]['permission']);
+        $filters = $this->filters($query);
+        $this->resolveReportFilters($report, $filters, $query, $user);
+        $this->authorizeReport($user, $report, $filters);
         if (!$this->csvAvailable($report)) {
             throw new InvalidArgumentException('CSV export is not available for this report yet.');
         }
-        $this->filters($query);
     }
 
     public function pdf(array $query, array $user): array
@@ -115,8 +120,9 @@ final class ReportsService
         $report = $this->reportKey($query['report'] ?? '');
         $this->authorize($user, 'reports.view');
         $this->authorize($user, 'reports.export');
-        $this->authorize($user, self::REPORTS[$report]['permission']);
         $filters = $this->filters($query);
+        $this->resolveReportFilters($report, $filters, $query, $user);
+        $this->authorizeReport($user, $report, $filters);
         $data = $this->exportDataset($report, $filters);
 
         $autoload = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
@@ -166,11 +172,84 @@ final class ReportsService
             $reports[] = [
                 'key' => $key,
                 'title' => $config['title'],
-                'available' => $this->can($user, $config['permission']),
-                'permission' => $config['permission'],
+                'available' => $this->canReport($user, $key),
+                'permission' => $config['permission'] ?? $this->documentsRecordsPermissionLabel($user),
             ];
         }
         return $reports;
+    }
+
+    private function resolveReport(mixed $value, array $user): string
+    {
+        $key = trim((string) $value);
+        if ($key !== '') {
+            return $this->reportKey($key);
+        }
+        foreach (array_keys(self::REPORTS) as $report) {
+            if ($this->canReport($user, $report)) {
+                return $report;
+            }
+        }
+        throw new InvalidArgumentException('No report types are available for your account.');
+    }
+
+    private function canReport(array $user, string $report): bool
+    {
+        if ($report === 'documents_records') {
+            return $this->can($user, 'records.view') || $this->can($user, 'retention.view');
+        }
+        $permission = self::REPORTS[$report]['permission'] ?? '';
+        return $permission !== '' && $this->can($user, $permission);
+    }
+
+    private function authorizeReport(array $user, string $report, array $filters): void
+    {
+        if ($report === 'documents_records') {
+            $this->authorize($user, $filters['source'] === 'records' ? 'retention.view' : 'records.view');
+            return;
+        }
+        $this->authorize($user, (string) self::REPORTS[$report]['permission']);
+    }
+
+    private function resolveReportFilters(string $report, array &$filters, array $query, array $user): void
+    {
+        if ($report !== 'documents_records') {
+            return;
+        }
+        $requested = (string) ($query['source'] ?? '');
+        if ($requested === 'records') {
+            $filters['source'] = 'records';
+            return;
+        }
+        if ($requested === 'documents') {
+            $filters['source'] = 'documents';
+            return;
+        }
+        $filters['source'] = $this->can($user, 'records.view') ? 'documents' : 'records';
+    }
+
+    private function documentsRecordsPermissionLabel(array $user): string
+    {
+        $permissions = [];
+        if ($this->can($user, 'records.view')) {
+            $permissions[] = 'records.view';
+        }
+        if ($this->can($user, 'retention.view')) {
+            $permissions[] = 'retention.view';
+        }
+        return implode('|', $permissions) ?: 'records.view|retention.view';
+    }
+
+    private function documentsRecordsSourceOptions(?array $user): array
+    {
+        $options = [];
+        if ($user === null || $this->can($user, 'records.view')) {
+            $options[] = ['id' => 'documents', 'name' => 'Documents'];
+        }
+        if ($user === null || $this->can($user, 'retention.view')) {
+            $options[] = ['id' => 'records', 'name' => 'Records Retention'];
+        }
+        return $options;
     }
 
     private function facilityRequestsReport(array $filters): array
@@ -182,13 +261,19 @@ final class ReportsService
         $this->exact($where, $params, 'category_id', 'fr.request_category_id', $filters);
         $this->search($where, $params, 'facility_search', $filters['search'], ['fr.request_number', 'fr.subject', 'fr.description']);
         $rows = $this->facilityRequestRows($where, $params, 500);
+        $whereSql = implode(' AND ', $where);
+        $total = $this->scalar("SELECT COUNT(*) FROM facility_request fr WHERE $whereSql", $params);
         return [
+            'record_count' => $total,
+            'displayed_count' => count($rows),
+            'display_limit' => 500,
+            'is_truncated' => $total > count($rows),
             'kpis' => [
-                'Total Requests' => count($rows),
-                'Open' => $this->countRows($rows, 'status', ['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'ASSIGNED']),
-                'In Progress' => $this->countRows($rows, 'status', ['IN_PROGRESS']),
-                'Completed' => $this->countRows($rows, 'status', ['COMPLETED', 'VERIFIED', 'CLOSED']),
-                'Due Soon / Past Due' => $this->scalar("SELECT COUNT(*) FROM facility_request fr WHERE " . implode(' AND ', $where) . " AND fr.requested_completion_at IS NOT NULL AND fr.status NOT IN ('COMPLETED','VERIFIED','CLOSED','CANCELLED','REJECTED') AND fr.requested_completion_at <= DATE_ADD(NOW(), INTERVAL 3 DAY)", $params),
+                'Total Requests' => $total,
+                'Open' => $this->scalar("SELECT COUNT(*) FROM facility_request fr WHERE $whereSql AND fr.status IN ('SUBMITTED','PENDING_APPROVAL','APPROVED','ASSIGNED')", $params),
+                'In Progress' => $this->scalar("SELECT COUNT(*) FROM facility_request fr WHERE $whereSql AND fr.status = 'IN_PROGRESS'", $params),
+                'Completed' => $this->scalar("SELECT COUNT(*) FROM facility_request fr WHERE $whereSql AND fr.status IN ('COMPLETED','VERIFIED','CLOSED')", $params),
+                'Due Soon / Past Due' => $this->scalar("SELECT COUNT(*) FROM facility_request fr WHERE $whereSql AND fr.requested_completion_at IS NOT NULL AND fr.status NOT IN ('COMPLETED','VERIFIED','CLOSED','CANCELLED','REJECTED') AND fr.requested_completion_at <= DATE_ADD(NOW(), INTERVAL 3 DAY)", $params),
             ],
             'charts' => [
                 'Status' => $this->group('facility_request fr', 'fr.status', $where, $params),
@@ -580,7 +665,7 @@ final class ReportsService
         return array_key_exists($report, self::REPORTS);
     }
 
-    private function filterOptions(string $report): array
+    private function filterOptions(string $report, ?array $user = null): array
     {
         return [
             'statuses' => match ($report) {
@@ -601,15 +686,15 @@ final class ReportsService
                 default => [],
             },
             'contract_types' => $report === 'contracts' ? $this->rows("SELECT contract_type_id id, type_name name FROM contract_type WHERE status = 'ACTIVE' ORDER BY type_name") : [],
-            'sources' => $report === 'documents_records' ? [
-                ['id' => 'documents', 'name' => 'Documents'],
-                ['id' => 'records', 'name' => 'Records Retention'],
-            ] : [],
+            'sources' => $report === 'documents_records' ? $this->documentsRecordsSourceOptions($user) : [],
             'retention_schedules' => $report === 'documents_records' ? $this->rows("SELECT retention_schedule_id id, schedule_name name FROM retention_schedule WHERE status = 'ACTIVE' ORDER BY schedule_name") : [],
             'retention_states' => $report === 'documents_records' ? ['WAITING_FOR_TRIGGER', 'ACTIVE', 'DUE_FOR_REVIEW', 'OVERDUE', 'ON_HOLD', 'ARCHIVED', 'DISPOSED', 'PERMANENT'] : [],
             'date_basises' => $report === 'contracts' ? [
                 ['id' => 'effective_start', 'name' => 'Effective / Start Date'],
                 ['id' => 'end_expiry', 'name' => 'End / Expiry Date'],
+            ] : [],
+            'expiry_states' => $report === 'contracts' ? [
+                ['id' => 'expiring_soon', 'name' => 'Expiring Soon'],
             ] : [],
             'assignees' => $report === 'legal_management' ? $this->rows("SELECT employee_reference_id id, full_name name FROM employee_reference WHERE employment_status = 'ACTIVE' AND deleted_at IS NULL ORDER BY full_name") : [],
             'document_statuses' => $report === 'documents_records' ? $this->distinct('document', 'document_status') : [],
@@ -1003,6 +1088,10 @@ final class ReportsService
                 $columns
             )
         );
+        $columnWidths = $this->pdfColumnWidths($report, $columns);
+        $colgroup = $columnWidths === []
+            ? ''
+            : '<colgroup>' . implode('', array_map(fn($width) => '<col style="width: ' . $this->html($width) . '">', $columnWidths)) . '</colgroup>';
 
         $bodyRows = $rows === []
             ? '<tr>
@@ -1331,7 +1420,12 @@ final class ReportsService
 
             '</table>
 
-    <table class="data-table">
+    <table class="data-table data-table-'
+            . $this->html($report) .
+            '">
+'
+            . $colgroup .
+            '
 
         <thead>
             <tr>'
@@ -1352,6 +1446,15 @@ final class ReportsService
 
 </body>
 </html>';
+    }
+
+    private function pdfColumnWidths(string $report, array $columns): array
+    {
+        return match ($report) {
+            'facility_requests' => ['9%', '15%', '10%', '10%', '10%', '8%', '8%', '8%', '11%', '11%'],
+            'legal_management' => ['9%', '17%', '10%', '10%', '10%', '8%', '8%', '9%', '9%', '10%'],
+            default => [],
+        };
     }
 
     private function reportingPeriod(array $filters): string
@@ -1383,6 +1486,7 @@ final class ReportsService
             'retention_state' => 'Retention State',
             'assignee_id' => 'Assignee',
             'date_basis' => 'Date Basis',
+            'expiry_state' => 'Expiry State',
             'search' => 'Search',
         ];
         $optionKeys = [
@@ -1393,6 +1497,7 @@ final class ReportsService
             'retention_schedule_id' => 'retention_schedules',
             'assignee_id' => 'assignees',
             'date_basis' => 'date_basises',
+            'expiry_state' => 'expiry_states',
         ];
         $options = $this->filterOptions($report);
         $parts = [];

@@ -8,6 +8,7 @@
         'legal-management': 'legal-management',
         records: 'document-management',
         'records-retention': 'records-retention',
+        reports: 'reports',
         settings: 'fam-administration',
         'under-maintenance': 'under-maintenance',
         'employee-dashboard': 'employee/',
@@ -28,6 +29,7 @@
         'legal-management.html': 'legal-management',
         'records.html': 'records',
         'records-retention.html': 'records-retention',
+        'reports.html': 'reports',
         'settings.html': 'settings',
         'fam-administration-maintenance.html': 'settings',
         'under-maintenance.html': 'under-maintenance'
