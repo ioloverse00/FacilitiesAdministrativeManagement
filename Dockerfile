@@ -20,6 +20,14 @@ RUN a2dismod mpm_event mpm_worker 2>/dev/null || true \
         > /etc/apache2/conf-available/fam-allowoverride.conf \
     && a2enconf fam-allowoverride
 
+# Diagnose Apache MPM configuration during image build
+RUN echo "=== ENABLED MPM FILES ===" \
+    && ls -la /etc/apache2/mods-enabled/*mpm* \
+    && echo "=== MPM LOAD DIRECTIVES ===" \
+    && grep -RniE 'LoadModule[[:space:]]+mpm_(event|worker|prefork)_module' /etc/apache2 \
+    && echo "=== APACHE MODULE CHECK ===" \
+    && apache2ctl -M
+
 WORKDIR /var/www/html
 
 # Copy Composer
