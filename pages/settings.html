@@ -21,7 +21,7 @@
     data-breadcrumb-title="Administrative Settings"
     data-active-nav="settings"
     data-page-heading="Administrative Settings"
-    data-page-description="Maintain visitor blacklist records and company Rules & Regulations.">
+    data-page-description="Manage FAM administrative records and configuration.">
     <div id="app-shell" class="app-shell">
         <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
         <div class="app-main-panel">
@@ -32,20 +32,18 @@
                         <header class="facility-page-header">
                             <div class="facility-title-block">
                                 <h1>Administrative Settings</h1>
-                                <p>Maintain visitor blacklist records and company Rules & Regulations.</p>
+                                <p>Manage FAM administrative records and configuration.</p>
                                 <span id="admin-updated" class="fam-last-updated">Last updated: Loading...</span>
                             </div>
                             <div class="facility-header-actions"></div>
                         </header>
 
-                        <section class="admin-layout" aria-label="Administrative settings">
+                        <section class="facility-section" aria-label="Administrative settings">
                             <label class="facility-field admin-mobile-picker">
                                 <span>Settings Section</span>
                                 <select id="admin-category-select"></select>
                             </label>
-                            <aside class="admin-nav-card" aria-label="Administrative settings sections">
-                                <nav id="admin-category-nav" class="admin-category-nav"></nav>
-                            </aside>
+                            <nav id="admin-category-nav" class="reports-tabs" aria-label="Administrative settings modules"></nav>
                             <div id="admin-panel-card" class="admin-panel-card"></div>
                         </section>
                         <aside id="admin-dialog" class="facility-dialog legal-dialog" hidden></aside>
