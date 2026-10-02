@@ -18,6 +18,7 @@
     const api = path => `../api/${path}`;
     const can = permission => (window.FAMApi?.currentUser?.permissions || []).includes(permission);
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const maintenanceMode = () => document.body?.dataset.settingsMaintenance === 'true';
 
     function isBlacklistAdmin() {
         const roles = window.FAMApi?.currentUser?.roles || [];
@@ -658,6 +659,7 @@
                 return;
             }
             qs('#admin-updated').textContent = `Last updated: ${new Date().toLocaleString([], { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+            if (maintenanceMode()) return;
             render();
             bind();
             if (state.active === 'visitors') await loadBlacklist();
