@@ -13,7 +13,9 @@ RUN install-php-extensions \
     zip
 
 # Apache configuration
-RUN a2enmod rewrite \
+RUN a2dismod mpm_event mpm_worker 2>/dev/null || true \
+    && a2enmod mpm_prefork \
+    && a2enmod rewrite \
     && printf '<Directory /var/www/html>\n    AllowOverride All\n</Directory>\n' \
         > /etc/apache2/conf-available/fam-allowoverride.conf \
     && a2enconf fam-allowoverride
