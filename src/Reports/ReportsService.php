@@ -1069,7 +1069,7 @@ final class ReportsService
 
         $logoPath = dirname(__DIR__, 2)
             . DIRECTORY_SEPARATOR . 'assets'
-            . DIRECTORY_SEPARATOR . 'logo-full.svg';
+            . DIRECTORY_SEPARATOR . 'logo-full.png';
         $logoSrc = is_file($logoPath) ? realpath($logoPath) : false;
         $logoHtml = $logoSrc !== false
             ? '<img src="' . $this->html($logoSrc) . '" alt="Great Solomon Manpower Services">'
