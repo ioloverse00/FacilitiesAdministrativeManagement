@@ -135,6 +135,8 @@ final class LegalMatterService
         $item['partySuggestions'] = [];
         $item['actions'] = $this->actionService->actionsForMatter($id);
         $item['actionSuggestions'] = $this->actionService->suggestionsForMatter($id);
+        $item['ruleBases'] = (new LegalRulePolicyService($this->pdo))->matterRuleBases($id);
+        $item['aiApplicableProvisions'] = $this->latestAiApplicableProvisions($id);
         $item['history'] = $this->history($id);
         $item['aiSummaryFailureReason'] = $this->latestAiSummaryFailureReason($id);
         $item['aiPartiesStatus'] = $this->latestAiSectionStatus($id, 'parties');
@@ -469,6 +471,8 @@ final class LegalMatterService
             'aiSummaryFailureReason' => '',
             'aiPartiesStatus' => 'NOT_REQUESTED',
             'aiActionsStatus' => 'NOT_REQUESTED',
+            'ruleBases' => [],
+            'aiApplicableProvisions' => [],
             'priority' => (string) $row['priority'],
             'status' => $status,
             'departmentId' => $row['department_reference_id'] === null ? null : (int) $row['department_reference_id'],
@@ -559,6 +563,32 @@ final class LegalMatterService
             return 'FAILED';
         }
         return 'READY';
+    }
+
+    private function latestAiApplicableProvisions(int $matterId): array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT metadata_json
+             FROM legal_matter_history
+             WHERE legal_matter_id = :id AND event_type = 'LEGAL_AI_RULES_ANALYZED'
+             ORDER BY legal_matter_history_id DESC
+             LIMIT 1"
+        );
+        $statement->execute(['id' => $matterId]);
+        $metadata = json_decode((string) ($statement->fetchColumn() ?: ''), true);
+        $items = is_array($metadata) && is_array($metadata['applicable_provisions'] ?? null) ? $metadata['applicable_provisions'] : [];
+        return array_values(array_filter(array_map(static function (mixed $item): ?array {
+            if (!is_array($item)) return null;
+            return [
+                'matterRuleBasisId' => isset($item['matter_rule_basis_id']) ? (int) $item['matter_rule_basis_id'] : null,
+                'policyCode' => (string) ($item['policy_code'] ?? ''),
+                'provisionCode' => (string) ($item['provision_code'] ?? ''),
+                'relevanceExplanation' => (string) ($item['relevance_explanation'] ?? ''),
+                'missingInformation' => (string) ($item['missing_information'] ?? ''),
+                'conflictsUncertainty' => (string) ($item['conflicts_uncertainty'] ?? ''),
+                'needsReview' => (bool) ($item['needs_review'] ?? true),
+            ];
+        }, $items)));
     }
 
     private function allowedActions(string $status): array

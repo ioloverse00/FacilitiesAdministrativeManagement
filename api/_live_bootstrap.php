@@ -23,6 +23,7 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATO
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterPartyService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterActionService.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalMatterAiAnalysisService.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Legal' . DIRECTORY_SEPARATOR . 'LegalRulePolicyService.php';
 
 function currentApiUser(): array
 {
@@ -123,6 +124,11 @@ function legalMatterAiAnalysisService(): LegalMatterAiAnalysisService
 {
     $connection = Database::connection();
     return new LegalMatterAiAnalysisService($connection, documentService(), new LegalMatterActionService($connection, new FamEmployeeEligibilityService($connection)));
+}
+
+function legalRulePolicyService(): LegalRulePolicyService
+{
+    return new LegalRulePolicyService(Database::connection());
 }
 
 function requireLegalDocumentAccessIfNeeded(int $documentId, array $user): void

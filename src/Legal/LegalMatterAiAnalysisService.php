@@ -49,32 +49,35 @@ final class LegalMatterAiAnalysisService
         $this->assertMatterNotClosed($matter);
         $startedAt = microtime(true);
         $sources = $this->readableSources($matter);
-        if (!$sources) {
+        $ruleBases = (new LegalRulePolicyService($this->pdo))->matterRuleBases($matterId);
+        if (!$sources && !$ruleBases) {
             $this->markNoReadableSource($matterId, $user);
-            return $this->result($matterId, ['summary' => 'NO_READABLE_SOURCE', 'parties' => 'EMPTY', 'actions' => 'EMPTY'], 0, 0);
+            return $this->result($matterId, ['summary' => 'NO_READABLE_SOURCE', 'parties' => 'EMPTY', 'actions' => 'EMPTY', 'rules' => 'EMPTY'], 0, 0);
         }
 
-        $fingerprint = $this->fingerprint($sources);
-        $this->markAnalysisStarted($matterId, $sources, $user);
+        $fingerprint = $this->fingerprint($sources, $ruleBases);
+        $this->markAnalysisStarted($matterId, $sources, $ruleBases, $user);
         $attempts = 0;
         try {
-            $analysis = $this->requestAnalysis($matter, $sources, $attempts);
+            $analysis = $this->requestAnalysis($matter, $sources, $ruleBases, $attempts);
         } catch (Throwable $exception) {
             $reason = $this->safeFailureStage($exception->getMessage());
-            $this->markProviderFailure($matterId, $reason, count($sources), $attempts, $startedAt, $user);
-            return $this->result($matterId, ['summary' => $this->uiFailureStatus($reason), 'parties' => $this->uiFailureStatus($reason), 'actions' => $this->uiFailureStatus($reason)], $attempts, $this->elapsed($startedAt));
+            $this->markProviderFailure($matterId, $reason, count($sources), count($ruleBases), $attempts, $startedAt, $user);
+            return $this->result($matterId, ['summary' => $this->uiFailureStatus($reason), 'parties' => $this->uiFailureStatus($reason), 'actions' => $this->uiFailureStatus($reason), 'rules' => $this->uiFailureStatus($reason)], $attempts, $this->elapsed($startedAt));
         }
 
-        $sectionStatuses = ['summary' => 'FAILED', 'parties' => 'FAILED', 'actions' => 'FAILED'];
+        $sectionStatuses = ['summary' => 'FAILED', 'parties' => 'FAILED', 'actions' => 'FAILED', 'rules' => 'FAILED'];
         $sectionCounts = ['parties' => 0, 'actions' => 0];
         $this->pdo->beginTransaction();
         try {
             $sectionStatuses['summary'] = $this->persistSummary($matterId, $analysis['summary'] ?? null, $fingerprint, $regeneration, count($sources), $user);
             [$sectionStatuses['parties'], $sectionCounts['parties']] = $this->persistParties($matterId, $analysis['parties'] ?? null, $user);
             [$sectionStatuses['actions'], $sectionCounts['actions']] = $this->persistActions($matterId, $analysis['actions'] ?? null);
+            $sectionStatuses['rules'] = $this->persistApplicableProvisions($matterId, $analysis['applicable_provisions'] ?? null, $ruleBases, $user);
             $this->history($matterId, 'LEGAL_AI_ANALYSIS_COMPLETED', 'Unified Legal AI analysis completed.', [
                 'model' => $this->model(),
                 'source_count' => count($sources),
+                'rule_basis_count' => count($ruleBases),
                 'elapsed_ms' => $this->elapsed($startedAt),
                 'attempt_count' => $attempts,
                 'section_statuses' => $sectionStatuses,
@@ -91,7 +94,7 @@ final class LegalMatterAiAnalysisService
         return $this->result($matterId, $sectionStatuses, $attempts, $this->elapsed($startedAt));
     }
 
-    private function markAnalysisStarted(int $matterId, array $sources, array $user): void
+    private function markAnalysisStarted(int $matterId, array $sources, array $ruleBases, array $user): void
     {
         $this->pdo->beginTransaction();
         try {
@@ -99,12 +102,13 @@ final class LegalMatterAiAnalysisService
                 'ai_summary_status' => 'PENDING',
                 'ai_summary_provider' => self::PROVIDER,
                 'ai_summary_model' => $this->model(),
-                'ai_summary_source_fingerprint' => $this->fingerprint($sources),
+                'ai_summary_source_fingerprint' => $this->fingerprint($sources, $ruleBases),
             ]);
             $this->history($matterId, 'LEGAL_AI_ANALYSIS_STARTED', 'Unified Legal AI analysis started.', [
                 'status' => 'PENDING',
                 'model' => $this->model(),
                 'source_count' => count($sources),
+                'rule_basis_count' => count($ruleBases),
             ], $user);
             $this->history($matterId, 'LEGAL_AI_PARTIES_PENDING', 'AI party extraction queued.', ['status' => 'PENDING'], $user);
             $this->history($matterId, 'LEGAL_AI_ACTIONS_PENDING', 'AI action recommendation extraction queued.', ['status' => 'PENDING'], $user);
@@ -193,10 +197,44 @@ final class LegalMatterAiAnalysisService
         return [$created > 0 ? 'READY' : 'EMPTY', $created];
     }
 
-    private function requestAnalysis(array $matter, array $sources, int &$attempts): array
+    private function persistApplicableProvisions(int $matterId, mixed $items, array $ruleBases, array $user): string
+    {
+        if (!$ruleBases) {
+            $this->history($matterId, 'LEGAL_AI_RULES_ANALYZED', 'No linked rule basis was supplied to AI analysis.', ['applicable_provisions' => []], $user);
+            return 'EMPTY';
+        }
+        if (!is_array($items)) {
+            $this->history($matterId, 'LEGAL_AI_RULES_ANALYZED', 'AI provision applicability section failed validation.', ['applicable_provisions' => [], 'reason' => 'SECTION_VALIDATION_FAILED'], $user);
+            return 'FAILED';
+        }
+        $allowed = [];
+        foreach ($ruleBases as $basis) {
+            $allowed[(int)$basis['id']] = $basis;
+        }
+        $clean = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) continue;
+            $basisId = $this->optionalId($item['matter_rule_basis_id'] ?? null);
+            if ($basisId === null || !isset($allowed[$basisId])) continue;
+            $basis = $allowed[$basisId];
+            $clean[] = [
+                'matter_rule_basis_id' => $basisId,
+                'policy_code' => $this->nullableText($item['policy_code'] ?? $basis['policyCode'], 80) ?? (string)$basis['policyCode'],
+                'provision_code' => $this->nullableText($item['provision_code'] ?? $basis['provisionCode'], 100) ?? (string)$basis['provisionCode'],
+                'relevance_explanation' => $this->nullableText($item['relevance_explanation'] ?? null, 1500),
+                'missing_information' => $this->nullableText($item['missing_information'] ?? null, 1000),
+                'conflicts_uncertainty' => $this->nullableText($item['conflicts_uncertainty'] ?? null, 1000),
+                'needs_review' => (bool)($item['needs_review'] ?? true),
+            ];
+        }
+        $this->history($matterId, 'LEGAL_AI_RULES_ANALYZED', $clean ? 'AI analyzed potentially applicable rule provisions.' : 'AI returned no potentially applicable rule provisions.', ['applicable_provisions' => $clean, 'rule_basis_count' => count($ruleBases)], $user);
+        return $clean ? 'READY' : 'EMPTY';
+    }
+
+    private function requestAnalysis(array $matter, array $sources, array $ruleBases, int &$attempts): array
     {
         if ($this->apiKey() === '') throw new RuntimeException('AI_KEY_MISSING');
-        $payload = $this->payload($matter, $sources);
+        $payload = $this->payload($matter, $sources, $ruleBases);
         $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
         if (!is_string($body)) throw new RuntimeException('AI_REQUEST_FAILED');
         $headers = ['Content-Type: application/json', 'Accept: application/json', 'Authorization: Bearer ' . $this->apiKey()];
@@ -217,9 +255,12 @@ final class LegalMatterAiAnalysisService
         throw $last ?? new RuntimeException('AI_REQUEST_FAILED');
     }
 
-    private function payload(array $matter, array $sources): array
+    private function payload(array $matter, array $sources, array $ruleBases): array
     {
         $parts = [['type' => 'input_text', 'text' => $this->instructions($matter)]];
+        if ($ruleBases) {
+            $parts[] = ['type' => 'input_text', 'text' => $this->rulesContext($ruleBases)];
+        }
         foreach ($sources as $index => $source) {
             $parts[] = ['type' => 'input_text', 'text' => 'Source ' . ($index + 1) . ': document_id=' . (int)$source['id'] . ', version_id=' . (int)($source['versionId'] ?? 0) . ', reference=' . (string)$source['documentNo'] . ', title=' . (string)$source['title']];
             $parts[] = $this->sourcePart($source);
@@ -262,9 +303,27 @@ final class LegalMatterAiAnalysisService
         return str_ends_with(strtolower($fileName), '.pdf') ? $fileName : $fileName . '.pdf';
     }
 
+    private function rulesContext(array $ruleBases): string
+    {
+        $lines = ['Linked company Rules & Regulations snapshots. These are historical matter-basis snapshots and advisory context for human Legal Manager review:'];
+        foreach ($ruleBases as $basis) {
+            $lines[] = 'matter_rule_basis_id=' . (int)$basis['id']
+                . '; policy_code=' . (string)$basis['policyCode']
+                . '; policy_title=' . (string)$basis['policyTitle']
+                . '; provision_code=' . (string)$basis['provisionCode']
+                . '; section_title=' . (string)($basis['sectionTitle'] ?? '')
+                . '; version=' . (int)$basis['versionNumber']
+                . '; effective_from=' . (string)($basis['effectiveFrom'] ?? '')
+                . '; effective_until=' . (string)($basis['effectiveUntil'] ?? '')
+                . '; rationale=' . $this->cleanText((string)($basis['rationale'] ?? ''))
+                . '; provision_text=' . $this->cleanText(mb_substr((string)$basis['provisionText'], 0, 3000));
+        }
+        return implode("\n", $lines);
+    }
+
     private function instructions(array $matter): string
     {
-        return 'Analyze the supplied legal matter evidence once and return structured JSON with a concise factual summary, identifiable parties, source-supported action suggestions, and key dates. The summary.text value must contain exactly 2 concise, grammatically complete sentences. Sentence 1 must identify the principal external party or parties and state the core legal matter, dispute, allegation, or issue, including material amount, agreement/service, event date, representative, or material allegation only when explicitly supported and useful. Sentence 2 must state the most decision-relevant current legal context, such as response deadline, procedural posture, unresolved issue, settlement status, admission-of-liability status, final-determination status, or other material qualification only when supported by evidence. Sentence 2 must be a standalone complete sentence, must not continue sentence 1, and must not start with punctuation. Do not separate an organization suffix from the organization name; abbreviations such as Inc., Corp., Ltd., Co., Atty., Mr., Ms., and Dr. must remain naturally embedded in the sentence. Do not repeat the same fact in both summary sentences. Distinguish allegations and disputes from established facts where relevant. Do not add recommendations, suggested actions, AI-processing narration, OpenAI references, provider references, or document-processing history to summary.text unless legally material. Prefer concise professional legal/business language and avoid filler such as "The document states" when direct phrasing is clearer. This is factual administrative analysis and advisory extraction only. Use only supplied sources; return empty arrays/nulls for unavailable information; do not invent unsupported facts, parties, dates, obligations, deadlines, legal conclusions, or source references; mark uncertain items as needing human review. Do not determine legal liability, guilt, fault, sanctions, binding legal conclusions, or approved legal advice. Do not change Legal matter status, assign a responsible handler, resolve, close, cancel, approve, or create official Legal actions. The model may only reference document IDs and version IDs explicitly supplied in source context. Matter context: title=' . (string)$matter['title'] . '; type=' . (string)$matter['matter_type'] . '; priority=' . (string)$matter['priority'] . '. Party roles: ' . implode(', ', LegalMatterPartyService::PARTY_ROLES) . '. Party types: ' . implode(', ', LegalMatterPartyService::PARTY_TYPES) . '. Action types: ' . implode(', ', LegalMatterActionService::ACTION_TYPES) . '. For action deadline_basis use SOURCE_DERIVED only for explicit source dates, AI_RECOMMENDED only for conservative internal targets, or NO_DEADLINE. AI_RECOMMENDED targets are review suggestions only; backend and human reviewers decide official actions.';
+        return 'Analyze the supplied legal matter evidence once and return structured JSON with a concise factual summary, identifiable parties, potentially applicable company rule provisions, source-supported action suggestions, and key dates. The summary.text value must contain exactly 2 concise, grammatically complete sentences. Sentence 1 must identify the principal external party or parties and state the core legal matter, dispute, allegation, or issue, including material amount, agreement/service, event date, representative, or material allegation only when explicitly supported and useful. Sentence 2 must state the most decision-relevant current legal context, such as response deadline, procedural posture, unresolved issue, settlement status, admission-of-liability status, final-determination status, or other material qualification only when supported by evidence. Sentence 2 must be a standalone complete sentence, must not continue sentence 1, and must not start with punctuation. Do not separate an organization suffix from the organization name; abbreviations such as Inc., Corp., Ltd., Co., Atty., Mr., Ms., and Dr. must remain naturally embedded in the sentence. Do not repeat the same fact in both summary sentences. Distinguish allegations and disputes from established facts where relevant. Do not add recommendations, suggested actions, AI-processing narration, OpenAI references, provider references, or document-processing history to summary.text unless legally material. Prefer concise professional legal/business language and avoid filler such as "The document states" when direct phrasing is clearer. This is factual administrative analysis and advisory extraction only. Use only supplied sources and linked rule-basis snapshots; return empty arrays/nulls for unavailable information; do not invent unsupported facts, parties, dates, obligations, deadlines, legal conclusions, policy provisions, or source references; mark uncertain items as needing human review. For applicable_provisions, explain why a supplied provision may be relevant to recorded facts, identify missing information, and identify conflicts or uncertainty. Do not automatically link or unlink any policy, and do not modify Rules and Regulations. Do not determine legal liability, guilt, fault, confirmed violations, sanctions, mandatory punishment, binding legal conclusions, or approved legal advice unless such a determination is explicitly recorded by an authorized human in supplied matter data. Do not change Legal matter status, assign a responsible handler, resolve, close, cancel, approve, or create official Legal actions. The model may only reference document IDs, version IDs, and matter_rule_basis IDs explicitly supplied in source context. Matter context: title=' . (string)$matter['title'] . '; type=' . (string)$matter['matter_type'] . '; priority=' . (string)$matter['priority'] . '. Party roles: ' . implode(', ', LegalMatterPartyService::PARTY_ROLES) . '. Party types: ' . implode(', ', LegalMatterPartyService::PARTY_TYPES) . '. Action types: ' . implode(', ', LegalMatterActionService::ACTION_TYPES) . '. For action deadline_basis use SOURCE_DERIVED only for explicit source dates, AI_RECOMMENDED only for conservative internal targets, or NO_DEADLINE. AI_RECOMMENDED targets are review suggestions only; backend and human reviewers decide official actions.';
     }
 
     private function schema(): array
@@ -300,13 +359,22 @@ final class LegalMatterAiAnalysisService
                 'confidence' => ['type' => ['string', 'null'], 'enum' => ['LOW', 'MEDIUM', 'HIGH', null]],
                 'needs_review' => ['type' => 'boolean'],
             ], 'required' => ['title', 'action_type', 'description', 'due_date', 'deadline_basis', 'recommended_business_days', 'recommendation_reason', 'date_basis', 'source_context', 'source_document_id', 'source_document_version_id', 'confidence', 'needs_review'], 'additionalProperties' => false]],
+            'applicable_provisions' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
+                'matter_rule_basis_id' => ['type' => 'integer'],
+                'policy_code' => ['type' => ['string', 'null']],
+                'provision_code' => ['type' => ['string', 'null']],
+                'relevance_explanation' => ['type' => ['string', 'null']],
+                'missing_information' => ['type' => ['string', 'null']],
+                'conflicts_uncertainty' => ['type' => ['string', 'null']],
+                'needs_review' => ['type' => 'boolean'],
+            ], 'required' => ['matter_rule_basis_id', 'policy_code', 'provision_code', 'relevance_explanation', 'missing_information', 'conflicts_uncertainty', 'needs_review'], 'additionalProperties' => false]],
             'key_dates' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
                 'date' => ['type' => 'string'],
                 'label' => ['type' => 'string'],
                 'source_reference' => ['type' => ['string', 'null']],
                 'needs_review' => ['type' => 'boolean'],
             ], 'required' => ['date', 'label', 'source_reference', 'needs_review'], 'additionalProperties' => false]],
-        ], 'required' => ['summary', 'parties', 'actions', 'key_dates'], 'additionalProperties' => false];
+        ], 'required' => ['summary', 'parties', 'actions', 'applicable_provisions', 'key_dates'], 'additionalProperties' => false];
     }
 
     private function partyCandidate(array $candidate): ?array
@@ -376,10 +444,10 @@ final class LegalMatterAiAnalysisService
         $this->history($matterId, 'LEGAL_AI_ACTIONS_ANALYZED', 'AI action analysis skipped because no readable supporting documents were available.', ['suggestion_count' => 0], $user);
     }
 
-    private function markProviderFailure(int $matterId, string $reason, int $sourceCount, int $attempts, float $startedAt, array $user): void
+    private function markProviderFailure(int $matterId, string $reason, int $sourceCount, int $ruleBasisCount, int $attempts, float $startedAt, array $user): void
     {
         $this->updateSummary($matterId, ['ai_summary_status' => 'FAILED', 'ai_summary_provider' => self::PROVIDER, 'ai_summary_model' => $this->model()]);
-        $metadata = ['reason' => $reason, 'source_count' => $sourceCount, 'attempt_count' => $attempts, 'elapsed_ms' => $this->elapsed($startedAt)];
+        $metadata = ['reason' => $reason, 'source_count' => $sourceCount, 'rule_basis_count' => $ruleBasisCount, 'attempt_count' => $attempts, 'elapsed_ms' => $this->elapsed($startedAt)];
         $this->history($matterId, 'LEGAL_AI_ANALYSIS_FAILED', 'Unified Legal AI analysis could not be completed.', $metadata, $user);
         $this->history($matterId, 'LEGAL_AI_SUMMARY_FAILED', 'AI matter summary could not be generated.', ['reason' => $reason], $user);
         $this->history($matterId, 'LEGAL_AI_PARTIES_FAILED', 'AI party analysis could not be completed.', ['reason' => $reason], $user);
@@ -498,9 +566,12 @@ final class LegalMatterAiAnalysisService
         return trim((string)env('OPENAI_API_KEY', ''));
     }
 
-    private function fingerprint(array $sources): string
+    private function fingerprint(array $sources, array $ruleBases = []): string
     {
         $parts = array_map(static fn(array $source): string => implode('|', [$source['documentNo'] ?? '', $source['versionNumber'] ?? '', $source['fileHash'] ?? '', $source['fileSize'] ?? '']), $sources);
+        foreach ($ruleBases as $basis) {
+            $parts[] = implode('|', ['rule', $basis['id'] ?? '', $basis['policyCode'] ?? '', $basis['provisionCode'] ?? '', $basis['versionNumber'] ?? '', hash('sha256', (string)($basis['provisionText'] ?? ''))]);
+        }
         sort($parts);
         return hash('sha256', implode(';;', $parts));
     }
