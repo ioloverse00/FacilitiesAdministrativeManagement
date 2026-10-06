@@ -6,7 +6,7 @@
       fallbackTitle: 'Facility Reservations Report',
       filters: ['search', 'date_from', 'date_to', 'status', 'facility_space_id'],
       analysis: {
-        categorical: { dataset: 'charts.Reservations by Facility', title: 'Reservations by Facility / Room', type: 'horizontalBar' },
+        categorical: { dataset: 'charts.Reservations by Facility', title: 'Reservations by Facility', type: 'horizontalBar' },
         distribution: { dataset: 'charts.Reservations by Status', title: 'Reservation Status Distribution', type: 'doughnut' },
         timeline: { dataset: 'charts.Reservation Activity Over Time', title: 'Reservation Activity Over Time', type: 'line' }
       },
@@ -76,7 +76,7 @@
     date_to: { label: 'To', type: 'date' },
     status: { label: context => context.report === 'contracts' ? 'Lifecycle Status' : 'Status', type: 'select', options: context => context.report === 'documents_records' && context.source === 'records' ? 'record_statuses' : 'statuses' },
     priority: { label: 'Priority', type: 'select', options: 'priorities' },
-    facility_space_id: { label: 'Facility / Room', type: 'select', options: 'facility_spaces' },
+    facility_space_id: { label: 'Facility', type: 'select', options: 'facility_spaces' },
     type: { label: context => context.report === 'legal_management' ? 'Matter Type' : 'Type', type: 'select', options: 'types' },
     confidentiality: { label: 'Confidentiality', type: 'select', options: 'confidentiality_levels' },
     department_id: { label: 'Department', type: 'select', options: 'departments' },

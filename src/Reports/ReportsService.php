@@ -135,10 +135,29 @@ final class ReportsService
         $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);
         $options->set('chroot', dirname(__DIR__, 2));
-        $dompdf = new Dompdf($options);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->loadHtml($this->pdfHtml($report, $filters, $data));
-        $dompdf->render();
+        $makePdf = function (bool $includeLogo) use ($options, $report, $filters, $data, $user): Dompdf {
+            $dompdf = new Dompdf($options);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->loadHtml($this->pdfHtml($report, $filters, $data, $user, $includeLogo));
+            $dompdf->render();
+            $this->decoratePdfFooter($dompdf);
+            return $dompdf;
+        };
+
+        try {
+            $dompdf = $makePdf(true);
+        } catch (Throwable $exception) {
+            $dompdf = $makePdf(false);
+        }
+
+        return [
+            'filename' => $report . '-report-' . date('Ymd-His') . '.pdf',
+            'content' => $dompdf->output(),
+        ];
+    }
+
+    private function decoratePdfFooter(Dompdf $dompdf): void
+    {
         $canvas = $dompdf->getCanvas();
         $font = $dompdf->getFontMetrics()->getFont('Helvetica', 'normal');
         $canvas->page_text(
@@ -149,7 +168,6 @@ final class ReportsService
             7.5,
             [0.35, 0.35, 0.35]
         );
-
         $canvas->page_text(
             470,
             810,
@@ -158,11 +176,29 @@ final class ReportsService
             7.5,
             [0.35, 0.35, 0.35]
         );
+    }
 
-        return [
-            'filename' => $report . '-report-' . date('Ymd-His') . '.pdf',
-            'content' => $dompdf->output(),
-        ];
+    private function pdfLogoPath(): ?string
+    {
+        $logoPath = dirname(__DIR__, 2)
+            . DIRECTORY_SEPARATOR . 'assets'
+            . DIRECTORY_SEPARATOR . 'logo-icon.png';
+        $realPath = is_file($logoPath) && is_readable($logoPath) ? realpath($logoPath) : false;
+        if ($realPath === false || @getimagesize($realPath) === false) {
+            return null;
+        }
+        return $realPath;
+    }
+
+    private function reportGeneratedBy(array $user): string
+    {
+        foreach (['full_name', 'username', 'email'] as $key) {
+            $value = trim((string) ($user[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+        return 'Authenticated user';
     }
 
     public function availableReports(array $user): array
@@ -320,7 +356,7 @@ final class ReportsService
 
     private function reservationColumns(): array
     {
-        return ['Reservation No.', 'Facility / Room', 'Building', 'Requester', 'Department', 'Type', 'Purpose', 'Attendees', 'Start', 'End', 'Status', 'Approval', 'Created'];
+        return ['Reservation No.', 'Facility', 'Building', 'Requester', 'Department', 'Type', 'Purpose', 'Attendees', 'Start', 'End', 'Status', 'Approval', 'Created'];
     }
 
     private function shapeReservationRow(array $row): array
@@ -1057,7 +1093,7 @@ final class ReportsService
         ];
     }
 
-    private function pdfHtml(string $report, array $filters, array $data): string
+    private function pdfHtml(string $report, array $filters, array $data, array $user, bool $includeLogo = true): string
     {
         $columns = $data['columns'];
         $rows = $data['rows'];
@@ -1065,13 +1101,11 @@ final class ReportsService
         $period = $this->reportingPeriod($filters);
         $summary = $this->filterSummary($report, $filters);
         $generated = (new DateTimeImmutable())->format('F j, Y g:i A');
+        $generatedBy = $this->reportGeneratedBy($user);
         $totalRecords = count($rows);
 
-        $logoPath = dirname(__DIR__, 2)
-            . DIRECTORY_SEPARATOR . 'assets'
-            . DIRECTORY_SEPARATOR . 'logo-full.svg';
-        $logoSrc = is_file($logoPath) ? realpath($logoPath) : false;
-        $logoHtml = $logoSrc !== false
+        $logoSrc = $includeLogo ? $this->pdfLogoPath() : null;
+        $logoHtml = $logoSrc !== null
             ? '<img src="' . $this->html($logoSrc) . '" alt="Great Solomon Manpower Services">'
             : '<div class="logo-fallback">GREAT SOLOMON MANPOWER SERVICES INC.</div>';
 
@@ -1135,7 +1169,7 @@ final class ReportsService
             width: 100%;
             padding-bottom: 11px;
             margin-bottom: 15px;
-            border-bottom: 2px solid #1f2937;
+            border-bottom: 2px solid #2563eb;
         }
 
         .brand-table {
@@ -1158,15 +1192,17 @@ final class ReportsService
         }
 
         .brand-logo img {
-            width: 185px;
-            max-height: 58px;
+            width: 54px;
+            max-height: 54px;
             height: auto;
         }
 
         .logo-fallback {
-            font-size: 12px;
+            padding-top: 3px;
+            font-size: 10px;
+            line-height: 1.25;
             font-weight: 700;
-            color: #111827;
+            color: #1e3a8a;
         }
 
         .brand-system {
@@ -1179,7 +1215,7 @@ final class ReportsService
             font-size: 10px;
             line-height: 1.35;
             font-weight: 700;
-            color: #111827;
+            color: #1d4ed8;
             text-transform: uppercase;
         }
 
@@ -1203,7 +1239,7 @@ final class ReportsService
             font-size: 16px;
             line-height: 1.2;
             font-weight: 700;
-            color: #111827;
+            color: #1d4ed8;
             text-transform: uppercase;
         }
 
@@ -1221,6 +1257,8 @@ final class ReportsService
             margin: 0 0 13px;
             border-collapse: collapse;
             table-layout: fixed;
+            border-top: 1px solid #d1d5db;
+            border-bottom: 1px solid #d1d5db;
         }
 
         .report-meta td {
@@ -1239,7 +1277,7 @@ final class ReportsService
 
         .report-meta .value {
             width: 35%;
-            color: #111827;
+            color: #1e3a8a;
         }
 
         .report-meta .right-label {
@@ -1251,7 +1289,15 @@ final class ReportsService
         .report-meta .right-value {
             width: 35%;
             padding-right: 0;
-            color: #111827;
+            color: #1e3a8a;
+        }
+
+        .report-meta tr:first-child td {
+            padding-top: 6px;
+        }
+
+        .report-meta tr:last-child td {
+            padding-bottom: 6px;
         }
 
         /*
@@ -1278,9 +1324,9 @@ final class ReportsService
 
         .data-table th {
             padding: 5px 3px;
-            border: 1px solid #9ca3af;
-            background: #e5e7eb;
-            color: #111827;
+            border: 1px solid #94a3b8;
+            background: #dbeafe;
+            color: #1e3a8a;
             font-size: 6.6px;
             line-height: 1.2;
             font-weight: 700;
@@ -1303,7 +1349,7 @@ final class ReportsService
         }
 
         .data-table tbody tr:nth-child(even) td {
-            background: #f9fafb;
+            background: #f8fafc;
         }
 
         .empty {
@@ -1390,14 +1436,13 @@ final class ReportsService
             <td class="value">'
             . $this->html($generated) .
             '</td>
-
             <td class="right-label">
-                Report Source:
+                Generated By:
             </td>
 
-            <td class="right-value">
-                FAM Reports &amp; Analytics
-            </td>
+            <td class="right-value">'
+            . $this->html($generatedBy) .
+            '</td>
         </tr>'
 
             . ($summary !== ''
@@ -1470,7 +1515,7 @@ final class ReportsService
         $labelSets = [
             'facility_reservations' => [
                 'status' => 'Status',
-                'facility_space_id' => 'Facility / Room',
+                'facility_space_id' => 'Facility',
                 'search' => 'Search',
             ],
             'documents_records' => [

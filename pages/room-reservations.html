@@ -22,7 +22,7 @@
     data-breadcrumb-title="Facility Reservations"
     data-active-nav="room-reservations"
     data-page-heading="Facility Reservations"
-    data-page-description="Manage facility bookings, room availability, approvals, participants, and schedules.">
+    data-page-description="Manage facility bookings, availability, approvals, participants, and schedules.">
     <div id="app-shell" class="app-shell">
         <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
         <div class="app-main-panel">
@@ -33,7 +33,7 @@
                         <header class="facility-page-header">
                             <div class="facility-title-block">
                                 <h1>Facility Reservations</h1>
-                                <p>Manage facility bookings, room availability, approvals, participants, and schedules.</p>
+                                <p>Manage facility bookings, availability, approvals, participants, and schedules.</p>
                             </div>
                             <div class="facility-header-actions">
                                 <button id="reservation-export" class="btn-primary dashboard-action-button" type="button">
@@ -52,17 +52,6 @@
                                     </select>
                                 </label>
                                 <div class="reservation-toolbar-controls">
-                                    <div class="reservation-view-toggle" role="group" aria-label="Calendar view">
-                                        <button id="reservation-month-view" class="active" type="button" data-calendar-view="month" aria-pressed="true">Month</button>
-                                        <button id="reservation-week-view" type="button" data-calendar-view="week" aria-pressed="false">Week</button>
-                                        <button id="reservation-day-view" type="button" data-calendar-view="day" aria-pressed="false">Day</button>
-                                    </div>
-                                    <label class="facility-field reservation-filter-field">
-                                        <span class="sr-only">Filter by status</span>
-                                        <select id="reservation-status-filter">
-                                            <option value="all">All statuses</option>
-                                        </select>
-                                    </label>
                                     <label class="facility-field facility-search-field reservation-search-field">
                                         <span class="sr-only">Search reservations</span>
                                         <input id="reservation-search" type="search" placeholder="Search reservations...">
@@ -75,7 +64,7 @@
                                 <span><i class="reservation-legend-dot reservation-legend-approved"></i>Approved</span>
                                 <span><i class="reservation-legend-dot reservation-legend-checked-in"></i>Checked in</span>
                                 <span><i class="reservation-legend-dot reservation-legend-completed"></i>Completed</span>
-                                <span><i class="reservation-legend-dot reservation-legend-muted"></i>Cancelled / No show</span>
+                                <span><i class="reservation-legend-dot reservation-legend-muted"></i>Cancelled / No show</span><span><i class="reservation-legend-dot reservation-legend-rejected"></i>Rejected</span>
                             </div>
                             <div class="reservation-dashboard-grid">
                                 <div class="reservation-calendar-column">
@@ -89,6 +78,19 @@
                                             <button id="reservation-next-period" class="fam-icon-button" type="button" aria-label="Next calendar period">
                                                 <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
                                             </button>
+                                        </div>
+                                        <div class="reservation-calendar-actions">
+                                            <div class="reservation-view-toggle" role="group" aria-label="Calendar view">
+                                                <button id="reservation-month-view" class="active" type="button" data-calendar-view="month" aria-pressed="true">Month</button>
+                                                <button id="reservation-week-view" type="button" data-calendar-view="week" aria-pressed="false">Week</button>
+                                                <button id="reservation-day-view" type="button" data-calendar-view="day" aria-pressed="false">Day</button>
+                                            </div>
+                                            <label class="facility-field reservation-filter-field">
+                                                <span class="sr-only">Filter by status</span>
+                                                <select id="reservation-status-filter">
+                                                    <option value="all">All statuses</option>
+                                                </select>
+                                            </label>
                                         </div>
                                     </div>
                                     <div class="reservation-calendar-card">
@@ -135,7 +137,7 @@
                                             <tr>
                                                 <th><button type="button" class="facility-sort-button" data-sort="reservation_number">Reservation No.</button></th>
                                                 <th><button type="button" class="facility-sort-button" data-sort="start_datetime">Date &amp; Time</button></th>
-                                                <th>Facility / Room</th>
+                                                <th>Facility</th>
                                                 <th>Requested By</th>
                                                 <th><button type="button" class="facility-sort-button" data-sort="purpose">Purpose</button></th>
                                                 <th><button type="button" class="facility-sort-button" data-sort="status">Status</button></th>

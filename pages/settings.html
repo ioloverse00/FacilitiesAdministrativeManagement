@@ -37,7 +37,6 @@
     data-requires-permission="administration.view"
     data-breadcrumb-title="Administrative Settings"
     data-active-nav="settings"
-    data-settings-maintenance="true"
     data-page-heading="Administrative Settings"
     data-page-description="Manage FAM administrative records and configuration."
 >
@@ -71,7 +70,7 @@
                             <div class="facility-header-actions"></div>
                         </header>
 
-                        <!-- Temporary Defense Maintenance State -->
+                        <!-- Legacy maintenance state retained only for emergency fallback. -->
                         <section
                             class="facility-section admin-settings-maintenance"
                             aria-labelledby="admin-maintenance-title"
@@ -125,7 +124,7 @@
                             Existing Administrative Settings implementation.
 
                             This section is intentionally preserved and hidden while
-                            data-settings-maintenance="true" is active.
+                            data-settings-maintenance is active.
                         -->
                         <section
                             class="facility-section admin-settings-live"

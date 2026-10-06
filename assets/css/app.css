@@ -14461,3 +14461,146 @@ body.facility-drawer-open {
     flex-direction: column;
   }
 }
+
+/* Facilities post-UAT reservation dashboard refinements */
+.reservation-calendar-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+.reservation-calendar-navigation,
+.reservation-calendar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.reservation-calendar-actions {
+  justify-content: flex-end;
+}
+.reservation-calendar-navigation h2 {
+  margin: 0 0.35rem 0 0;
+  min-width: 11rem;
+}
+.reservation-calendar-actions .reservation-filter-field {
+  min-width: 11rem;
+}
+.reservation-dashboard-grid {
+  align-items: stretch;
+}
+.reservation-calendar-column,
+.reservation-side-column {
+  min-height: 0;
+}
+.reservation-calendar-column {
+  display: flex;
+  flex-direction: column;
+}
+.reservation-calendar-card {
+  flex: 1 1 auto;
+}
+.reservation-side-column {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.reservation-preview-panel {
+  display: flex;
+  min-height: 0;
+}
+.reservation-preview-panel > .reservation-side-panel-body {
+  width: 100%;
+  overflow: auto;
+}
+.reservation-preview-panel > .fam-state {
+  flex: 1 1 auto;
+}
+.reservation-selected-facility-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 13rem;
+}
+.reservation-selected-facility-card .reservation-selected-facility-media {
+  min-height: 100%;
+  aspect-ratio: auto;
+}
+.reservation-preview-empty {
+  width: 100%;
+  min-height: 100% !important;
+  justify-content: center;
+  text-align: center;
+}
+.reservation-preview-empty .material-symbols-outlined {
+  font-size: 2.25rem;
+}
+.reservation-legend-rejected { background: #dc2626; }
+.reservation-event-submitted {
+  background: #fff7ed;
+  border-color: #f59e0b;
+  color: #7c2d12;
+}
+.reservation-event-approved {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1e3a8a;
+}
+.reservation-event-checked-in {
+  background: #f5f3ff;
+  border-color: #7c3aed;
+  color: #4c1d95;
+}
+.reservation-event-completed {
+  background: #f0fdf4;
+  border-color: #16a34a;
+  color: #14532d;
+}
+.reservation-event-rejected {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #7f1d1d;
+}
+.reservation-event-muted {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #334155;
+}
+.reservation-event.selected {
+  outline: 3px solid color-mix(in srgb, currentColor 45%, transparent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 8px 18px rgba(15, 23, 42, 0.16);
+}
+.reservation-event:focus-visible {
+  outline: 3px solid color-mix(in srgb, currentColor 50%, transparent);
+  outline-offset: 2px;
+}
+@media (min-width: 960px) {
+  .reservation-dashboard-grid {
+    grid-template-columns: minmax(0, 1.8fr) minmax(24rem, 1fr);
+  }
+  .reservation-side-column {
+    max-height: 100%;
+  }
+}
+@media (max-width: 959px) {
+  .reservation-selected-facility-card {
+    grid-template-columns: 1fr;
+  }
+  .reservation-calendar-actions {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 640px) {
+  .reservation-calendar-toolbar,
+  .reservation-calendar-navigation,
+  .reservation-calendar-actions,
+  .reservation-toolbar-controls {
+    align-items: stretch;
+    width: 100%;
+  }
+  .reservation-calendar-actions .reservation-view-toggle,
+  .reservation-calendar-actions .reservation-filter-field,
+  .reservation-search-field {
+    width: 100%;
+  }
+}

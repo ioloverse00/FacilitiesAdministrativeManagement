@@ -19,8 +19,7 @@ function settingsFacilitiesCan(array $user, string $permission): bool
 
 function settingsFacilitiesRequireManage(array $user, string $area): void
 {
-    $permission = $area === 'reservations' ? 'reservations.manage' : 'facility_requests.manage';
-    requirePermission($user, $permission);
+    requirePermission($user, 'reservations.manage');
 }
 
 function settingsFacilitiesStatuses(): array
@@ -83,8 +82,6 @@ function settingsFacilitiesList(array $user): array
     $pdo = settingsFacilitiesPdo();
     $buildings = $pdo->query("SELECT building_id id, building_code code, building_name name, address, description, status, updated_at FROM building WHERE deleted_at IS NULL ORDER BY building_name")->fetchAll();
     $spaces = $pdo->query("SELECT fs.facility_space_id id, fs.building_id buildingId, fs.parent_space_id parentSpaceId, fs.space_code code, fs.space_name name, fs.space_type type, fs.floor_number floor, fs.capacity, fs.capacity_unit capacityUnit, fs.location_description location, fs.is_reservable reservable, fs.status, fs.updated_at updatedAt, fs.primary_image_original_file_name imageFileName, fs.primary_image_mime_type imageMimeType, fs.primary_image_file_size imageFileSize, fs.primary_image_uploaded_at imageUploadedAt, b.building_name buildingName FROM facility_space fs INNER JOIN building b ON b.building_id=fs.building_id WHERE fs.deleted_at IS NULL ORDER BY b.building_name, fs.space_name")->fetchAll();
-    $categories = $pdo->query("SELECT request_category_id id, category_code code, category_name name, description, default_priority defaultPriority, responsible_role_code responsibleRole, status FROM request_category ORDER BY category_name")->fetchAll();
-    $sla = $pdo->query("SELECT sp.sla_policy_id id, sp.policy_code code, sp.policy_name name, sp.request_category_id categoryId, rc.category_name categoryName, sp.priority, sp.acknowledgement_minutes acknowledgementMinutes, sp.assignment_minutes assignmentMinutes, sp.resolution_minutes resolutionMinutes, sp.escalation_minutes escalationMinutes, sp.status, sp.effective_from effectiveFrom, sp.effective_to effectiveTo FROM sla_policy sp LEFT JOIN request_category rc ON rc.request_category_id=sp.request_category_id ORDER BY sp.policy_name")->fetchAll();
     return [
         'buildings' => $buildings,
         'spaces' => array_map(static function (array $row): array {
@@ -94,13 +91,10 @@ function settingsFacilitiesList(array $user): array
             $row['capacityLabel'] = $row['capacity'] === null ? null : ((int)$row['capacity']) . ' ' . strtolower((string)$row['capacityUnit']);
             return $row;
         }, $spaces),
-        'categories' => $categories,
-        'slaPolicies' => $sla,
         'statuses' => settingsFacilitiesStatuses(),
         'capacityUnits' => settingsFacilitiesCapacityUnits(),
         'priorities' => settingsFacilitiesPriorities(),
         'canManageReservations' => settingsFacilitiesCan($user, 'reservations.manage'),
-        'canManageFacilityRequests' => settingsFacilitiesCan($user, 'facility_requests.manage'),
         'canManageRoomImages' => settingsFacilitiesCan($user, 'reservations.manage') || settingsFacilitiesCan($user, 'reservations.edit'),
     ];
 }
@@ -147,7 +141,7 @@ function settingsFacilitiesSaveSpace(array $body, array $user): array
     $code = settingsFacilitiesCode($body['code'] ?? '', 'code');
     $name = trim((string)($body['name'] ?? ''));
     $type = strtoupper(trim((string)($body['space_type'] ?? $body['type'] ?? '')));
-    if ($name === '') throw new InvalidArgumentException(json_encode(['name' => 'Room name is required.']));
+    if ($name === '') throw new InvalidArgumentException(json_encode(['name' => 'Facility name is required.']));
     if ($type === '') throw new InvalidArgumentException(json_encode(['space_type' => 'Space type is required.']));
     if (!settingsFacilitiesUnique($pdo, 'facility_space', 'space_code', $code, 'facility_space_id', $id, true)) {
         throw new InvalidArgumentException(json_encode(['code' => 'Space code already exists.']));
@@ -180,87 +174,6 @@ function settingsFacilitiesSaveSpace(array $body, array $user): array
     return ['id' => $id];
 }
 
-function settingsFacilitiesSaveCategory(array $body, array $user): array
-{
-    settingsFacilitiesRequireManage($user, 'facility_requests');
-    $pdo = settingsFacilitiesPdo();
-    $id = (int)($body['id'] ?? 0);
-    $code = settingsFacilitiesCode($body['code'] ?? '', 'code');
-    $name = trim((string)($body['name'] ?? ''));
-    if ($name === '') throw new InvalidArgumentException(json_encode(['name' => 'Category name is required.']));
-    if (!settingsFacilitiesUnique($pdo, 'request_category', 'category_code', $code, 'request_category_id', $id)) {
-        throw new InvalidArgumentException(json_encode(['code' => 'Category code already exists.']));
-    }
-    $priority = strtoupper(trim((string)($body['default_priority'] ?? $body['defaultPriority'] ?? '')));
-    if ($priority !== '' && !in_array($priority, settingsFacilitiesPriorities(), true)) {
-        throw new InvalidArgumentException(json_encode(['default_priority' => 'Default priority is invalid.']));
-    }
-    $params = [
-        'code' => $code,
-        'name' => mb_substr($name, 0, 150),
-        'description' => settingsFacilitiesNullableString($body['description'] ?? null, 4000),
-        'priority' => $priority === '' ? null : $priority,
-        'role' => settingsFacilitiesNullableString($body['responsible_role_code'] ?? $body['responsibleRole'] ?? null, 80),
-        'status' => settingsFacilitiesStatus($body['status'] ?? 'ACTIVE'),
-    ];
-    if ($id > 0) {
-        $params['id'] = $id;
-        $pdo->prepare('UPDATE request_category SET category_code=:code, category_name=:name, description=:description, default_priority=:priority, responsible_role_code=:role, status=:status WHERE request_category_id=:id')->execute($params);
-    } else {
-        $pdo->prepare('INSERT INTO request_category (category_code, category_name, description, default_priority, responsible_role_code, status) VALUES (:code,:name,:description,:priority,:role,:status)')->execute($params);
-        $id = (int)$pdo->lastInsertId();
-    }
-    return ['id' => $id];
-}
-
-function settingsFacilitiesSaveSla(array $body, array $user): array
-{
-    settingsFacilitiesRequireManage($user, 'facility_requests');
-    $pdo = settingsFacilitiesPdo();
-    $id = (int)($body['id'] ?? 0);
-    $code = settingsFacilitiesCode($body['code'] ?? '', 'code');
-    $name = trim((string)($body['name'] ?? ''));
-    if ($name === '') throw new InvalidArgumentException(json_encode(['name' => 'Policy name is required.']));
-    $categoryId = (int)($body['request_category_id'] ?? $body['categoryId'] ?? 0);
-    if ($categoryId > 0) {
-        $stmt = $pdo->prepare('SELECT 1 FROM request_category WHERE request_category_id=:id LIMIT 1');
-        $stmt->execute(['id' => $categoryId]);
-        if ($stmt->fetchColumn() === false) throw new InvalidArgumentException(json_encode(['request_category_id' => 'Request category is invalid.']));
-    }
-    if (!settingsFacilitiesUnique($pdo, 'sla_policy', 'policy_code', $code, 'sla_policy_id', $id)) {
-        throw new InvalidArgumentException(json_encode(['code' => 'SLA policy code already exists.']));
-    }
-    $priority = strtoupper(trim((string)($body['priority'] ?? 'NORMAL')));
-    if (!in_array($priority, settingsFacilitiesPriorities(), true)) {
-        throw new InvalidArgumentException(json_encode(['priority' => 'Priority is invalid.']));
-    }
-    $effectiveFrom = trim((string)($body['effective_from'] ?? $body['effectiveFrom'] ?? ''));
-    if ($effectiveFrom === '') throw new InvalidArgumentException(json_encode(['effective_from' => 'Effective from date is required.']));
-    $effectiveTo = trim((string)($body['effective_to'] ?? $body['effectiveTo'] ?? ''));
-    $minutes = static fn(string $key, string $alt): ?int => (($body[$key] ?? $body[$alt] ?? '') === '') ? null : max(0, (int)($body[$key] ?? $body[$alt]));
-    $params = [
-        'code' => $code,
-        'name' => mb_substr($name, 0, 150),
-        'category_id' => $categoryId > 0 ? $categoryId : null,
-        'priority' => $priority,
-        'ack' => $minutes('acknowledgement_minutes', 'acknowledgementMinutes'),
-        'assign' => $minutes('assignment_minutes', 'assignmentMinutes'),
-        'resolve' => $minutes('resolution_minutes', 'resolutionMinutes'),
-        'escalation' => $minutes('escalation_minutes', 'escalationMinutes'),
-        'status' => settingsFacilitiesStatus($body['status'] ?? 'ACTIVE'),
-        'from' => $effectiveFrom,
-        'to' => $effectiveTo === '' ? null : $effectiveTo,
-    ];
-    if ($id > 0) {
-        $params['id'] = $id;
-        $pdo->prepare('UPDATE sla_policy SET policy_code=:code, policy_name=:name, request_category_id=:category_id, priority=:priority, acknowledgement_minutes=:ack, assignment_minutes=:assign, resolution_minutes=:resolve, escalation_minutes=:escalation, status=:status, effective_from=:from, effective_to=:to WHERE sla_policy_id=:id')->execute($params);
-    } else {
-        $pdo->prepare('INSERT INTO sla_policy (policy_code, policy_name, request_category_id, priority, acknowledgement_minutes, assignment_minutes, resolution_minutes, escalation_minutes, status, effective_from, effective_to) VALUES (:code,:name,:category_id,:priority,:ack,:assign,:resolve,:escalation,:status,:from,:to)')->execute($params);
-        $id = (int)$pdo->lastInsertId();
-    }
-    return ['id' => $id];
-}
-
 try {
     if ($method === 'GET') {
         jsonResponse(true, 'Facilities settings retrieved.', settingsFacilitiesList($user));
@@ -273,8 +186,6 @@ try {
         $result = match ($action) {
             'save-building' => settingsFacilitiesSaveBuilding($body, $user),
             'save-space' => settingsFacilitiesSaveSpace($body, $user),
-            'save-category' => settingsFacilitiesSaveCategory($body, $user),
-            'save-sla' => settingsFacilitiesSaveSla($body, $user),
             default => throw new InvalidArgumentException(json_encode(['action' => 'Unsupported Facilities settings action.'])),
         };
         jsonResponse(true, 'Facilities settings saved.', ['item' => $result]);

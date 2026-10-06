@@ -6,7 +6,7 @@
     ];
 
     const state = {
-        active: 'visitors',
+        active: 'facilities',
         facilities: { section: 'spaces', data: {}, loading: false, loaded: false, error: '', building: 'all', search: '' },
         blacklist: { query: '', candidates: [], selected: null, entries: [], reason: '', loading: false },
         rules: { items: [], categories: [], statuses: [], search: '', category: 'all', status: 'all', loading: false, loaded: false, error: '' },
@@ -27,7 +27,6 @@
 
     function canManageRooms() { return can('reservations.manage'); }
     function canManageRoomImages() { return can('reservations.manage') || can('reservations.edit'); }
-    function canManageRequests() { return can('facility_requests.manage'); }
 
     function title(value) {
         return String(value || '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
@@ -171,15 +170,11 @@
 
     function facilitiesPanel() {
         const tabs = [
-            ['spaces', 'Spaces & Rooms'],
-            ['categories', 'Request Categories'],
-            ['sla', 'SLA Policies'],
+            ['spaces', 'Facilities'],
         ];
         const body = state.facilities.loading ? stateBlock('Loading Facilities settings...', 'progress_activity') :
-            state.facilities.error ? stateBlock(state.facilities.error, 'error') :
-            state.facilities.section === 'categories' ? requestCategoriesPanel() :
-            state.facilities.section === 'sla' ? slaPoliciesPanel() : spacesPanel();
-        return `${sectionHeader('Facilities', 'Manage Facilities master records used by reservations and facility requests.')}
+            state.facilities.error ? stateBlock(state.facilities.error, 'error') : spacesPanel();
+        return `${sectionHeader('Facilities', 'Maintain facility master records used by facility reservations.')}
             <nav class="reports-tabs" aria-label="Facilities settings sections">${tabs.map(([key, label]) => `<button class="${state.facilities.section === key ? 'active' : ''}" type="button" data-facilities-section="${esc(key)}">${esc(label)}</button>`).join('')}</nav>
             ${body}`;
     }
@@ -205,45 +200,16 @@
         </tr>`).join('');
         return `<div class="facility-table-card">
             <div class="facility-table-header">
-                <div><h3>Spaces & Rooms</h3><p>${rows.length} room${rows.length === 1 ? '' : 's'} shown</p></div>
+                <div><h3>Facilities</h3><p>${rows.length} facilit${rows.length === 1 ? 'y' : 'ies'} shown</p></div>
                 <div class="facility-header-controls legal-controls">
-                    <label class="facility-field facility-search-field"><span class="sr-only">Search rooms</span><input id="facilities-space-search" type="search" value="${esc(state.facilities.search)}" placeholder="Search rooms..."></label>
+                    <label class="facility-field facility-search-field"><span class="sr-only">Search facilities</span><input id="facilities-space-search" type="search" value="${esc(state.facilities.search)}" placeholder="Search facilities..."></label>
                     <label class="facility-field document-filter-field"><span class="sr-only">Building</span><select id="facilities-building-filter"><option value="all">All Buildings</option>${buildings.map(row => `<option value="${esc(row.id)}" ${String(state.facilities.building) === String(row.id) ? 'selected' : ''}>${esc(row.name)}</option>`).join('')}</select></label>
                     <button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="manage-buildings"><span class="material-symbols-outlined" aria-hidden="true">apartment</span>Manage Buildings</button>
-                    ${canManageRooms() ? '<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="create-space"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Add Room</button>' : ''}
+                    ${canManageRooms() ? '<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="create-space"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Add Facility</button>' : ''}
                 </div>
             </div>
-            <div class="facility-table-scroll"><table class="facility-requests-table"><thead><tr><th>Room</th><th>Building</th><th>Type</th><th>Capacity</th><th>Reservable</th><th>Image</th><th>Status</th><th>Actions</th></tr></thead><tbody>${tableRows || `<tr><td colspan="8">${stateBlock('No rooms match the current filters.', 'meeting_room')}</td></tr>`}</tbody></table></div>
+            <div class="facility-table-scroll"><table class="facility-requests-table"><thead><tr><th>Facility</th><th>Building</th><th>Type</th><th>Capacity</th><th>Reservable</th><th>Image</th><th>Status</th><th>Actions</th></tr></thead><tbody>${tableRows || `<tr><td colspan="8">${stateBlock('No facilities match the current filters.', 'meeting_room')}</td></tr>`}</tbody></table></div>
         </div>`;
-    }
-
-    function requestCategoriesPanel() {
-        const categories = state.facilities.data.categories || [];
-        const rows = categories.map(category => `<tr>
-            <td><strong>${esc(category.code)}</strong><small class="table-cell-secondary">${esc(category.name)}</small></td>
-            <td>${esc(category.description || 'Not available')}</td>
-            <td>${esc(title(category.defaultPriority || 'Not set'))}</td>
-            <td>${esc(category.responsibleRole || 'Not set')}</td>
-            <td>${badge(category.status)}</td>
-            <td>${canManageRequests() ? `<button class="facility-text-button" type="button" data-facilities-action="edit-category" data-category-id="${esc(category.id)}">Edit</button>` : ''}</td>
-        </tr>`).join('');
-        return `<div class="facility-table-card"><div class="facility-table-header"><div><h3>Request Categories</h3><p>${categories.length} categories</p></div>${canManageRequests() ? '<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="create-category"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Add Category</button>' : ''}</div><div class="facility-table-scroll"><table class="facility-requests-table"><thead><tr><th>Category</th><th>Description</th><th>Default Priority</th><th>Responsible Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows || `<tr><td colspan="6">${stateBlock('No request categories found.', 'category')}</td></tr>`}</tbody></table></div></div>`;
-    }
-
-    function slaPoliciesPanel() {
-        const policies = state.facilities.data.slaPolicies || [];
-        const rows = policies.map(policy => `<tr>
-            <td><strong>${esc(policy.code)}</strong><small class="table-cell-secondary">${esc(policy.name)}</small></td>
-            <td>${esc(policy.categoryName || 'Any category')}</td>
-            <td>${esc(title(policy.priority))}</td>
-            <td>${esc(minutesLabel(policy.acknowledgementMinutes))}</td>
-            <td>${esc(minutesLabel(policy.assignmentMinutes))}</td>
-            <td>${esc(minutesLabel(policy.resolutionMinutes))}</td>
-            <td>${esc(policy.effectiveFrom || 'Not set')}${policy.effectiveTo ? ` - ${esc(policy.effectiveTo)}` : ''}</td>
-            <td>${badge(policy.status)}</td>
-            <td>${canManageRequests() ? `<button class="facility-text-button" type="button" data-facilities-action="edit-sla" data-sla-id="${esc(policy.id)}">Edit</button>` : ''}</td>
-        </tr>`).join('');
-        return `<div class="facility-table-card"><div class="facility-table-header"><div><h3>SLA Policies</h3><p>${policies.length} policies</p></div>${canManageRequests() ? '<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="create-sla"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Add SLA Policy</button>' : ''}</div><div class="facility-table-scroll"><table class="facility-requests-table"><thead><tr><th>Policy</th><th>Category</th><th>Priority</th><th>Ack.</th><th>Assign</th><th>Resolve</th><th>Effective</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows || `<tr><td colspan="9">${stateBlock('No SLA policies found.', 'timer')}</td></tr>`}</tbody></table></div></div>`;
     }
 
     function minutesLabel(value) {
@@ -259,10 +225,6 @@
         return (state.facilities.data.statuses || ['ACTIVE', 'INACTIVE']).map(value => ({ value, label: title(value), selected }));
     }
 
-    function priorityOptions(selected = '') {
-        return (state.facilities.data.priorities || ['LOW', 'NORMAL', 'MEDIUM', 'HIGH', 'CRITICAL']).map(value => ({ value, label: title(value), selected }));
-    }
-
     function buildingOptions(selected = '') {
         return (state.facilities.data.buildings || []).map(row => ({ value: row.id, label: `${row.name} (${row.code})`, selected }));
     }
@@ -275,10 +237,6 @@
         if (space.capacityLabel) return space.capacityLabel;
         if (space.capacity === null || space.capacity === undefined || space.capacity === '') return 'Not set';
         return `${space.capacity} ${String(space.capacityUnit || 'PAX').toLowerCase()}`;
-    }
-
-    function categoryOptions(selected = '') {
-        return [{ value: '', label: 'Any category' }].concat((state.facilities.data.categories || []).map(row => ({ value: row.id, label: row.name, selected })));
     }
 
     function openDialog(html) {
@@ -315,16 +273,8 @@
         const media = imageUrl
             ? `<img src="${esc(imageUrl)}" alt="${esc(space.name || 'Facility image')}" loading="lazy">`
             : (window.FAMFacilityImages?.placeholderHtml?.(space, 'No image yet') || '<div class="facility-image-placeholder"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><span>No image yet</span></div>');
-        const imagePanel = space.id ? `<section class="document-form-section"><h3>Primary Image</h3><div class="reservation-room-image-panel">${media}<div><strong>${esc(space.name || 'Facility')}</strong><small>${space.hasImage ? esc([space.imageFileName, fileSize(space.imageFileSize), space.imageUploadedAt ? `Uploaded ${fmt(space.imageUploadedAt)}` : ''].filter(Boolean).join(' - ')) : 'No image uploaded yet.'}</small>${canManageRoomImages() ? `<div data-room-image-form data-space-id="${esc(space.id)}"><label class="facility-field"><span>Facility Image</span><input name="room_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><small>JPEG, PNG, or WebP up to 5 MB.</small></label><div class="reservation-room-image-actions"><button class="btn-primary dashboard-action-button" type="button" data-upload-room-image>${space.hasImage ? 'Replace Image' : 'Upload Image'}</button>${space.hasImage ? `<button class="btn-secondary dashboard-action-button" type="button" data-remove-room-image="${esc(space.id)}">Remove Image</button>` : ''}</div></div>` : ''}</div></div></section>` : '';
-        openDialog(`<form class="facility-dialog-panel legal-form" data-settings-form="facility-space" data-id="${esc(space.id || '')}"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>${space.id ? 'Edit Room' : 'Add Room'}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-settings-error></div><section class="document-form-section"><div class="document-form-grid">${field('code', 'Code *', space.code || '', 'text', true)}${field('name', 'Name *', space.name || '', 'text', true)}${selectField('building_id', 'Building *', buildingOptions(space.buildingId), space.buildingId, true)}${field('space_type', 'Space Type *', space.type || '', 'text', true)}${field('floor', 'Floor', space.floor || '')}${field('capacity', 'Capacity', space.capacity ?? '', 'number')}${selectField('capacity_unit', 'Capacity Unit', capacityUnitOptions(space.capacityUnit || 'PAX'), space.capacityUnit || 'PAX')}${field('location', 'Location', space.location || '')}${selectField('reservable', 'Reservable', [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }], space.reservable ? '1' : '0')}${selectField('status', 'Status', statusOptions(space.status || 'ACTIVE'), space.status || 'ACTIVE')}</div></section>${imagePanel}</div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-settings-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Save Room</button></div></form>`);
-    }
-
-    function openCategoryForm(category = {}) {
-        openDialog(`<form class="facility-dialog-panel legal-form" data-settings-form="facility-category" data-id="${esc(category.id || '')}"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>${category.id ? 'Edit Request Category' : 'Add Request Category'}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-settings-error></div><section class="document-form-section"><div class="document-form-grid">${field('code', 'Code *', category.code || '', 'text', true)}${field('name', 'Name *', category.name || '', 'text', true)}${selectField('default_priority', 'Default Priority', [{ value: '', label: 'Not set' }].concat(priorityOptions(category.defaultPriority)), category.defaultPriority || '')}${field('responsible_role_code', 'Responsible Role', category.responsibleRole || '')}${selectField('status', 'Status', statusOptions(category.status || 'ACTIVE'), category.status || 'ACTIVE')}</div>${textarea('description', 'Description', category.description || '')}</section></div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-settings-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Save Category</button></div></form>`);
-    }
-
-    function openSlaForm(policy = {}) {
-        openDialog(`<form class="facility-dialog-panel legal-form" data-settings-form="facility-sla" data-id="${esc(policy.id || '')}"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>${policy.id ? 'Edit SLA Policy' : 'Add SLA Policy'}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-settings-error></div><section class="document-form-section"><div class="document-form-grid">${field('code', 'Code *', policy.code || '', 'text', true)}${field('name', 'Name *', policy.name || '', 'text', true)}${selectField('request_category_id', 'Request Category', categoryOptions(policy.categoryId), policy.categoryId || '')}${selectField('priority', 'Priority *', priorityOptions(policy.priority || 'NORMAL'), policy.priority || 'NORMAL', true)}${field('acknowledgement_minutes', 'Acknowledgement Target (minutes)', policy.acknowledgementMinutes ?? '', 'number')}${field('assignment_minutes', 'Assignment Target (minutes)', policy.assignmentMinutes ?? '', 'number')}${field('resolution_minutes', 'Resolution Target (minutes)', policy.resolutionMinutes ?? '', 'number')}${field('escalation_minutes', 'Escalation (minutes)', policy.escalationMinutes ?? '', 'number')}${field('effective_from', 'Effective From *', policy.effectiveFrom || new Date().toISOString().slice(0, 10), 'date', true)}${field('effective_to', 'Effective To', policy.effectiveTo || '', 'date')}${selectField('status', 'Status', statusOptions(policy.status || 'ACTIVE'), policy.status || 'ACTIVE')}</div></section></div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-settings-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Save SLA Policy</button></div></form>`);
+        const imagePanel = space.id ? `<section class="document-form-section"><h3>Primary Image</h3><div class="reservation-room-image-panel">${media}<div><strong>${esc(space.name || 'Facility')}</strong><small>${space.hasImage ? esc([space.imageFileName, fileSize(space.imageFileSize), space.imageUploadedAt ? `Uploaded ${fmt(space.imageUploadedAt)}` : ''].filter(Boolean).join(' - ')) : 'No facility image uploaded yet.'}</small>${canManageRoomImages() ? `<div data-room-image-form data-space-id="${esc(space.id)}"><label class="facility-field"><span>Primary Facility Image</span><input name="room_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><small>JPEG, PNG, or WebP up to 5 MB.</small></label><div class="reservation-room-image-actions"><button class="btn-primary dashboard-action-button" type="button" data-upload-room-image>${space.hasImage ? 'Replace Image' : 'Upload Image'}</button>${space.hasImage ? `<button class="btn-secondary dashboard-action-button" type="button" data-remove-room-image="${esc(space.id)}">Remove Image</button>` : ''}</div></div>` : ''}</div></div></section>` : '';
+        openDialog(`<form class="facility-dialog-panel legal-form" data-settings-form="facility-space" data-id="${esc(space.id || '')}"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>${space.id ? 'Edit Facility' : 'Add Facility'}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-settings-error></div><section class="document-form-section"><div class="document-form-grid">${field('code', 'Code *', space.code || '', 'text', true)}${field('name', 'Name *', space.name || '', 'text', true)}${selectField('building_id', 'Building *', buildingOptions(space.buildingId), space.buildingId, true)}${field('space_type', 'Space Type *', space.type || '', 'text', true)}${field('floor', 'Floor', space.floor || '')}${field('capacity', 'Capacity', space.capacity ?? '', 'number')}${selectField('capacity_unit', 'Capacity Unit', capacityUnitOptions(space.capacityUnit || 'PAX'), space.capacityUnit || 'PAX')}${field('location', 'Location', space.location || '')}${selectField('reservable', 'Reservable', [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }], space.reservable ? '1' : '0')}${selectField('status', 'Status', statusOptions(space.status || 'ACTIVE'), space.status || 'ACTIVE')}</div></section>${imagePanel}</div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-settings-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Save Facility</button></div></form>`);
     }
 
     async function submitFacilitiesForm(form) {
@@ -335,8 +285,6 @@
         payload.action = {
             'facility-building': 'save-building',
             'facility-space': 'save-space',
-            'facility-category': 'save-category',
-            'facility-sla': 'save-sla',
         }[type];
         if (!payload.action) return;
         setSubmitting(form, true);
@@ -359,7 +307,7 @@
         const input = container.querySelector('input[name="room_image"]');
         const spaceId = container.dataset.spaceId;
         if (!input?.files?.length) {
-            window.FAMModal?.showToast?.('Select a room image first.');
+            window.FAMModal?.showToast?.('Select a facility image first.');
             return;
         }
         const body = new FormData();
@@ -367,20 +315,20 @@
         button.disabled = true;
         try {
             await window.FAMApi.request(api(`reservations/room-image.php?space_id=${encodeURIComponent(spaceId)}`), { method: 'POST', body });
-            window.FAMModal?.showToast?.('Room image saved.');
+            window.FAMModal?.showToast?.('Facility image saved.');
             closeDialog();
             await loadFacilities();
         } catch (error) {
-            window.FAMModal?.showToast?.(error.message || 'Unable to save room image.');
+            window.FAMModal?.showToast?.(error.message || 'Unable to save facility image.');
         } finally {
             button.disabled = false;
         }
     }
 
     async function removeRoomImage(spaceId) {
-        if (!await window.FAMModal.confirm('Remove the image for this room?', { title: 'Remove Room Image', confirmLabel: 'Remove Image' })) return;
+        if (!await window.FAMModal.confirm('Remove the image for this facility?', { title: 'Remove Facility Image', confirmLabel: 'Remove Image' })) return;
         await window.FAMApi.request(api(`reservations/room-image.php?space_id=${encodeURIComponent(spaceId)}`), { method: 'DELETE' });
-        window.FAMModal?.showToast?.('Room image removed.');
+        window.FAMModal?.showToast?.('Facility image removed.');
         closeDialog();
         await loadFacilities();
     }
@@ -564,7 +512,7 @@
                 return;
             }
             const removeImage = event.target.closest('[data-remove-room-image]');
-            if (removeImage) return void removeRoomImage(removeImage.dataset.removeRoomImage).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to remove room image.'));
+            if (removeImage) return void removeRoomImage(removeImage.dataset.removeRoomImage).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to remove facility image.'));
             const uploadImage = event.target.closest('[data-upload-room-image]');
             if (uploadImage) {
                 const imageForm = uploadImage.closest('[data-room-image-form]');
@@ -658,10 +606,6 @@
         if (type === 'edit-building') return openBuildingForm((state.facilities.data.buildings || []).find(row => String(row.id) === String(action.dataset.buildingId)) || {});
         if (type === 'create-space') return openSpaceForm();
         if (type === 'edit-space') return openSpaceForm((state.facilities.data.spaces || []).find(row => String(row.id) === String(action.dataset.spaceId)) || {});
-        if (type === 'create-category') return openCategoryForm();
-        if (type === 'edit-category') return openCategoryForm((state.facilities.data.categories || []).find(row => String(row.id) === String(action.dataset.categoryId)) || {});
-        if (type === 'create-sla') return openSlaForm();
-        if (type === 'edit-sla') return openSlaForm((state.facilities.data.slaPolicies || []).find(row => String(row.id) === String(action.dataset.slaId)) || {});
     }
 
     document.addEventListener('fam:layout-ready', async () => {

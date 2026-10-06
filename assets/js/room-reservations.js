@@ -1,4 +1,4 @@
-ï»¿(function () {
+(function () {
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const title = value => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     const qs = id => document.getElementById(id);
@@ -24,7 +24,7 @@
         const status = String(event.status || '').toUpperCase();
         const approval = String(event.approval || '').toUpperCase();
         if (status === 'CHECKED_IN') return 'CHECKED_IN';
-        if (status === 'COMPLETED') return 'CHECKED_OUT';
+        if (status === 'COMPLETED') return 'COMPLETED';
         if (status === 'REJECTED' || approval === 'REJECTED') return 'REJECTED';
         if (status === 'CANCELLED' || approval === 'CANCELLED') return 'CANCELLED';
         if (status === 'SUBMITTED' || approval === 'PENDING') return 'PENDING';
@@ -118,15 +118,22 @@
             panel.innerHTML = '<div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><strong>Select a facility</strong><span>Choose an active reservable facility to view its calendar.</span></div>';
             return;
         }
-        const meta = [title(facility.type || 'Facility'), facility.building_name, facility.location_description].filter(Boolean).join(' - ');
-        panel.innerHTML = `<div class="reservation-selected-facility-media">${window.FAMFacilityImages?.mediaHtml?.(facility, { alt: facility.name || 'Facility image' }) || ''}</div><div class="reservation-side-panel-body"><span class="facility-badge facility-status-approved">Active / Reservable</span><h3>${esc(facility.name || facility.code || 'Facility')}</h3><p>${esc(meta || 'Facility details unavailable')}</p><dl class="reservation-preview-list"><div><dt>Capacity</dt><dd>${esc(capacityLabel(facility))}</dd></div></dl></div>`;
+        const stateLabel = [facility.status || 'ACTIVE', facility.reservable === false ? 'Non-reservable' : 'Reservable'].filter(Boolean).map(title).join(' / ');
+        const details = [
+            ['Type', title(facility.type || 'Facility')],
+            ['Building', facility.building_name || facility.buildingName || 'Not assigned'],
+            ['Location', facility.location_description || facility.location || 'Not specified'],
+            ['Capacity', capacityLabel(facility)],
+            ['Floor', facility.floor || facility.floor_number || 'Not specified'],
+        ];
+        panel.innerHTML = `<div class="reservation-selected-facility-card"><div class="reservation-selected-facility-media">${window.FAMFacilityImages?.mediaHtml?.(facility, { alt: facility.name || 'Facility image' }) || ''}</div><div class="reservation-side-panel-body"><span class="facility-badge facility-status-approved">${esc(stateLabel)}</span><h3>${esc(facility.name || facility.code || 'Facility')}</h3><dl class="reservation-preview-list">${details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value || 'Not specified')}</dd></div>`).join('')}</dl></div></div>`;
     }
 
     function renderReservationPreview(item = null) {
         const panel = qs('reservation-preview-panel');
         if (!panel) return;
         if (!item) {
-            panel.innerHTML = '<div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">event_note</span><strong>Select a reservation</strong><span>Select a reservation from the calendar to view its details.</span></div>';
+            panel.innerHTML = '<div class="fam-state reservation-preview-empty"><span class="material-symbols-outlined" aria-hidden="true">event_note</span><strong>Select a reservation</strong><span>Choose an event from the calendar to view its details.</span></div>';
             return;
         }
         const summary = aiSummary(item);
@@ -149,15 +156,15 @@
     }
 
     function tone(event) {
-        const value = `${event.approval || ''} ${event.status || ''}`.toLowerCase();
-        if (value.includes('reject')) return 'danger';
-        if (value.includes('cancel')) return 'muted';
-        if (value.includes('no_show') || value.includes('no show')) return 'muted';
-        if (value.includes('pending') || value.includes('submit')) return 'warning';
-        if (value.includes('check') || value.includes('active')) return 'info';
-        if (value.includes('complete')) return 'info';
-        if (value.includes('approve')) return 'success';
-        return 'info';
+        const status = String(event.status || '').toUpperCase();
+        const approval = String(event.approval || '').toUpperCase();
+        if (status === 'REJECTED' || approval === 'REJECTED') return 'rejected';
+        if (status === 'CANCELLED' || approval === 'CANCELLED' || status === 'NO_SHOW') return 'muted';
+        if (status === 'COMPLETED') return 'completed';
+        if (status === 'CHECKED_IN') return 'checked-in';
+        if (status === 'APPROVED' || approval === 'APPROVED') return 'approved';
+        if (status === 'SUBMITTED' || approval === 'PENDING') return 'submitted';
+        return 'muted';
     }
     function displayPriority(event) {
         const status = String(event.status || '').toUpperCase();
@@ -179,7 +186,7 @@
     }
 
     function eventButton(event) {
-        const time = fmtTime(event.start), room = event.room || 'Room unavailable', requestType = title(event.reservationType || 'Reservation');
+        const time = fmtTime(event.start), room = event.room || 'Facility unavailable', requestType = title(event.reservationType || 'Reservation');
         const label = `${time} ${room} ${requestType} ${title(event.status)} ${title(event.approval)}`;
         const selected = String(event.id) === String(state.selectedReservationId);
         return `<button class="reservation-event reservation-event-${tone(event)}${selected ? ' selected' : ''}" type="button" data-reservation-id="${esc(event.id)}" aria-label="${esc(label)}" title="${esc(label)}"><span class="reservation-event-time">${esc(time)}</span><strong>${esc(room)}</strong><span>${esc(requestType)}</span></button>`;
@@ -221,7 +228,7 @@
     }
 
     function focusRow(event) {
-        const room = event.room || 'Room unavailable';
+        const room = event.room || 'Facility unavailable';
         const requestType = title(event.reservationType || 'Reservation');
         return `<button class="reservation-focus-row reservation-event-${tone(event)}" type="button" data-reservation-id="${esc(event.id)}"><span>${esc(fmtTime(event.start))}-${esc(fmtTime(event.end))}</span><strong>${esc(room)}</strong><small>${esc(requestType)}</small>${badge(reservationQueueStatus(event))}</button>`;
     }
@@ -292,25 +299,25 @@
         return `<section class="retention-ai-card ai-insights-card" aria-label="AI Request Letter Summary">
             <div class="retention-ai-card-header"><div><h3><span class="material-symbols-outlined ai-insights-icon" aria-hidden="true">auto_awesome</span>AI Insights</h3><p class="retention-muted">Request Letter Summary</p></div></div>
             <p class="retention-ai-reason">${aiSummary(item)}</p>
-            <p class="retention-muted">${esc(generated)} Â· Review against the source document.</p>
+            <p class="retention-muted">${esc(generated)} · Review against the source document.</p>
         </section>`;
     }
     function requestLetterLinks(item) {
         if (!item.request_letter) return '<p>No request letter is attached to this reservation.</p>';
         const id = encodeURIComponent(item.id);
         const letter = item.request_letter || {};
-        const meta = [letter.fileName || 'File unavailable', String(letter.extension || letter.mimeType || '').toUpperCase(), fileSize(letter.fileSize), letter.uploadedAt ? `Uploaded ${fmtDateTime(letter.uploadedAt)}` : 'Current request letter'].filter(Boolean).join(' Â· ');
+        const meta = [letter.fileName || 'File unavailable', String(letter.extension || letter.mimeType || '').toUpperCase(), fileSize(letter.fileSize), letter.uploadedAt ? `Uploaded ${fmtDateTime(letter.uploadedAt)}` : 'Current request letter'].filter(Boolean).join(' · ');
         return `<article class="document-file-row reservation-request-letter-row"><div><span class="material-symbols-outlined document-file-icon" aria-hidden="true">description</span><div><strong>Request Letter</strong><small>${esc(meta)}</small></div></div><div class="document-file-actions"><a href="../api/reservations/request-letter.php?id=${id}&mode=view" target="_blank" rel="noopener">View</a><a href="../api/reservations/request-letter.php?id=${id}&mode=download" target="_blank" rel="noopener">Download</a></div></article>`;
     }
     function roomImagePanel(item) {
         const imageUrl = roomImageUrl(item.roomImage);
         const meta = item.roomImage?.has_image
             ? [item.roomImage.fileName, item.roomImage.fileSize ? fileSize(item.roomImage.fileSize) : '', item.roomImage.uploadedAt ? `Uploaded ${fmtDateTime(item.roomImage.uploadedAt)}` : ''].filter(Boolean).join(' - ')
-            : 'No room image uploaded yet.';
+            : 'No facility image uploaded yet.';
         const media = imageUrl
             ? `<img src="${esc(imageUrl)}" alt="${esc(item.room || 'Facility image')}" loading="lazy">`
             : (window.FAMFacilityImages?.placeholderHtml?.(item, 'No image yet') || '<div class="facility-image-placeholder"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><span>No image yet</span></div>');
-        return `<section class="reservation-room-image-panel">${media}<div><strong>${esc(item.room || 'Room')}</strong><small>${esc(meta)}</small></div></section>`;
+        return `<section class="reservation-room-image-panel">${media}<div><strong>${esc(item.room || 'Facility')}</strong><small>${esc(meta)}</small></div></section>`;
     }
     function historyTitle(row) {
         const next = String(row.new_status || '').toUpperCase();
@@ -329,7 +336,7 @@
         return `<ol class="facility-history-list visitor-activity-timeline reservation-history-timeline">${rows.map(row => {
             const timestamp = fmtDateTime(row.changed_at);
             const reason = row.change_reason ? `<p>${esc(row.change_reason)}</p>` : '';
-            return `<li><strong>${esc(historyTitle(row))}</strong><span>${esc(timestamp)} Â· Actor unavailable</span>${reason}</li>`;
+            return `<li><strong>${esc(historyTitle(row))}</strong><span>${esc(timestamp)} · Actor unavailable</span>${reason}</li>`;
         }).join('')}</ol>`;
     }
     function drawerShell(message, retryId) {
