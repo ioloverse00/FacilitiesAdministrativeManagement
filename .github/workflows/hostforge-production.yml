@@ -1,0 +1,116 @@
+name: FAM Production CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fam-production-main
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: dom, mbstring, pdo_mysql, zip
+          coverage: none
+
+      - name: Validate Composer configuration
+        run: composer validate --no-check-publish
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+
+      - name: PHP syntax validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' files < <(find . \
+            -path './.git' -prune -o \
+            -path './vendor' -prune -o \
+            -path './node_modules' -prune -o \
+            -name '*.php' -type f -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No PHP files found."
+            exit 0
+          fi
+          for file in "${files[@]}"; do
+            php -l "$file"
+          done
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: JavaScript syntax validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' files < <(find . \
+            -path './.git' -prune -o \
+            -path './vendor' -prune -o \
+            -path './node_modules' -prune -o \
+            -path './assets/vendor' -prune -o \
+            -name '*.js' -type f -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No first-party JavaScript files found."
+            exit 0
+          fi
+          for file in "${files[@]}"; do
+            node --check "$file"
+          done
+
+      - name: Git whitespace validation
+        run: git diff --check
+
+  deploy:
+    name: Deploy to HostForge Production
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install HostForge CLI
+        run: npm install --global @hostforge/cli
+
+      - name: Authenticate HostForge CLI
+        env:
+          HOSTFORGE_TOKEN: ${{ secrets.HOSTFORGE_TOKEN }}
+        run: hostforge auth token "$HOSTFORGE_TOKEN"
+
+      - name: Deploy production application
+        env:
+          HOSTFORGE_WORKSPACE_ID: ${{ vars.HOSTFORGE_WORKSPACE_ID }}
+          HOSTFORGE_PROJECT_ID: ${{ vars.HOSTFORGE_PROJECT_ID }}
+          HOSTFORGE_APPLICATION_ID: ${{ vars.HOSTFORGE_APPLICATION_ID }}
+        run: |
+          set -euo pipefail
+          hostforge application deploy "$HOSTFORGE_APPLICATION_ID" \
+            --project "$HOSTFORGE_PROJECT_ID" \
+            --workspace "$HOSTFORGE_WORKSPACE_ID" \
+            --environment production \
+            --json > deployment.json
