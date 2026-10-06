@@ -89,28 +89,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install HostForge CLI
-        run: npm install --global @hostforge/cli
-
-      - name: Authenticate HostForge CLI
+      - name: Request HostForge production deployment
         env:
           HOSTFORGE_TOKEN: ${{ secrets.HOSTFORGE_TOKEN }}
-        run: hostforge auth token "$HOSTFORGE_TOKEN"
-
-      - name: Deploy production application
-        env:
           HOSTFORGE_WORKSPACE_ID: ${{ vars.HOSTFORGE_WORKSPACE_ID }}
           HOSTFORGE_PROJECT_ID: ${{ vars.HOSTFORGE_PROJECT_ID }}
           HOSTFORGE_APPLICATION_ID: ${{ vars.HOSTFORGE_APPLICATION_ID }}
         run: |
           set -euo pipefail
-          hostforge application deploy "$HOSTFORGE_APPLICATION_ID" \
-            --project "$HOSTFORGE_PROJECT_ID" \
-            --workspace "$HOSTFORGE_WORKSPACE_ID" \
-            --environment production \
-            --json > deployment.json
+          endpoint="https://hostforgeplatform.cloud/api/v1/workspaces/${HOSTFORGE_WORKSPACE_ID}/projects/${HOSTFORGE_PROJECT_ID}/applications/${HOSTFORGE_APPLICATION_ID}/deployments"
+          response_file="$(mktemp)"
+          http_status="$(
+            curl --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer ${HOSTFORGE_TOKEN}" \
+              --header "Accept: application/json" \
+              --output "$response_file" \
+              --write-out "%{http_code}" \
+              "$endpoint"
+          )"
+
+          if [ "$http_status" != "201" ]; then
+            echo "HostForge deployment request failed with HTTP ${http_status}."
+            cat "$response_file"
+            exit 1
+          fi
+
+          echo "HostForge deployment request accepted with HTTP 201."
+          cat "$response_file" > deployment.json
