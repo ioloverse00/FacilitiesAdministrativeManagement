@@ -26,7 +26,7 @@ if (!$start || !$end || $end < $start) {
 
 $roomStatement = $pdo->prepare(
     "SELECT fs.facility_space_id id, fs.space_code code, fs.space_name name, fs.space_type type,
-            fs.capacity, b.building_name
+            fs.capacity, fs.capacity_unit, b.building_name
        FROM facility_space fs
        INNER JOIN building b ON b.building_id = fs.building_id
       WHERE fs.facility_space_id = :id
@@ -46,9 +46,7 @@ $statement = $pdo->prepare(
        FROM facility_reservation
       WHERE deleted_at IS NULL
         AND facility_space_id = :space_id
-        AND requested_by_employee_reference_id = :employee_id
-        AND status = 'APPROVED'
-        AND approval_status = 'APPROVED'
+        AND status IN ('SUBMITTED', 'APPROVED', 'CHECKED_IN')
         AND start_datetime <= :date_to
         AND end_datetime >= :date_from
       ORDER BY start_datetime ASC"
@@ -56,20 +54,20 @@ $statement = $pdo->prepare(
 $employeeId = (int) $user['employee_id'];
 $statement->execute([
     'space_id' => $spaceId,
-    'employee_id' => $employeeId,
     'date_from' => $start->format('Y-m-d H:i:s'),
     'date_to' => $end->format('Y-m-d H:i:s'),
 ]);
 
-$events = array_map(static function (array $row): array {
+$events = array_map(static function (array $row) use ($employeeId): array {
+    $isOwn = (int) $row['requested_by_employee_reference_id'] === $employeeId;
     return [
         'start' => $row['start_datetime'],
         'end' => $row['end_datetime'],
-        'ownership' => 'SELF',
+        'ownership' => $isOwn ? 'SELF' : 'OTHER',
         'occupancy' => 'RESERVED',
-        'reservation_id' => (int) $row['facility_reservation_id'],
-        'reservation_number' => (string) $row['reservation_number'],
-        'purpose' => (string) $row['purpose'],
+        'reservation_id' => $isOwn ? (int) $row['facility_reservation_id'] : null,
+        'reservation_number' => $isOwn ? (string) $row['reservation_number'] : null,
+        'purpose' => $isOwn ? (string) $row['purpose'] : null,
         'status' => (string) $row['status'],
         'approval_status' => (string) $row['approval_status'],
     ];
@@ -82,6 +80,8 @@ jsonResponse(true, 'Room availability calendar retrieved.', [
         'name' => $room['name'],
         'type' => $room['type'],
         'capacity' => $room['capacity'] === null ? null : (int) $room['capacity'],
+        'capacity_unit' => $room['capacity_unit'] ?: 'PAX',
+        'capacity_label' => $room['capacity'] === null ? null : ((int) $room['capacity']) . ' ' . strtolower((string)($room['capacity_unit'] ?: 'PAX')),
         'building_name' => $room['building_name'],
     ],
     'range' => [

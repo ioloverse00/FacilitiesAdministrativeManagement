@@ -28,6 +28,11 @@ function settingsFacilitiesStatuses(): array
     return ['ACTIVE', 'INACTIVE'];
 }
 
+function settingsFacilitiesCapacityUnits(): array
+{
+    return ['PAX', 'VEHICLES'];
+}
+
 function settingsFacilitiesPriorities(): array
 {
     return ['LOW', 'NORMAL', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -77,7 +82,7 @@ function settingsFacilitiesList(array $user): array
 {
     $pdo = settingsFacilitiesPdo();
     $buildings = $pdo->query("SELECT building_id id, building_code code, building_name name, address, description, status, updated_at FROM building WHERE deleted_at IS NULL ORDER BY building_name")->fetchAll();
-    $spaces = $pdo->query("SELECT fs.facility_space_id id, fs.building_id buildingId, fs.parent_space_id parentSpaceId, fs.space_code code, fs.space_name name, fs.space_type type, fs.floor_number floor, fs.capacity, fs.location_description location, fs.is_reservable reservable, fs.status, fs.updated_at updatedAt, fs.primary_image_original_file_name imageFileName, fs.primary_image_mime_type imageMimeType, fs.primary_image_file_size imageFileSize, fs.primary_image_uploaded_at imageUploadedAt, b.building_name buildingName FROM facility_space fs INNER JOIN building b ON b.building_id=fs.building_id WHERE fs.deleted_at IS NULL ORDER BY b.building_name, fs.space_name")->fetchAll();
+    $spaces = $pdo->query("SELECT fs.facility_space_id id, fs.building_id buildingId, fs.parent_space_id parentSpaceId, fs.space_code code, fs.space_name name, fs.space_type type, fs.floor_number floor, fs.capacity, fs.capacity_unit capacityUnit, fs.location_description location, fs.is_reservable reservable, fs.status, fs.updated_at updatedAt, fs.primary_image_original_file_name imageFileName, fs.primary_image_mime_type imageMimeType, fs.primary_image_file_size imageFileSize, fs.primary_image_uploaded_at imageUploadedAt, b.building_name buildingName FROM facility_space fs INNER JOIN building b ON b.building_id=fs.building_id WHERE fs.deleted_at IS NULL ORDER BY b.building_name, fs.space_name")->fetchAll();
     $categories = $pdo->query("SELECT request_category_id id, category_code code, category_name name, description, default_priority defaultPriority, responsible_role_code responsibleRole, status FROM request_category ORDER BY category_name")->fetchAll();
     $sla = $pdo->query("SELECT sp.sla_policy_id id, sp.policy_code code, sp.policy_name name, sp.request_category_id categoryId, rc.category_name categoryName, sp.priority, sp.acknowledgement_minutes acknowledgementMinutes, sp.assignment_minutes assignmentMinutes, sp.resolution_minutes resolutionMinutes, sp.escalation_minutes escalationMinutes, sp.status, sp.effective_from effectiveFrom, sp.effective_to effectiveTo FROM sla_policy sp LEFT JOIN request_category rc ON rc.request_category_id=sp.request_category_id ORDER BY sp.policy_name")->fetchAll();
     return [
@@ -85,11 +90,14 @@ function settingsFacilitiesList(array $user): array
         'spaces' => array_map(static function (array $row): array {
             $row['reservable'] = (int)$row['reservable'] === 1;
             $row['hasImage'] = !empty($row['imageFileName']);
+            $row['capacityUnit'] = $row['capacityUnit'] ?: 'PAX';
+            $row['capacityLabel'] = $row['capacity'] === null ? null : ((int)$row['capacity']) . ' ' . strtolower((string)$row['capacityUnit']);
             return $row;
         }, $spaces),
         'categories' => $categories,
         'slaPolicies' => $sla,
         'statuses' => settingsFacilitiesStatuses(),
+        'capacityUnits' => settingsFacilitiesCapacityUnits(),
         'priorities' => settingsFacilitiesPriorities(),
         'canManageReservations' => settingsFacilitiesCan($user, 'reservations.manage'),
         'canManageFacilityRequests' => settingsFacilitiesCan($user, 'facility_requests.manage'),
@@ -146,6 +154,10 @@ function settingsFacilitiesSaveSpace(array $body, array $user): array
     }
     $capacityRaw = $body['capacity'] ?? null;
     $capacity = ($capacityRaw === '' || $capacityRaw === null) ? null : max(0, (int)$capacityRaw);
+    $capacityUnit = strtoupper(trim((string)($body['capacity_unit'] ?? $body['capacityUnit'] ?? 'PAX')));
+    if (!in_array($capacityUnit, settingsFacilitiesCapacityUnits(), true)) {
+        throw new InvalidArgumentException(json_encode(['capacity_unit' => 'Capacity unit must be PAX or VEHICLES.']));
+    }
     $params = [
         'building_id' => $buildingId,
         'code' => $code,
@@ -153,15 +165,16 @@ function settingsFacilitiesSaveSpace(array $body, array $user): array
         'type' => mb_substr($type, 0, 100),
         'floor' => settingsFacilitiesNullableString($body['floor'] ?? $body['floor_number'] ?? null, 20),
         'capacity' => $capacity,
+        'capacity_unit' => $capacityUnit,
         'location' => settingsFacilitiesNullableString($body['location'] ?? $body['location_description'] ?? null, 500),
         'reservable' => !empty($body['reservable']) && !in_array($body['reservable'], ['0', 'false', 'FALSE'], true) ? 1 : 0,
         'status' => settingsFacilitiesStatus($body['status'] ?? 'ACTIVE'),
     ];
     if ($id > 0) {
         $params['id'] = $id;
-        $pdo->prepare('UPDATE facility_space SET building_id=:building_id, space_code=:code, space_name=:name, space_type=:type, floor_number=:floor, capacity=:capacity, location_description=:location, is_reservable=:reservable, status=:status, updated_at=NOW() WHERE facility_space_id=:id AND deleted_at IS NULL')->execute($params);
+        $pdo->prepare('UPDATE facility_space SET building_id=:building_id, space_code=:code, space_name=:name, space_type=:type, floor_number=:floor, capacity=:capacity, capacity_unit=:capacity_unit, location_description=:location, is_reservable=:reservable, status=:status, updated_at=NOW() WHERE facility_space_id=:id AND deleted_at IS NULL')->execute($params);
     } else {
-        $pdo->prepare('INSERT INTO facility_space (building_id, space_code, space_name, space_type, floor_number, capacity, location_description, is_reservable, status, created_at, updated_at) VALUES (:building_id,:code,:name,:type,:floor,:capacity,:location,:reservable,:status,NOW(),NOW())')->execute($params);
+        $pdo->prepare('INSERT INTO facility_space (building_id, space_code, space_name, space_type, floor_number, capacity, capacity_unit, location_description, is_reservable, status, created_at, updated_at) VALUES (:building_id,:code,:name,:type,:floor,:capacity,:capacity_unit,:location,:reservable,:status,NOW(),NOW())')->execute($params);
         $id = (int)$pdo->lastInsertId();
     }
     return ['id' => $id];

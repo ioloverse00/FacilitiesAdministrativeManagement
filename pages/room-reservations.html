@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>Room Reservations</title>
+    <title>Facility Reservations</title>
     <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
     <script src="../assets/js/theme.js"></script>
     <link href="../assets/css/app.css?v=20260919-requester-postfix" rel="stylesheet">
@@ -14,13 +14,14 @@
     <script src="../assets/js/layout.js?v=20260919-clock-subtext-format" defer></script>
     <script src="../assets/js/api-client.js" defer></script>
     <script src="../assets/js/table-audit.js" defer></script>
+    <script src="../assets/js/facility-images.js?v=20261006-phase3" defer></script>
     <script src="../assets/js/room-reservations.js?v=20260922-purpose-field-fix" defer></script>
 </head>
 <body class="app-body bg-background text-on-background font-body"
-    data-page-title="Room Reservations"
-    data-breadcrumb-title="Room Reservations"
+    data-page-title="Facility Reservations"
+    data-breadcrumb-title="Facility Reservations"
     data-active-nav="room-reservations"
-    data-page-heading="Room Reservations"
+    data-page-heading="Facility Reservations"
     data-page-description="Manage facility bookings, room availability, approvals, participants, and schedules.">
     <div id="app-shell" class="app-shell">
         <div id="app-sidebar-slot" class="app-sidebar-slot"></div>
@@ -31,7 +32,7 @@
                     <div class="facility-requests-shell">
                         <header class="facility-page-header">
                             <div class="facility-title-block">
-                                <h1>Room Reservations</h1>
+                                <h1>Facility Reservations</h1>
                                 <p>Manage facility bookings, room availability, approvals, participants, and schedules.</p>
                             </div>
                             <div class="facility-header-actions">
@@ -42,30 +43,20 @@
                             </div>
                         </header>
 
-                        <section class="facility-section reservation-calendar-section" aria-labelledby="reservation-calendar-title">
-                            <div class="reservation-calendar-toolbar" aria-label="Reservation calendar controls">
-                                <div class="reservation-calendar-navigation">
-                                    <h2 id="reservation-calendar-title">Reservation Calendar</h2>
-                                    <button id="reservation-today" class="facility-page-button" type="button">Today</button>
-                                    <button id="reservation-prev-period" class="fam-icon-button" type="button" aria-label="Previous calendar period">
-                                        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
-                                    </button>
-                                    <button id="reservation-next-period" class="fam-icon-button" type="button" aria-label="Next calendar period">
-                                        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
-                                    </button>
-                                </div>
+                        <section class="facility-section reservation-dashboard-section" aria-labelledby="reservation-calendar-title">
+                            <div class="reservation-dashboard-toolbar">
+                                <label class="facility-field reservation-facility-picker">
+                                    <span>Facility</span>
+                                    <select id="reservation-room-filter">
+                                        <option value="">Loading facilities...</option>
+                                    </select>
+                                </label>
                                 <div class="reservation-toolbar-controls">
                                     <div class="reservation-view-toggle" role="group" aria-label="Calendar view">
                                         <button id="reservation-month-view" class="active" type="button" data-calendar-view="month" aria-pressed="true">Month</button>
                                         <button id="reservation-week-view" type="button" data-calendar-view="week" aria-pressed="false">Week</button>
                                         <button id="reservation-day-view" type="button" data-calendar-view="day" aria-pressed="false">Day</button>
                                     </div>
-                                    <label class="facility-field reservation-filter-field">
-                                        <span class="sr-only">Filter by room</span>
-                                        <select id="reservation-room-filter">
-                                            <option value="all">All rooms</option>
-                                        </select>
-                                    </label>
                                     <label class="facility-field reservation-filter-field">
                                         <span class="sr-only">Filter by status</span>
                                         <select id="reservation-status-filter">
@@ -79,40 +70,40 @@
                                     <button id="reservation-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
                                 </div>
                             </div>
-                            <div class="reservation-calendar-card">
-                                <div id="reservation-calendar-loading" class="fam-state reservation-calendar-overlay" aria-live="polite" role="status">
-                                    <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
-                                    <span>Loading reservation calendar...</span>
-                                </div>
-                                <div id="reservation-calendar-panel" class="reservation-calendar" aria-live="polite"></div>
-                                <div id="reservation-calendar-message" class="reservation-calendar-message" aria-live="polite"></div>
+                            <div class="reservation-status-legend" aria-label="Reservation status legend">
+                                <span><i class="reservation-legend-dot reservation-legend-submitted"></i>Submitted</span>
+                                <span><i class="reservation-legend-dot reservation-legend-approved"></i>Approved</span>
+                                <span><i class="reservation-legend-dot reservation-legend-checked-in"></i>Checked in</span>
+                                <span><i class="reservation-legend-dot reservation-legend-completed"></i>Completed</span>
+                                <span><i class="reservation-legend-dot reservation-legend-muted"></i>Cancelled / No show</span>
                             </div>
-                        </section>
-
-                        <section class="facility-section reservation-operations-section" aria-labelledby="reservation-operations-title">
-                            <div class="fam-section-heading">
-                                <div>
-                                    <h2 id="reservation-operations-title">Requests Queue</h2>
-                                    <p class="fam-muted">A quick operational view of reservations that need attention.</p>
+                            <div class="reservation-dashboard-grid">
+                                <div class="reservation-calendar-column">
+                                    <div class="reservation-calendar-toolbar" aria-label="Reservation calendar controls">
+                                        <div class="reservation-calendar-navigation">
+                                            <h2 id="reservation-calendar-title">Reservation Calendar</h2>
+                                            <button id="reservation-today" class="facility-page-button" type="button">Today</button>
+                                            <button id="reservation-prev-period" class="fam-icon-button" type="button" aria-label="Previous calendar period">
+                                                <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                                            </button>
+                                            <button id="reservation-next-period" class="fam-icon-button" type="button" aria-label="Next calendar period">
+                                                <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="reservation-calendar-card">
+                                        <div id="reservation-calendar-loading" class="fam-state reservation-calendar-overlay" aria-live="polite" role="status">
+                                            <span class="material-symbols-outlined fam-spinner" aria-hidden="true">progress_activity</span>
+                                            <span>Loading reservation calendar...</span>
+                                        </div>
+                                        <div id="reservation-calendar-panel" class="reservation-calendar" aria-live="polite"></div>
+                                        <div id="reservation-calendar-message" class="reservation-calendar-message" aria-live="polite"></div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="reservation-focus-grid">
-                                <article class="reservation-focus-panel">
-                                    <h3>Pending Approval</h3>
-                                    <div id="reservation-pending-list" class="reservation-focus-list" aria-live="polite"></div>
-                                </article>
-                                <article class="reservation-focus-panel">
-                                    <h3>Today</h3>
-                                    <div id="reservation-today-list" class="reservation-focus-list" aria-live="polite"></div>
-                                </article>
-                                <article class="reservation-focus-panel">
-                                    <h3>Upcoming</h3>
-                                    <div id="reservation-upcoming-list" class="reservation-focus-list" aria-live="polite"></div>
-                                </article>
-                                <article class="reservation-focus-panel">
-                                    <h3>Rejected or Cancelled</h3>
-                                    <div id="reservation-recent-list" class="reservation-focus-list" aria-live="polite"></div>
-                                </article>
+                                <aside class="reservation-side-column" aria-label="Facility and reservation preview">
+                                    <section id="reservation-selected-facility" class="reservation-side-panel" aria-live="polite"></section>
+                                    <section id="reservation-preview-panel" class="reservation-side-panel reservation-preview-panel" aria-live="polite"></section>
+                                </aside>
                             </div>
                         </section>
 

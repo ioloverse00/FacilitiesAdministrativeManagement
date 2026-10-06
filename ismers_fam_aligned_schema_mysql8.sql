@@ -182,6 +182,7 @@ CREATE TABLE facility_space (
   building_id BIGINT UNSIGNED NOT NULL, parent_space_id BIGINT UNSIGNED,
   space_code VARCHAR(50) NOT NULL UNIQUE, space_name VARCHAR(200) NOT NULL,
   space_type VARCHAR(100) NOT NULL, floor_number VARCHAR(20), capacity INT UNSIGNED,
+  capacity_unit VARCHAR(20) NOT NULL DEFAULT 'PAX',
   location_description VARCHAR(500), is_reservable BOOLEAN NOT NULL DEFAULT TRUE,
   status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -190,7 +191,8 @@ CREATE TABLE facility_space (
   CONSTRAINT fk_space_building FOREIGN KEY(building_id) REFERENCES building(building_id) ON DELETE RESTRICT,
   CONSTRAINT fk_space_parent FOREIGN KEY(parent_space_id) REFERENCES facility_space(facility_space_id) ON DELETE SET NULL,
   INDEX idx_space_building(building_id), INDEX idx_space_type_status(space_type,status),
-  CHECK(capacity IS NULL OR capacity>0)
+  CHECK(capacity IS NULL OR capacity>0),
+  CHECK(capacity_unit IN ('PAX','VEHICLES'))
 ) ENGINE=InnoDB;
 
 -- SETTINGS

@@ -42,6 +42,8 @@ function employeeVisibleReservation(array $item, array $user): array
         'building' => $item['building'] ?? null,
         'floor' => $item['floor'] ?? null,
         'capacity' => $item['capacity'] ?? null,
+        'capacityUnit' => $item['capacityUnit'] ?? 'PAX',
+        'capacityLabel' => $item['capacityLabel'] ?? null,
         'department' => $item['department'] ?? null,
         'attendees' => $item['attendees'] ?? null,
         'approval' => $item['approval'] ?? null,

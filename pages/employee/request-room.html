@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>Request a Room</title>
+    <title>Request Facility</title>
     <link rel="icon" type="image/svg+xml" href="../assets/logo-icon.svg" />
     <script src="../assets/js/theme.js"></script>
     <link href="../assets/css/app.css?v=20260919-request-room-ux" rel="stylesheet">
@@ -13,22 +13,44 @@
     <script src="../assets/js/profile-dropdown.js?v=20260919-root-login" defer></script>
     <script src="../assets/js/modal.js" defer></script>
     <script src="../assets/js/employee/portal.js?v=20260919-requester-postfix" defer></script>
+    <script src="../assets/js/facility-images.js?v=20261006-phase3" defer></script>
     <script src="../assets/js/employee/room-reservations.js?v=20261001-room-images" defer></script>
 </head>
-<body class="app-body bg-background text-on-background font-body employee-portal-body" data-active-nav="employee-request-room" data-page-title="Request a Room" data-page-heading="Request a Room" data-page-description="Choose a room and date, then submit a reservation request.">
+<body class="app-body bg-background text-on-background font-body employee-portal-body" data-active-nav="employee-request-room" data-page-title="Request Facility" data-page-heading="Request Facility" data-page-description="Choose a facility and schedule, then submit a reservation request.">
     <div id="app-shell" class="app-shell"><div id="app-sidebar-slot" class="app-sidebar-slot"></div><div class="app-main-panel"><div id="app-header-slot" class="shrink-0"></div><main id="app-content" class="app-main bg-surface-container-lowest"><div id="page-content" class="app-page-content employee-workspace"><div class="employee-shell">
-        <header class="facility-page-header employee-request-page-header"><div class="facility-title-block"><h1 id="page-heading">Request a Room</h1><p id="page-description">Choose a room and date, then submit a reservation request.</p></div><div class="facility-header-actions"><button id="employee-request-room" class="btn-primary dashboard-action-button" type="button" disabled><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Request Selected Room</button></div></header>
-        <section class="employee-reservation-workspace" aria-label="Room request workspace">
+        <header class="facility-page-header employee-request-page-header"><div class="facility-title-block"><h1 id="page-heading">Request Facility</h1><p id="page-description">Choose a facility and schedule, then submit a reservation request.</p></div><div class="facility-header-actions"><button id="employee-request-room" class="btn-primary dashboard-action-button" type="button" disabled><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Request Selected Facility</button></div></header>
+        <section class="employee-reservation-workspace employee-facility-request-flow" aria-label="Facility request workspace">
             <article class="fam-card employee-room-selection-panel" aria-labelledby="employee-room-selection-title">
                 <div class="employee-calendar-header">
                     <div>
-                        <h2 id="employee-room-selection-title">Select a Room</h2>
-                        <p>Choose a room to continue to the reservation request form.</p>
+                        <h2 id="employee-room-selection-title">Browse Facilities</h2>
+                        <p>Choose a facility, check availability, then submit a reservation request.</p>
                     </div>
-                    <span id="employee-room-selection-count" class="fam-muted employee-room-meta">Loading rooms...</span>
+                    <span id="employee-room-selection-count" class="fam-muted employee-room-meta">Loading facilities...</span>
                 </div>
                 <div id="employee-room-card-grid" class="employee-room-card-grid" aria-live="polite"></div>
                 <p id="employee-room-selection-message" class="reservation-calendar-message" aria-live="polite"></p>
+            </article>
+            <article class="fam-card employee-availability-panel" aria-labelledby="employee-availability-title">
+                <div class="employee-calendar-header">
+                    <div>
+                        <h2 id="employee-availability-title">Availability</h2>
+                        <p id="employee-availability-subtitle">Select a facility to view its schedule.</p>
+                    </div>
+                    <div class="employee-availability-controls">
+                        <button id="employee-availability-prev" class="fam-icon-button" type="button" aria-label="Previous week"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
+                        <button id="employee-availability-today" class="facility-page-button" type="button">This Week</button>
+                        <button id="employee-availability-next" class="fam-icon-button" type="button" aria-label="Next week"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
+                    </div>
+                </div>
+                <div class="reservation-status-legend" aria-label="Availability legend">
+                    <span><i class="reservation-legend-dot reservation-legend-submitted"></i>Pending</span>
+                    <span><i class="reservation-legend-dot reservation-legend-approved"></i>Reserved</span>
+                    <span><i class="reservation-legend-dot reservation-legend-checked-in"></i>In use</span>
+                    <span><i class="reservation-legend-dot reservation-legend-available"></i>Available</span>
+                </div>
+                <div id="employee-availability-calendar" class="employee-availability-calendar" aria-live="polite"></div>
+                <div id="employee-availability-message" class="reservation-calendar-message" aria-live="polite">Select a facility to view availability.</div>
             </article>
         </section>
     </div></div><div id="app-footer-slot" class="app-footer-slot"></div></main></div></div>

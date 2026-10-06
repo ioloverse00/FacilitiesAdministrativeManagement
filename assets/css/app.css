@@ -10643,7 +10643,8 @@ body[data-active-nav="employee-request-room"] .employee-reservation-workspace {
   object-fit: cover;
 }
 .employee-room-card-placeholder,
-.reservation-room-image-placeholder {
+.reservation-room-image-placeholder,
+.facility-image-placeholder {
   display: grid;
   width: 100%;
   height: 100%;
@@ -10656,7 +10657,8 @@ body[data-active-nav="employee-request-room"] .employee-reservation-workspace {
   text-align: center;
 }
 .employee-room-card-placeholder .material-symbols-outlined,
-.reservation-room-image-placeholder .material-symbols-outlined {
+.reservation-room-image-placeholder .material-symbols-outlined,
+.facility-image-placeholder .material-symbols-outlined {
   color: var(--primary, #2563eb);
   font-size: 2.4rem;
 }
@@ -10693,7 +10695,8 @@ body[data-active-nav="employee-request-room"] .employee-reservation-workspace {
   background: var(--surface, #fff);
 }
 .reservation-room-image-panel > img,
-.reservation-room-image-placeholder {
+.reservation-room-image-placeholder,
+.facility-image-placeholder {
   aspect-ratio: 16 / 9;
   min-height: 8rem;
   overflow: hidden;
@@ -10706,6 +10709,216 @@ body[data-active-nav="employee-request-room"] .employee-reservation-workspace {
 }
 .reservation-room-image-form {
   margin-top: 0.35rem;
+}
+.employee-facility-request-flow {
+  display: grid;
+  gap: 1rem;
+}
+.employee-availability-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+.employee-availability-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.employee-availability-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+.employee-availability-day {
+  min-width: 0;
+  border: 1px solid var(--outline-variant, #d6dbe6);
+  border-radius: 0.65rem;
+  background: var(--surface, #fff);
+  overflow: hidden;
+}
+.employee-availability-day header {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.65rem;
+  background: var(--surface-container, #f8fafc);
+}
+.employee-availability-day header span {
+  color: var(--text-muted, #64748b);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.employee-availability-day > div {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.65rem;
+}
+.employee-availability-event {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem;
+  border-radius: 0.5rem;
+  color: #111827;
+  font-size: 0.82rem;
+}
+.employee-availability-event span,
+.employee-availability-event small {
+  color: inherit;
+}
+.employee-availability-open {
+  margin: 0;
+  color: var(--text-muted, #64748b);
+  font-size: 0.85rem;
+}
+.reservation-dashboard-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+.reservation-facility-picker {
+  min-width: min(100%, 22rem);
+}
+.reservation-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(18rem, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.reservation-calendar-column,
+.reservation-side-column {
+  min-width: 0;
+}
+.reservation-side-column {
+  display: grid;
+  gap: 1rem;
+}
+.reservation-side-panel {
+  overflow: hidden;
+  border: 1px solid var(--outline-variant, #d6dbe6);
+  border-radius: 0.75rem;
+  background: var(--surface, #fff);
+}
+.reservation-side-panel .fam-state {
+  min-height: 12rem;
+}
+.reservation-selected-facility-media {
+  aspect-ratio: 16 / 9;
+  background: #eef2f7;
+}
+.reservation-selected-facility-media img,
+.reservation-selected-facility-media .facility-image-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+.reservation-side-panel-body {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+.reservation-side-panel-body h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.reservation-side-panel-body p {
+  margin: 0;
+  color: var(--text-muted, #64748b);
+  line-height: 1.45;
+}
+.reservation-preview-heading {
+  display: flex;
+  gap: 0.75rem;
+  align-items: start;
+  justify-content: space-between;
+}
+.reservation-preview-list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+.reservation-preview-list div {
+  display: grid;
+  gap: 0.15rem;
+}
+.reservation-preview-list dt {
+  color: var(--text-muted, #64748b);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.reservation-preview-list dd {
+  margin: 0;
+  color: var(--text, #111827);
+}
+.reservation-preview-summary {
+  padding: 0.75rem;
+  border-radius: 0.55rem;
+  background: var(--surface-container, #f8fafc);
+}
+.reservation-preview-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.reservation-status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.85rem;
+  color: var(--text-muted, #64748b);
+  font-size: 0.88rem;
+}
+.reservation-status-legend span {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+.reservation-legend-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+.reservation-legend-submitted { background: #f59e0b; }
+.reservation-legend-approved { background: #2563eb; }
+.reservation-legend-checked-in { background: #7c3aed; }
+.reservation-legend-completed { background: #16a34a; }
+.reservation-legend-available { background: #cbd5e1; }
+.reservation-legend-muted { background: #64748b; }
+.reservation-event-warning,
+.reservation-event-submitted {
+  background: #fff7ed;
+  border-color: #f59e0b;
+  color: #7c2d12;
+}
+.reservation-event-success,
+.reservation-event-approved {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1e3a8a;
+}
+.reservation-event-info,
+.reservation-event-checked-in {
+  background: #f5f3ff;
+  border-color: #7c3aed;
+  color: #4c1d95;
+}
+.reservation-event-completed {
+  background: #f0fdf4;
+  border-color: #16a34a;
+  color: #14532d;
+}
+.reservation-event-muted {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #334155;
+}
+.reservation-event.selected {
+  outline: 3px solid rgba(37, 99, 235, 0.25);
+  outline-offset: 2px;
 }
 .employee-next-panel {
   display: grid;
@@ -12215,6 +12428,16 @@ body.facility-drawer-open {
 }
 
 @media (max-width: 640px) {
+  .reservation-dashboard-grid,
+  .employee-availability-calendar {
+    grid-template-columns: 1fr;
+  }
+  .reservation-dashboard-toolbar {
+    align-items: stretch;
+  }
+  .reservation-toolbar-controls {
+    width: 100%;
+  }
   .employee-calendar-header,
   .employee-selected-date-header {
     align-items: stretch;

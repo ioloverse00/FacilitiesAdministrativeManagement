@@ -6,7 +6,7 @@
     const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const toDate = value => value ? new Date(String(value).replace(' ', 'T')) : null;
     const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-    const state = { view: window.matchMedia('(max-width: 520px)').matches ? 'day' : 'month', anchor: new Date(), room: 'all', status: 'all', search: '', page: 1, perPage: 10, sort: 'start_datetime', direction: 'desc', events: [], rows: [], pagination: { total: 0, total_pages: 1 }, options: {}, details: new Map(), expandedDays: new Set(), calendarLoading: false, calendarLoaded: false, listLoading: false };
+    const state = { view: window.matchMedia('(max-width: 520px)').matches ? 'day' : 'month', anchor: new Date(), room: '', status: 'all', search: '', page: 1, perPage: 10, sort: 'start_datetime', direction: 'desc', events: [], rows: [], pagination: { total: 0, total_pages: 1 }, options: {}, details: new Map(), selectedReservationId: '', expandedDays: new Set(), calendarLoading: false, calendarLoaded: false, listLoading: false };
     const fmtTime = value => { const d = value instanceof Date ? value : toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'Time unavailable'; };
     const fmtDateTime = value => { const d = toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not applicable'; };
     const fileSize = bytes => {
@@ -15,9 +15,8 @@
         if (value < 1048576) return `${Math.ceil(value / 1024)} KB`;
         return `${(value / 1048576).toFixed(value < 10485760 ? 1 : 0)} MB`;
     };
-    const roomImageUrl = image => image?.has_image && image.url
-        ? (window.FAMApi?.apiUrl?.(image.url) || `../api/${image.url}`)
-        : '';
+    const roomImageUrl = image => window.FAMFacilityImages?.imageUrl?.(image) || '';
+    const capacityLabel = item => item?.capacityLabel || item?.capacity_label || (item?.capacity ? `${item.capacity} ${String(item.capacityUnit || item.capacity_unit || 'PAX').toLowerCase()}` : 'Not applicable');
     const badge = value => `<span class="facility-badge facility-status-${String(value || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${esc(title(value || 'Not applicable'))}</span>`;
     const can = permission => (window.FAMApi?.currentUser?.permissions || []).includes(permission);
     const canAny = permissions => permissions.some(can);
@@ -54,7 +53,7 @@
 
     function filteredQuery(base = {}) {
         const p = new URLSearchParams(base);
-        if (state.room !== 'all') p.set('facility_space_id', state.room);
+        if (state.room) p.set('facility_space_id', state.room);
         if (state.status !== 'all') p.set('status', state.status);
         if (state.search.trim()) p.set('search', state.search.trim());
         return p;
@@ -82,7 +81,7 @@
             button.classList.toggle('active', active);
             button.setAttribute('aria-pressed', String(active));
         });
-        qs('reservation-reset-filters')?.classList.toggle('hidden', state.room === 'all' && state.status === 'all' && !state.search.trim());
+        qs('reservation-reset-filters')?.classList.toggle('hidden', state.status === 'all' && !state.search.trim());
     }
     function setCalendarBusy(isBusy, initial = false) {
         const card = qs('reservation-calendar-panel')?.closest('.reservation-calendar-card');
@@ -102,8 +101,51 @@
     }
 
     function populateFilters() {
-        qs('reservation-room-filter').innerHTML = '<option value="all">All rooms</option>' + (state.options.facility_spaces || []).map(x => `<option value="${esc(x.id)}">${esc(x.name || x.code || 'Room')}</option>`).join('');
+        qs('reservation-room-filter').innerHTML = (state.options.facility_spaces || []).map(x => `<option value="${esc(x.id)}">${esc(x.name || x.code || 'Facility')}</option>`).join('');
+        qs('reservation-room-filter').value = state.room;
         qs('reservation-status-filter').innerHTML = '<option value="all">All statuses</option>' + (state.options.statuses || []).map(x => `<option value="${esc(x)}">${esc(title(x))}</option>`).join('');
+    }
+
+    function selectedFacility() {
+        return (state.options.facility_spaces || []).find(item => String(item.id) === String(state.room));
+    }
+
+    function renderSelectedFacility() {
+        const panel = qs('reservation-selected-facility');
+        if (!panel) return;
+        const facility = selectedFacility();
+        if (!facility) {
+            panel.innerHTML = '<div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><strong>Select a facility</strong><span>Choose an active reservable facility to view its calendar.</span></div>';
+            return;
+        }
+        const meta = [title(facility.type || 'Facility'), facility.building_name, facility.location_description].filter(Boolean).join(' - ');
+        panel.innerHTML = `<div class="reservation-selected-facility-media">${window.FAMFacilityImages?.mediaHtml?.(facility, { alt: facility.name || 'Facility image' }) || ''}</div><div class="reservation-side-panel-body"><span class="facility-badge facility-status-approved">Active / Reservable</span><h3>${esc(facility.name || facility.code || 'Facility')}</h3><p>${esc(meta || 'Facility details unavailable')}</p><dl class="reservation-preview-list"><div><dt>Capacity</dt><dd>${esc(capacityLabel(facility))}</dd></div></dl></div>`;
+    }
+
+    function renderReservationPreview(item = null) {
+        const panel = qs('reservation-preview-panel');
+        if (!panel) return;
+        if (!item) {
+            panel.innerHTML = '<div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">event_note</span><strong>Select a reservation</strong><span>Select a reservation from the calendar to view its details.</span></div>';
+            return;
+        }
+        const summary = aiSummary(item);
+        panel.innerHTML = `<div class="reservation-side-panel-body"><div class="reservation-preview-heading"><div><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h3>${esc(item.purpose || 'Reservation')}</h3></div>${badge(item.status)}</div><dl class="reservation-preview-list"><div><dt>Date</dt><dd>${esc(fmtDateTime(item.start))}</dd></div><div><dt>Time</dt><dd>${esc(fmtTime(item.start))} - ${esc(fmtTime(item.end))}</dd></div><div><dt>Requester</dt><dd>${esc(item.requester || 'Requester unavailable')}</dd></div><div><dt>Facility</dt><dd>${esc(item.room || 'Facility unavailable')}</dd></div></dl><p class="reservation-preview-summary">${summary}</p><div class="reservation-preview-actions"><button class="btn-primary dashboard-action-button" type="button" data-preview-see-more="${esc(item.id)}">See More</button></div></div>`;
+    }
+
+    async function selectReservationPreview(id) {
+        state.selectedReservationId = String(id || '');
+        if (!state.selectedReservationId) return renderReservationPreview(null);
+        try {
+            if (!state.details.has(state.selectedReservationId)) {
+                const payload = await window.FAMApi.request(`../api/reservations/show.php?id=${encodeURIComponent(state.selectedReservationId)}`);
+                state.details.set(state.selectedReservationId, payload.data?.item || {});
+            }
+            renderReservationPreview(state.details.get(state.selectedReservationId));
+        } catch (error) {
+            const panel = qs('reservation-preview-panel');
+            if (panel) panel.innerHTML = `<div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">error</span><strong>Reservation unavailable</strong><span>${esc(error.message || 'Unable to load reservation preview.')}</span></div>`;
+        }
     }
 
     function tone(event) {
@@ -139,7 +181,8 @@
     function eventButton(event) {
         const time = fmtTime(event.start), room = event.room || 'Room unavailable', requestType = title(event.reservationType || 'Reservation');
         const label = `${time} ${room} ${requestType} ${title(event.status)} ${title(event.approval)}`;
-        return `<button class="reservation-event reservation-event-${tone(event)}" type="button" data-reservation-id="${esc(event.id)}" aria-label="${esc(label)}" title="${esc(label)}"><span class="reservation-event-time">${esc(time)}</span><strong>${esc(room)}</strong><span>${esc(requestType)}</span></button>`;
+        const selected = String(event.id) === String(state.selectedReservationId);
+        return `<button class="reservation-event reservation-event-${tone(event)}${selected ? ' selected' : ''}" type="button" data-reservation-id="${esc(event.id)}" aria-label="${esc(label)}" title="${esc(label)}"><span class="reservation-event-time">${esc(time)}</span><strong>${esc(room)}</strong><span>${esc(requestType)}</span></button>`;
     }
 
     function days(start, end) {
@@ -265,8 +308,8 @@
             ? [item.roomImage.fileName, item.roomImage.fileSize ? fileSize(item.roomImage.fileSize) : '', item.roomImage.uploadedAt ? `Uploaded ${fmtDateTime(item.roomImage.uploadedAt)}` : ''].filter(Boolean).join(' - ')
             : 'No room image uploaded yet.';
         const media = imageUrl
-            ? `<img src="${esc(imageUrl)}" alt="${esc(item.room || 'Room image')}" loading="lazy">`
-            : `<div class="reservation-room-image-placeholder"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><span>No image</span></div>`;
+            ? `<img src="${esc(imageUrl)}" alt="${esc(item.room || 'Facility image')}" loading="lazy">`
+            : (window.FAMFacilityImages?.placeholderHtml?.(item, 'No image yet') || '<div class="facility-image-placeholder"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><span>No image yet</span></div>');
         return `<section class="reservation-room-image-panel">${media}<div><strong>${esc(item.room || 'Room')}</strong><small>${esc(meta)}</small></div></section>`;
     }
     function historyTitle(row) {
@@ -290,18 +333,18 @@
         }).join('')}</ol>`;
     }
     function drawerShell(message, retryId) {
-        return `<div class="facility-details-modal-panel"><div class="facility-details-modal-header"><div><p>Room Reservation</p><span class="facility-details-modal-request-number">Details</span><h2 id="reservation-drawer-title">Reservation Details</h2></div><button class="facility-details-modal-close" type="button" data-close-reservation-drawer aria-label="Close reservation details">&times;</button></div><div class="facility-details-modal-body" aria-live="polite"><div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">info</span><span>${esc(message)}</span>${retryId ? `<button class="facility-text-button" type="button" data-reservation-retry="${esc(retryId)}">Retry</button>` : ''}</div></div></div>`;
+        return `<div class="facility-details-modal-panel"><div class="facility-details-modal-header"><div><p>Facility Reservation</p><span class="facility-details-modal-request-number">Details</span><h2 id="reservation-drawer-title">Reservation Details</h2></div><button class="facility-details-modal-close" type="button" data-close-reservation-drawer aria-label="Close reservation details">&times;</button></div><div class="facility-details-modal-body" aria-live="polite"><div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">info</span><span>${esc(message)}</span>${retryId ? `<button class="facility-text-button" type="button" data-reservation-retry="${esc(retryId)}">Retry</button>` : ''}</div></div></div>`;
     }
     function drawerDetails(item) {
         const participants = (item.participants || []).map(p => `${p.full_name || 'Participant'} - ${title(p.participant_role || 'participant')} (${title(p.attendance_status || 'pending')})`);
         const actions = adminActions(item);
         const general = detailGrid(`${detail('Reservation No.', item.reservationNo)}${detail('Status', title(item.status))}${detail('Approval Status', title(item.approval))}${detail('Reservation Type', title(item.reservationType || 'MEETING'))}`);
         const schedule = detailGrid(`${detail('Start', fmtDateTime(item.start))}${detail('End', fmtDateTime(item.end))}${detail('Attendee Count', item.attendees)}`);
-        const room = `${roomImagePanel(item)}${detailGrid(`${detail('Facility Space', item.room)}${detail('Building', item.building)}${detail('Floor', item.floor)}${detail('Room Type', item.roomType)}${detail('Capacity', item.capacity)}${item.locationDescription ? detail('Location', item.locationDescription, 'detail-item--full') : ''}`)}`;
+        const room = `${roomImagePanel(item)}${detailGrid(`${detail('Facility Space', item.room)}${detail('Building', item.building)}${detail('Floor', item.floor)}${detail('Facility Type', item.roomType)}${detail('Capacity', capacityLabel(item))}${item.locationDescription ? detail('Location', item.locationDescription, 'detail-item--full') : ''}`)}`;
         const requester = detailGrid(`${detail('Name', item.requester)}${detail('Employee No.', item.employeeNumber)}${detail('Department', item.department)}`);
         const attendance = detailGrid(`${detail('Checked In', fmtDateTime(item.lifecycle?.checked_in_at))}${detail('Checked Out', fmtDateTime(item.lifecycle?.checked_out_at))}`);
         const approvalHistory = `${historyTimeline(item.history || [])}${participants.length ? `<h3 class="reservation-accordion-subhead">Participants</h3>${lines(participants, 'No participants recorded.')}` : ''}`;
-        return `<div class="facility-details-modal-panel"><div class="facility-details-modal-header"><div><p>Room Reservation</p><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h2 id="reservation-drawer-title">${esc(item.room || 'Reservation Details')}</h2></div><button class="facility-details-modal-close" type="button" data-close-reservation-drawer aria-label="Close reservation details">&times;</button></div><div class="facility-details-modal-body">${aiSummaryPanel(item)}<div class="visitor-detail-accordion reservation-detail-accordion">${disclosure('General Information', general, true)}${disclosure('Schedule', schedule, true)}${disclosure('Room Information', room)}${disclosure('Requester', requester, true)}${disclosure('Request Letter', requestLetterLinks(item), true)}${disclosure('Attendance', attendance)}${disclosure('Approval / History', approvalHistory)}</div></div>${actions ? `<div class="facility-dialog-actions">${actions}</div>` : ''}</div>`;
+        return `<div class="facility-details-modal-panel"><div class="facility-details-modal-header"><div><p>Facility Reservation</p><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h2 id="reservation-drawer-title">${esc(item.room || 'Reservation Details')}</h2></div><button class="facility-details-modal-close" type="button" data-close-reservation-drawer aria-label="Close reservation details">&times;</button></div><div class="facility-details-modal-body">${aiSummaryPanel(item)}<div class="visitor-detail-accordion reservation-detail-accordion">${disclosure('General Information', general, true)}${disclosure('Schedule', schedule, true)}${disclosure('Facility Information', room)}${disclosure('Requester', requester, true)}${disclosure('Request Letter', requestLetterLinks(item), true)}${disclosure('Attendance', attendance)}${disclosure('Approval / History', approvalHistory)}</div></div>${actions ? `<div class="facility-dialog-actions">${actions}</div>` : ''}</div>`;
     }
     function adminActions(item) {
         const status = String(item.status || '').toUpperCase();
@@ -405,6 +448,7 @@
     }
     async function refreshFilteredViews() {
         renderToolbar();
+        renderSelectedFacility();
         await Promise.all([loadCalendar(), loadList()]);
     }
     async function processReservation(action, id) {
@@ -439,7 +483,10 @@
             await window.FAMApi.me();
             const options = await window.FAMApi.request('../api/reservations/options.php');
             state.options = options.data || {};
+            state.room = String(state.options.facility_spaces?.[0]?.id || '');
             populateFilters();
+            renderSelectedFacility();
+            renderReservationPreview(null);
             refreshFilteredViews();
         } catch (error) {
             if (error.status === 401) {
@@ -458,15 +505,13 @@
     qs('reservation-prev-period')?.addEventListener('click', () => shift(-1));
     qs('reservation-next-period')?.addEventListener('click', () => shift(1));
     document.querySelectorAll('[data-calendar-view]').forEach(button => button.addEventListener('click', () => { state.view = button.dataset.calendarView; state.expandedDays.clear(); refreshCalendar(); }));
-    qs('reservation-room-filter')?.addEventListener('change', event => { state.room = event.target.value; state.page = 1; state.expandedDays.clear(); refreshFilteredViews(); });
+    qs('reservation-room-filter')?.addEventListener('change', event => { state.room = event.target.value; state.page = 1; state.selectedReservationId = ''; state.expandedDays.clear(); state.details.clear(); renderReservationPreview(null); refreshFilteredViews(); });
     qs('reservation-status-filter')?.addEventListener('change', event => { state.status = event.target.value; state.page = 1; state.expandedDays.clear(); refreshFilteredViews(); });
     qs('reservation-search')?.addEventListener('input', event => { state.search = event.target.value; state.page = 1; state.expandedDays.clear(); clearTimeout(state.timer); state.timer = setTimeout(refreshFilteredViews, 300); renderToolbar(); });
     qs('reservation-reset-filters')?.addEventListener('click', () => {
-        state.room = 'all';
         state.status = 'all';
         state.search = '';
         state.page = 1;
-        qs('reservation-room-filter').value = 'all';
         qs('reservation-status-filter').value = 'all';
         if (qs('reservation-search')) qs('reservation-search').value = '';
         state.expandedDays.clear();
@@ -493,7 +538,9 @@
         const detailAction = event.target.closest('[data-open-reservation-details]');
         if (detailAction) return openDetails(detailAction.dataset.openReservationDetails);
         const open = event.target.closest('[data-reservation-id]');
-        if (open) return openDetails(open.dataset.reservationId);
+        if (open) return selectReservationPreview(open.dataset.reservationId).then(renderCalendar);
+        const seeMore = event.target.closest('[data-preview-see-more]');
+        if (seeMore) return openDetails(seeMore.dataset.previewSeeMore);
         const more = event.target.closest('[data-calendar-day-more]');
         if (more) {
             const key = more.dataset.calendarDayMore;
