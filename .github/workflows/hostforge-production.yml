@@ -104,6 +104,8 @@ jobs:
               --request POST \
               --header "Authorization: Bearer ${HOSTFORGE_TOKEN}" \
               --header "Accept: application/json" \
+              --header "Content-Type: application/json" \
+              --data '{"environment":"production"}' \
               --output "$response_file" \
               --write-out "%{http_code}" \
               "$endpoint"
