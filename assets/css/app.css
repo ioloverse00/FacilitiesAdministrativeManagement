@@ -14604,3 +14604,100 @@ body.facility-drawer-open {
     width: 100%;
   }
 }
+
+/* UAT flags 8-11: reservation/admin settings polish */
+.reservation-records-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.reservation-records-controls .reservation-search-field {
+    min-width: min(22rem, 100%);
+}
+
+.admin-primary-tabs {
+    margin-bottom: 1rem;
+}
+
+.reservation-details-compact .facility-details-modal-header h2 {
+    font-size: 1.15rem;
+    line-height: 1.25;
+}
+
+.reservation-details-compact .facility-details-modal-header small {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--color-on-surface-variant, #64748b);
+    font-size: 0.78rem;
+}
+
+.reservation-detail-matrix {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.reservation-detail-matrix > article {
+    border: 1px solid var(--color-outline-variant, #dbe3ef);
+    border-radius: 8px;
+    padding: 0.75rem;
+    background: var(--color-surface-container-lowest, #fff);
+}
+
+.reservation-detail-matrix span,
+.reservation-detail-matrix small {
+    display: block;
+    color: var(--color-on-surface-variant, #64748b);
+    font-size: 0.75rem;
+    line-height: 1.35;
+}
+
+.reservation-detail-matrix strong {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--color-on-surface, #111827);
+    font-size: 0.92rem;
+    line-height: 1.25;
+}
+
+.reservation-detail-ai {
+    grid-column: 1 / -1;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+}
+
+.reservation-detail-accordion.compact {
+    margin-top: 0.75rem;
+}
+
+.settings-room-image-panel {
+    align-items: flex-start;
+}
+
+.settings-image-actions {
+    margin-top: 0.65rem;
+}
+
+.settings-image-actions .facility-field {
+    margin-bottom: 0.5rem;
+}
+
+@media (max-width: 720px) {
+    .reservation-records-controls {
+        align-items: stretch;
+        justify-content: stretch;
+    }
+
+    .reservation-records-controls .reservation-search-field,
+    .reservation-records-controls .reservation-search-field input {
+        width: 100%;
+    }
+
+    .reservation-detail-matrix {
+        grid-template-columns: 1fr;
+    }
+}

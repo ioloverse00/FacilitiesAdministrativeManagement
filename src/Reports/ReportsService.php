@@ -135,19 +135,24 @@ final class ReportsService
         $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);
         $options->set('chroot', dirname(__DIR__, 2));
-        $makePdf = function (bool $includeLogo) use ($options, $report, $filters, $data, $user): Dompdf {
+        $logoPath = $this->pdfLogoUri();
+        $makePdf = function (?string $logoPath) use ($options, $report, $filters, $data, $user): Dompdf {
             $dompdf = new Dompdf($options);
-            $dompdf->setPaper('A4', 'portrait');
-            $dompdf->loadHtml($this->pdfHtml($report, $filters, $data, $user, $includeLogo));
+            $dompdf->setPaper('A4', $report === 'facility_reservations' ? 'landscape' : 'portrait');
+            $dompdf->loadHtml($this->pdfHtml($report, $filters, $data, $user, $logoPath));
             $dompdf->render();
             $this->decoratePdfFooter($dompdf);
             return $dompdf;
         };
 
-        try {
-            $dompdf = $makePdf(true);
-        } catch (Throwable $exception) {
-            $dompdf = $makePdf(false);
+        if ($logoPath === null) {
+            $dompdf = $makePdf(null);
+        } else {
+            try {
+                $dompdf = $makePdf($logoPath);
+            } catch (Throwable) {
+                $dompdf = $makePdf(null);
+            }
         }
 
         return [
@@ -160,17 +165,18 @@ final class ReportsService
     {
         $canvas = $dompdf->getCanvas();
         $font = $dompdf->getFontMetrics()->getFont('Helvetica', 'normal');
+        $footerY = max(24, $canvas->get_height() - 32);
         $canvas->page_text(
             36,
-            810,
+            $footerY,
             'CONFIDENTIAL - FOR INTERNAL USE ONLY',
             $font,
             7.5,
             [0.35, 0.35, 0.35]
         );
         $canvas->page_text(
-            470,
-            810,
+            max(36, $canvas->get_width() - 125),
+            $footerY,
             'Page {PAGE_NUM} of {PAGE_COUNT}',
             $font,
             7.5,
@@ -178,7 +184,7 @@ final class ReportsService
         );
     }
 
-    private function pdfLogoPath(): ?string
+    private function pdfLogoUri(): ?string
     {
         $logoPath = dirname(__DIR__, 2)
             . DIRECTORY_SEPARATOR . 'assets'
@@ -187,7 +193,8 @@ final class ReportsService
         if ($realPath === false || @getimagesize($realPath) === false) {
             return null;
         }
-        return $realPath;
+        $normalized = str_replace(DIRECTORY_SEPARATOR, '/', $realPath);
+        return 'file://' . (str_starts_with($normalized, '/') ? '' : '/') . $normalized;
     }
 
     private function reportGeneratedBy(array $user): string
@@ -345,7 +352,7 @@ final class ReportsService
 
     private function reservationSelectSql(array $where): string
     {
-        return "SELECT r.reservation_number, r.reservation_type, r.purpose, r.expected_attendees, r.start_datetime, r.end_datetime, r.status, r.approval_status, r.created_at, fs.space_name, b.building_name, e.full_name requester_name, d.department_name
+        return "SELECT r.reservation_number, r.reservation_type, r.purpose, r.expected_attendees, r.start_datetime, r.end_datetime, r.status, r.approval_status, r.created_at, fs.space_name, fs.capacity, fs.capacity_unit, b.building_name, e.full_name requester_name, d.department_name
             FROM facility_reservation r
             INNER JOIN facility_space fs ON fs.facility_space_id = r.facility_space_id
             LEFT JOIN building b ON b.building_id = fs.building_id
@@ -356,7 +363,7 @@ final class ReportsService
 
     private function reservationColumns(): array
     {
-        return ['Reservation No.', 'Facility', 'Building', 'Requester', 'Department', 'Type', 'Purpose', 'Attendees', 'Start', 'End', 'Status', 'Approval', 'Created'];
+        return ['Reservation No.', 'Facility', 'Capacity', 'Building', 'Requester', 'Department', 'Type', 'Purpose', 'Expected Attendees', 'Start', 'End', 'Status', 'Approval', 'Created'];
     }
 
     private function shapeReservationRow(array $row): array
@@ -364,6 +371,7 @@ final class ReportsService
         return [
             $row['reservation_number'],
             $row['space_name'],
+            $this->facilityCapacityLabel($row),
             $row['building_name'] ?: 'Unassigned',
             $row['requester_name'] ?: 'Unassigned',
             $row['department_name'] ?: 'Unassigned',
@@ -376,6 +384,21 @@ final class ReportsService
             $this->statusLabel($row['approval_status']),
             $this->reportDateTime($row['created_at']),
         ];
+    }
+
+    private function facilityCapacityLabel(array $row): string
+    {
+        $capacity = $row['capacity'] ?? null;
+        if ($capacity === null || $capacity === '') {
+            return 'Not specified';
+        }
+        $unit = strtoupper(trim((string) ($row['capacity_unit'] ?? '')));
+        $unitLabel = match ($unit) {
+            'PAX' => 'pax',
+            'VEHICLES' => 'vehicles',
+            default => $unit !== '' ? strtolower(str_replace('_', ' ', $unit)) : 'units',
+        };
+        return trim((string) $capacity) . ' ' . $unitLabel;
     }
 
     private function streamFacilityReservationsCsv(array $filters, mixed $handle): void
@@ -1093,7 +1116,7 @@ final class ReportsService
         ];
     }
 
-    private function pdfHtml(string $report, array $filters, array $data, array $user, bool $includeLogo = true): string
+    private function pdfHtml(string $report, array $filters, array $data, array $user, ?string $logoSrc): string
     {
         $columns = $data['columns'];
         $rows = $data['rows'];
@@ -1104,7 +1127,6 @@ final class ReportsService
         $generatedBy = $this->reportGeneratedBy($user);
         $totalRecords = count($rows);
 
-        $logoSrc = $includeLogo ? $this->pdfLogoPath() : null;
         $logoHtml = $logoSrc !== null
             ? '<img src="' . $this->html($logoSrc) . '" alt="Great Solomon Manpower Services">'
             : '<div class="logo-fallback">GREAT SOLOMON MANPOWER SERVICES INC.</div>';
@@ -1490,7 +1512,7 @@ final class ReportsService
     private function pdfColumnWidths(string $report, array $columns): array
     {
         return match ($report) {
-            'facility_reservations' => ['8%', '10%', '8%', '9%', '8%', '7%', '14%', '6%', '8%', '8%', '6%', '6%', '6%'],
+            'facility_reservations' => ['7%', '10%', '7%', '8%', '8%', '8%', '6%', '12%', '6%', '7%', '7%', '5%', '5%', '4%'],
             'legal_management' => ['9%', '17%', '10%', '10%', '10%', '8%', '8%', '9%', '9%', '10%'],
             default => [],
         };

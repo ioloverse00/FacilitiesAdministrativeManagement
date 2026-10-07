@@ -51,13 +51,7 @@
                                         <option value="">Loading facilities...</option>
                                     </select>
                                 </label>
-                                <div class="reservation-toolbar-controls">
-                                    <label class="facility-field facility-search-field reservation-search-field">
-                                        <span class="sr-only">Search reservations</span>
-                                        <input id="reservation-search" type="search" placeholder="Search reservations...">
-                                    </label>
-                                    <button id="reservation-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
-                                </div>
+
                             </div>
                             <div class="reservation-status-legend" aria-label="Reservation status legend">
                                 <span><i class="reservation-legend-dot reservation-legend-submitted"></i>Submitted</span>
@@ -115,7 +109,14 @@
                                     <h2 id="reservation-records-title">Reservation Records</h2>
                                     <p class="fam-muted">Complete reservation register across all dates.</p>
                                 </div>
-                                <span id="reservation-table-count" class="facility-table-count">No reservation records</span>
+                                <div class="reservation-records-controls">
+                                    <label class="facility-field facility-search-field reservation-search-field">
+                                        <span class="sr-only">Search reservation records</span>
+                                        <input id="reservation-search" type="search" placeholder="Search reservation records...">
+                                    </label>
+                                    <button id="reservation-reset-filters" class="facility-text-button hidden" type="button">Reset Filters</button>
+                                    <span id="reservation-table-count" class="facility-table-count">No reservation records</span>
+                                </div>
                             </div>
                             <div class="facility-table-card">
                                 <div id="reservation-loading-state" class="fam-state hidden" aria-live="polite" role="status">

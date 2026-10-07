@@ -127,7 +127,7 @@
         const nav = qs('#admin-category-nav');
         const select = qs('#admin-category-select');
         if (!nav || !select) return;
-        nav.innerHTML = modules.map(([key, label, icon]) => `<button class="${state.active === key ? 'active' : ''}" type="button" data-admin-section="${esc(key)}"><span class="material-symbols-outlined" aria-hidden="true">${esc(icon)}</span>${esc(label)}</button>`).join('');
+        nav.innerHTML = modules.map(([key, label]) => `<button class="facility-tab ${state.active === key ? 'is-active' : ''}" type="button" role="tab" aria-selected="${state.active === key}" data-admin-section="${esc(key)}">${esc(label)}</button>`).join('');
         select.innerHTML = modules.map(([key, label]) => `<option value="${esc(key)}" ${state.active === key ? 'selected' : ''}>${esc(label)}</option>`).join('');
     }
 
@@ -169,14 +169,9 @@
     }
 
     function facilitiesPanel() {
-        const tabs = [
-            ['spaces', 'Facilities'],
-        ];
         const body = state.facilities.loading ? stateBlock('Loading Facilities settings...', 'progress_activity') :
             state.facilities.error ? stateBlock(state.facilities.error, 'error') : spacesPanel();
-        return `${sectionHeader('Facilities', 'Maintain facility master records used by facility reservations.')}
-            <nav class="reports-tabs" aria-label="Facilities settings sections">${tabs.map(([key, label]) => `<button class="${state.facilities.section === key ? 'active' : ''}" type="button" data-facilities-section="${esc(key)}">${esc(label)}</button>`).join('')}</nav>
-            ${body}`;
+        return `${sectionHeader('Facilities', 'Maintain facility master records used by facility reservations.')}${body}`;
     }
 
     function spacesPanel() {
@@ -191,7 +186,7 @@
         const tableRows = rows.map(space => `<tr>
             <td><button class="document-primary-cell legal-primary-cell" type="button" data-facilities-action="edit-space" data-space-id="${esc(space.id)}"><span class="material-symbols-outlined document-file-icon" aria-hidden="true">meeting_room</span><span><strong>${esc(space.name)}</strong><small>${esc(space.code)}</small></span></button></td>
             <td>${esc(space.buildingName || 'Not assigned')}</td>
-            <td>${esc(title(space.type))}</td>
+            <td>${esc(spaceTypeLabel(space.type))}</td>
             <td>${esc(capacityLabel(space))}</td>
             <td>${space.reservable ? 'Yes' : 'No'}</td>
             <td>${space.hasImage ? 'Uploaded' : 'No image'}</td>
@@ -230,13 +225,37 @@
     }
 
     function capacityUnitOptions(selected = 'PAX') {
-        return (state.facilities.data.capacityUnits || ['PAX', 'VEHICLES']).map(value => ({ value, label: value === 'PAX' ? 'Pax' : title(value), selected }));
+        return (state.facilities.data.capacityUnits || ['PAX', 'VEHICLES']).map(value => ({ value, label: capacityUnitLabel(value), selected }));
+    }
+
+    function capacityUnitLabel(value) {
+        return String(value || '').toUpperCase() === 'PAX' ? 'Pax' : title(value);
+    }
+
+    function spaceTypeLabel(value) {
+        const raw = String(value || '').toUpperCase();
+        const labels = {
+            MEETING_ROOM: 'Meeting Room',
+            TRAINING_ROOM: 'Training Room',
+            CONFERENCE_ROOM: 'Conference Room',
+            EVENT_SPACE: 'Event Space',
+            PARKING_AREA: 'Parking Area',
+            MAIN_PARKING_AREA: 'Main Parking Area',
+            PARKING: 'Parking Area',
+        };
+        return labels[raw] || title(raw || 'Facility');
+    }
+
+    function spaceTypeOptions(selected = '') {
+        const configured = state.facilities.data.spaceTypes || ['MEETING_ROOM', 'TRAINING_ROOM', 'CONFERENCE_ROOM', 'EVENT_SPACE', 'MAIN_PARKING_AREA'];
+        const values = Array.from(new Set([selected, ...configured].filter(Boolean)));
+        return values.map(value => ({ value, label: spaceTypeLabel(value), selected }));
     }
 
     function capacityLabel(space) {
         if (space.capacityLabel) return space.capacityLabel;
         if (space.capacity === null || space.capacity === undefined || space.capacity === '') return 'Not set';
-        return `${space.capacity} ${String(space.capacityUnit || 'PAX').toLowerCase()}`;
+        return `${space.capacity} ${capacityUnitLabel(space.capacityUnit || 'PAX').toLowerCase()}`;
     }
 
     function openDialog(html) {
@@ -273,8 +292,8 @@
         const media = imageUrl
             ? `<img src="${esc(imageUrl)}" alt="${esc(space.name || 'Facility image')}" loading="lazy">`
             : (window.FAMFacilityImages?.placeholderHtml?.(space, 'No image yet') || '<div class="facility-image-placeholder"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><span>No image yet</span></div>');
-        const imagePanel = space.id ? `<section class="document-form-section"><h3>Primary Image</h3><div class="reservation-room-image-panel">${media}<div><strong>${esc(space.name || 'Facility')}</strong><small>${space.hasImage ? esc([space.imageFileName, fileSize(space.imageFileSize), space.imageUploadedAt ? `Uploaded ${fmt(space.imageUploadedAt)}` : ''].filter(Boolean).join(' - ')) : 'No facility image uploaded yet.'}</small>${canManageRoomImages() ? `<div data-room-image-form data-space-id="${esc(space.id)}"><label class="facility-field"><span>Primary Facility Image</span><input name="room_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><small>JPEG, PNG, or WebP up to 5 MB.</small></label><div class="reservation-room-image-actions"><button class="btn-primary dashboard-action-button" type="button" data-upload-room-image>${space.hasImage ? 'Replace Image' : 'Upload Image'}</button>${space.hasImage ? `<button class="btn-secondary dashboard-action-button" type="button" data-remove-room-image="${esc(space.id)}">Remove Image</button>` : ''}</div></div>` : ''}</div></div></section>` : '';
-        openDialog(`<form class="facility-dialog-panel legal-form" data-settings-form="facility-space" data-id="${esc(space.id || '')}"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>${space.id ? 'Edit Facility' : 'Add Facility'}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-settings-error></div><section class="document-form-section"><div class="document-form-grid">${field('code', 'Code *', space.code || '', 'text', true)}${field('name', 'Name *', space.name || '', 'text', true)}${selectField('building_id', 'Building *', buildingOptions(space.buildingId), space.buildingId, true)}${field('space_type', 'Space Type *', space.type || '', 'text', true)}${field('floor', 'Floor', space.floor || '')}${field('capacity', 'Capacity', space.capacity ?? '', 'number')}${selectField('capacity_unit', 'Capacity Unit', capacityUnitOptions(space.capacityUnit || 'PAX'), space.capacityUnit || 'PAX')}${field('location', 'Location', space.location || '')}${selectField('reservable', 'Reservable', [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }], space.reservable ? '1' : '0')}${selectField('status', 'Status', statusOptions(space.status || 'ACTIVE'), space.status || 'ACTIVE')}</div></section>${imagePanel}</div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-settings-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Save Facility</button></div></form>`);
+        const imagePanel = space.id ? `<section class="document-form-section facility-image-section"><h3>Primary Image</h3><div class="reservation-room-image-panel settings-room-image-panel">${media}<div><strong>${esc(space.name || 'Facility')}</strong><small>${space.hasImage ? esc([space.imageFileName, fileSize(space.imageFileSize), space.imageUploadedAt ? `Uploaded ${fmt(space.imageUploadedAt)}` : ''].filter(Boolean).join(' - ')) : 'No facility image uploaded.'}</small>${canManageRoomImages() ? `<div data-room-image-form data-space-id="${esc(space.id)}" class="settings-image-actions"><label class="facility-field"><span>Image File</span><input name="room_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><small>JPEG, PNG, or WebP up to 5 MB.</small></label><div class="reservation-room-image-actions"><button class="btn-primary dashboard-action-button" type="button" data-upload-room-image>${space.hasImage ? 'Replace' : 'Upload'}</button>${space.hasImage ? `<button class="btn-secondary dashboard-action-button" type="button" data-remove-room-image="${esc(space.id)}">Remove</button>` : ''}</div></div>` : ''}</div></div></section>` : '';
+        openDialog(`<form class="facility-dialog-panel legal-form" data-settings-form="facility-space" data-id="${esc(space.id || '')}"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>${space.id ? 'Edit Facility' : 'Add Facility'}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-settings-error></div><section class="document-form-section"><div class="document-form-grid">${field('code', 'Code *', space.code || '', 'text', true)}${field('name', 'Name *', space.name || '', 'text', true)}${selectField('building_id', 'Building *', buildingOptions(space.buildingId), space.buildingId, true)}${selectField('space_type', 'Space Type *', spaceTypeOptions(space.type || 'MEETING_ROOM'), space.type || 'MEETING_ROOM', true)}${field('floor', 'Floor', space.floor || '')}${field('capacity', 'Capacity', space.capacity ?? '', 'number')}${selectField('capacity_unit', 'Capacity Unit', capacityUnitOptions(space.capacityUnit || 'PAX'), space.capacityUnit || 'PAX')}${field('location', 'Location', space.location || '')}${selectField('reservable', 'Reservable', [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }], space.reservable ? '1' : '0')}${selectField('status', 'Status', statusOptions(space.status || 'ACTIVE'), space.status || 'ACTIVE')}</div></section>${imagePanel}</div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-settings-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Save Facility</button></div></form>`);
     }
 
     async function submitFacilitiesForm(form) {

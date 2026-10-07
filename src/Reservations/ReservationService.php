@@ -641,9 +641,17 @@ final class ReservationService
     {
         $name = preg_replace('/[^A-Za-z0-9._ -]+/', '_', $name) ?? 'request-letter';
         $name = trim($name, " .\t\n\r\0\x0B");
-        return mb_substr($name === '' ? 'request-letter' : $name, 0, 180);
+        return $this->truncateFileName($name === '' ? 'request-letter' : $name, 180);
     }
 
+
+    private function truncateFileName(string $name, int $maxLength): string
+    {
+        if (function_exists('mb_substr')) {
+            return mb_substr($name, 0, $maxLength);
+        }
+        return substr($name, 0, $maxLength);
+    }
     private function assertTransition(string $current, string $next): void
     {
         $current = match ($current) {
