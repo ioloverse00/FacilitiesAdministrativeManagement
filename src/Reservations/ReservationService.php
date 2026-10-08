@@ -134,23 +134,48 @@ final class ReservationService
     public function uploadRoomImage(int $spaceId, array $file, array $user): array
     {
         ReservationPolicy::requireAnyPermission($user, ['reservations.manage','reservations.edit']);
-        $upload = $this->validateRoomImage($file);
-        $stored = $this->storeRoomImage($upload, $spaceId);
-        $previous = '';
-        $this->pdo->beginTransaction();
         try {
-            $room = $this->lockRoomForImage($spaceId);
+            $upload = $this->validateRoomImage($file, $spaceId);
+        } catch (Throwable $e) {
+            $this->logRoomImageUploadDiagnostic('upload_validation', $e, $spaceId, $file);
+            throw $e;
+        }
+        $stored = $this->storeRoomImage($upload, $spaceId, $file);
+        $previous = '';
+        try {
+            $this->pdo->beginTransaction();
+        } catch (Throwable $e) {
+            $this->logRoomImageUploadDiagnostic('database_transaction', $e, $spaceId, $file);
+            throw $e;
+        }
+        try {
+            try {
+                $room = $this->lockRoomForImage($spaceId);
+            } catch (Throwable $e) {
+                $this->logRoomImageUploadDiagnostic('database_transaction', $e, $spaceId, $file);
+                throw $e;
+            }
             if ($room === null) throw new InvalidArgumentException(json_encode(['facility_space_id'=>'Active reservable room is required.']));
             $previous = (string)($room['primary_image_storage_path'] ?? '');
-            $this->pdo->prepare("UPDATE facility_space SET primary_image_original_file_name=:original, primary_image_storage_path=:path, primary_image_mime_type=:mime, primary_image_file_size=:size, primary_image_uploaded_by_user_id=:user_id, primary_image_uploaded_at=NOW(), updated_at=NOW() WHERE facility_space_id=:id AND status='ACTIVE' AND is_reservable=1 AND deleted_at IS NULL")->execute([
-                'original'=>$upload['original_name'],
-                'path'=>$stored['relative_path'],
-                'mime'=>$upload['mime_type'],
-                'size'=>$upload['size'],
-                'user_id'=>(int)$user['id'],
-                'id'=>$spaceId,
-            ]);
-            $this->pdo->commit();
+            try {
+                $this->pdo->prepare("UPDATE facility_space SET primary_image_original_file_name=:original, primary_image_storage_path=:path, primary_image_mime_type=:mime, primary_image_file_size=:size, primary_image_uploaded_by_user_id=:user_id, primary_image_uploaded_at=NOW(), updated_at=NOW() WHERE facility_space_id=:id AND status='ACTIVE' AND is_reservable=1 AND deleted_at IS NULL")->execute([
+                    'original'=>$upload['original_name'],
+                    'path'=>$stored['relative_path'],
+                    'mime'=>$upload['mime_type'],
+                    'size'=>$upload['size'],
+                    'user_id'=>(int)$user['id'],
+                    'id'=>$spaceId,
+                ]);
+            } catch (Throwable $e) {
+                $this->logRoomImageUploadDiagnostic('facility_image_metadata_update', $e, $spaceId, $file);
+                throw $e;
+            }
+            try {
+                $this->pdo->commit();
+            } catch (Throwable $e) {
+                $this->logRoomImageUploadDiagnostic('database_transaction', $e, $spaceId, $file);
+                throw $e;
+            }
         } catch (Throwable $e) {
             $this->pdo->rollBack();
             if (is_file($stored['absolute_path'])) @unlink($stored['absolute_path']);
@@ -480,7 +505,7 @@ final class ReservationService
         return ['tmp_name'=>$tmp,'original_name'=>$this->safeFileName($original),'extension'=>$extension,'mime_type'=>$mime,'size'=>$size];
     }
 
-    private function validateRoomImage(array $file): array
+    private function validateRoomImage(array $file, int $spaceId): array
     {
         if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             throw new InvalidArgumentException(json_encode(['room_image'=>'Upload a room image.']));
@@ -495,7 +520,12 @@ final class ReservationService
             throw new InvalidArgumentException(json_encode(['room_image'=>'Upload a JPEG, PNG, or WebP image.']));
         }
         $tmp = (string)($file['tmp_name'] ?? '');
-        $mime = $tmp !== '' ? ((new finfo(FILEINFO_MIME_TYPE))->file($tmp) ?: '') : '';
+        try {
+            $mime = $tmp !== '' ? ((new finfo(FILEINFO_MIME_TYPE))->file($tmp) ?: '') : '';
+        } catch (Throwable $e) {
+            $this->logRoomImageUploadDiagnostic('mime_detection', $e, $spaceId, $file);
+            throw $e;
+        }
         if (!in_array($mime, self::ROOM_IMAGE_MIME, true)) {
             throw new InvalidArgumentException(json_encode(['room_image'=>'Room image file type is not supported.']));
         }
@@ -520,22 +550,70 @@ final class ReservationService
         return ['relative_path'=>$relativeDir . '/' . $storedName,'absolute_path'=>$absolutePath,'stored_name'=>$storedName,'hash'=>hash_file('sha256', $absolutePath) ?: ''];
     }
 
-    private function storeRoomImage(array $upload, int $spaceId): array
+    private function storeRoomImage(array $upload, int $spaceId, array $file): array
     {
         $relativeDir = 'facility-spaces/' . $spaceId . '/primary-image';
-        $absoluteDir = StoragePath::resolveWithin('facility-spaces', $relativeDir);
-        if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0775, true) && !is_dir($absoluteDir)) {
-            throw new RuntimeException('Unable to prepare room image storage.');
+        try {
+            $absoluteDir = StoragePath::resolveWithin('facility-spaces', $relativeDir);
+        } catch (Throwable $e) {
+            $this->logRoomImageUploadDiagnostic('storage_root_resolution', $e, $spaceId, $file);
+            throw $e;
+        }
+        try {
+            if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0775, true) && !is_dir($absoluteDir)) {
+                throw new RuntimeException('Unable to prepare room image storage.');
+            }
+        } catch (Throwable $e) {
+            $this->logRoomImageUploadDiagnostic('directory_creation', $e, $spaceId, $file, $absoluteDir);
+            throw $e;
         }
         $storedName = bin2hex(random_bytes(16)) . '.' . $upload['extension'];
         $absolutePath = $absoluteDir . DIRECTORY_SEPARATOR . $storedName;
-        $stored = is_uploaded_file($upload['tmp_name'])
-            ? move_uploaded_file($upload['tmp_name'], $absolutePath)
-            : (PHP_SAPI === 'cli' && copy($upload['tmp_name'], $absolutePath));
-        if (!$stored) {
-            throw new RuntimeException('Unable to store room image.');
+        try {
+            $stored = is_uploaded_file($upload['tmp_name'])
+                ? move_uploaded_file($upload['tmp_name'], $absolutePath)
+                : (PHP_SAPI === 'cli' && copy($upload['tmp_name'], $absolutePath));
+            if (!$stored) {
+                throw new RuntimeException('Unable to store room image.');
+            }
+        } catch (Throwable $e) {
+            $this->logRoomImageUploadDiagnostic('file_move', $e, $spaceId, $file, $absoluteDir);
+            throw $e;
         }
         return ['relative_path'=>$relativeDir . '/' . $storedName,'absolute_path'=>$absolutePath];
+    }
+
+    private function logRoomImageUploadDiagnostic(string $stage, Throwable $exception, int $spaceId, array $file, ?string $targetDir = null): void
+    {
+        try {
+            $payload = [
+                'event'=>'facility_primary_image_upload_failed',
+                'stage'=>$stage,
+                'exception_class'=>$exception::class,
+                'category'=>$this->roomImageUploadExceptionCategory($exception),
+                'space_id'=>$spaceId,
+                'upload_error_code'=>$file['error'] ?? null,
+                'extensions'=>[
+                    'fileinfo'=>class_exists('finfo'),
+                    'mbstring'=>extension_loaded('mbstring'),
+                ],
+                'target_dir_exists'=>$targetDir === null ? null : is_dir($targetDir),
+                'target_dir_writable'=>$targetDir === null ? null : is_writable($targetDir),
+            ];
+
+            error_log('Facility primary image diagnostic: ' . json_encode($payload, JSON_UNESCAPED_SLASHES));
+        } catch (Throwable) {
+        }
+    }
+
+    private function roomImageUploadExceptionCategory(Throwable $exception): string
+    {
+        if ($exception instanceof PDOException) return 'database';
+        if ($exception instanceof InvalidArgumentException) return 'validation';
+        if ($exception instanceof RuntimeException) return 'runtime';
+        if ($exception instanceof ErrorException) return 'php_warning';
+        if ($exception instanceof Error) return 'php_error';
+        return 'unexpected';
     }
 
     private function insertRequestLetter(int $reservationId, array $upload, array $stored, int $userId): void
