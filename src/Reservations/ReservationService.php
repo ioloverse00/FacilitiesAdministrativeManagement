@@ -165,10 +165,10 @@ final class ReservationService
                 $this->logRoomImageUploadDiagnostic('database_transaction', $e, $spaceId, $file);
                 throw $e;
             }
-            if ($room === null) throw new InvalidArgumentException(json_encode(['facility_space_id'=>'Active reservable room is required.']));
+            if ($room === null) throw new InvalidArgumentException(json_encode(['facility_space_id'=>'Active facility is required.']));
             $previous = (string)($room['primary_image_storage_path'] ?? '');
             try {
-                $this->pdo->prepare("UPDATE facility_space SET primary_image_original_file_name=:original, primary_image_storage_path=:path, primary_image_mime_type=:mime, primary_image_file_size=:size, primary_image_uploaded_by_user_id=:user_id, primary_image_uploaded_at=NOW(), updated_at=NOW() WHERE facility_space_id=:id AND status='ACTIVE' AND is_reservable=1 AND deleted_at IS NULL")->execute([
+                $this->pdo->prepare("UPDATE facility_space SET primary_image_original_file_name=:original, primary_image_storage_path=:path, primary_image_mime_type=:mime, primary_image_file_size=:size, primary_image_uploaded_by_user_id=:user_id, primary_image_uploaded_at=NOW(), updated_at=NOW() WHERE facility_space_id=:id AND status='ACTIVE' AND deleted_at IS NULL")->execute([
                     'original'=>$upload['original_name'],
                     'path'=>$stored['relative_path'],
                     'mime'=>$upload['mime_type'],
@@ -202,9 +202,9 @@ final class ReservationService
         $this->pdo->beginTransaction();
         try {
             $room = $this->lockRoomForImage($spaceId);
-            if ($room === null) throw new InvalidArgumentException(json_encode(['facility_space_id'=>'Active reservable room is required.']));
+            if ($room === null) throw new InvalidArgumentException(json_encode(['facility_space_id'=>'Active facility is required.']));
             $previous = (string)($room['primary_image_storage_path'] ?? '');
-            $this->pdo->prepare("UPDATE facility_space SET primary_image_original_file_name=NULL, primary_image_storage_path=NULL, primary_image_mime_type=NULL, primary_image_file_size=NULL, primary_image_uploaded_by_user_id=NULL, primary_image_uploaded_at=NULL, updated_at=NOW() WHERE facility_space_id=:id")->execute(['id'=>$spaceId]);
+            $this->pdo->prepare("UPDATE facility_space SET primary_image_original_file_name=NULL, primary_image_storage_path=NULL, primary_image_mime_type=NULL, primary_image_file_size=NULL, primary_image_uploaded_by_user_id=NULL, primary_image_uploaded_at=NULL, updated_at=NOW() WHERE facility_space_id=:id AND status='ACTIVE' AND deleted_at IS NULL")->execute(['id'=>$spaceId]);
             $this->pdo->commit();
         } catch (Throwable $e) {
             $this->pdo->rollBack();
@@ -518,11 +518,11 @@ final class ReservationService
     private function validateRoomImage(array $file, int $spaceId): array
     {
         if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            throw new InvalidArgumentException(json_encode(['room_image'=>'Upload a room image.']));
+            throw new InvalidArgumentException(json_encode(['room_image'=>'Upload a facility image.']));
         }
         $size = (int)($file['size'] ?? 0);
         if ($size <= 0 || $size > self::ROOM_IMAGE_MAX_SIZE) {
-            throw new InvalidArgumentException(json_encode(['room_image'=>'Room image must be 5 MB or smaller.']));
+            throw new InvalidArgumentException(json_encode(['room_image'=>'Facility image must be 5 MB or smaller.']));
         }
         $original = basename((string)($file['name'] ?? 'room-image'));
         $extension = strtolower(pathinfo($original, PATHINFO_EXTENSION));
@@ -537,7 +537,7 @@ final class ReservationService
             throw $e;
         }
         if (!in_array($mime, self::ROOM_IMAGE_MIME, true)) {
-            throw new InvalidArgumentException(json_encode(['room_image'=>'Room image file type is not supported.']));
+            throw new InvalidArgumentException(json_encode(['room_image'=>'Facility image file type is not supported.']));
         }
         return ['tmp_name'=>$tmp,'original_name'=>$this->safeFileName($original),'extension'=>$extension,'mime_type'=>$mime,'size'=>$size];
     }
@@ -571,7 +571,7 @@ final class ReservationService
         }
         try {
             if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0775, true) && !is_dir($absoluteDir)) {
-                throw new RuntimeException('Unable to prepare room image storage.');
+                throw new RuntimeException('Unable to prepare facility image storage.');
             }
         } catch (Throwable $e) {
             $this->logRoomImageUploadDiagnostic('directory_creation', $e, $spaceId, $file, $absoluteDir);
@@ -584,7 +584,7 @@ final class ReservationService
                 ? move_uploaded_file($upload['tmp_name'], $absolutePath)
                 : (PHP_SAPI === 'cli' && copy($upload['tmp_name'], $absolutePath));
             if (!$stored) {
-                throw new RuntimeException('Unable to store room image.');
+                throw new RuntimeException('Unable to store facility image.');
             }
         } catch (Throwable $e) {
             $this->logRoomImageUploadDiagnostic('file_move', $e, $spaceId, $file, $absoluteDir);
@@ -701,7 +701,7 @@ final class ReservationService
 
     private function lockRoomForImage(int $spaceId): ?array
     {
-        $stmt = $this->pdo->prepare("SELECT * FROM facility_space WHERE facility_space_id=:id AND status='ACTIVE' AND is_reservable=1 AND deleted_at IS NULL FOR UPDATE");
+        $stmt = $this->pdo->prepare("SELECT * FROM facility_space WHERE facility_space_id=:id AND status='ACTIVE' AND deleted_at IS NULL FOR UPDATE");
         $stmt->execute(['id'=>$spaceId]);
         $row = $stmt->fetch();
         return is_array($row) ? $row : null;

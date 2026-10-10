@@ -28,7 +28,7 @@ if ($method === 'GET') {
 
     $file = $service->roomImageFile($spaceId);
     if ($file === null) {
-        jsonResponse(false, 'Room image not found.', [], 404);
+        jsonResponse(false, 'Facility image not found.', [], 404);
     }
 
     header('Content-Type: ' . $file['mime_type']);
@@ -43,7 +43,7 @@ if ($method === 'POST') {
     requireCsrfToken();
     try {
         $room = $service->uploadRoomImage($spaceId, $_FILES['room_image'] ?? [], $user);
-        jsonResponse(true, 'Room image saved.', ['room' => $room]);
+        jsonResponse(true, 'Facility image saved.', ['room' => $room]);
     } catch (Throwable $e) {
         validationResponse($e);
     }
@@ -53,7 +53,7 @@ if ($method === 'DELETE') {
     requireCsrfToken();
     try {
         $room = $service->removeRoomImage($spaceId, $user);
-        jsonResponse(true, 'Room image removed.', ['room' => $room]);
+        jsonResponse(true, 'Facility image removed.', ['room' => $room]);
     } catch (Throwable $e) {
         validationResponse($e);
     }

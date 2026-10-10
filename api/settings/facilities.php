@@ -32,6 +32,19 @@ function settingsFacilitiesCapacityUnits(): array
     return ['PAX', 'VEHICLES'];
 }
 
+function settingsFacilitiesSpaceTypes(): array
+{
+    return [
+        'MEETING_ROOM',
+        'CONFERENCE_ROOM',
+        'TRAINING_FACILITY',
+        'MULTIPURPOSE_FACILITY',
+        'INTERVIEW_ROOM',
+        'PARKING_AREA',
+        'OPEN_AREA',
+    ];
+}
+
 function settingsFacilitiesPriorities(): array
 {
     return ['LOW', 'NORMAL', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -93,6 +106,7 @@ function settingsFacilitiesList(array $user): array
         }, $spaces),
         'statuses' => settingsFacilitiesStatuses(),
         'capacityUnits' => settingsFacilitiesCapacityUnits(),
+        'spaceTypes' => settingsFacilitiesSpaceTypes(),
         'priorities' => settingsFacilitiesPriorities(),
         'canManageReservations' => settingsFacilitiesCan($user, 'reservations.manage'),
         'canManageRoomImages' => settingsFacilitiesCan($user, 'reservations.manage') || settingsFacilitiesCan($user, 'reservations.edit'),

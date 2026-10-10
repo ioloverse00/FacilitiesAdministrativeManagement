@@ -236,18 +236,22 @@
         const raw = String(value || '').toUpperCase();
         const labels = {
             MEETING_ROOM: 'Meeting Room',
+            TRAINING_FACILITY: 'Training Facility',
             TRAINING_ROOM: 'Training Room',
             CONFERENCE_ROOM: 'Conference Room',
             EVENT_SPACE: 'Event Space',
+            MULTIPURPOSE_FACILITY: 'Multipurpose Facility',
+            INTERVIEW_ROOM: 'Interview Room',
             PARKING_AREA: 'Parking Area',
             MAIN_PARKING_AREA: 'Main Parking Area',
+            OPEN_AREA: 'Open Area',
             PARKING: 'Parking Area',
         };
         return labels[raw] || title(raw || 'Facility');
     }
 
     function spaceTypeOptions(selected = '') {
-        const configured = state.facilities.data.spaceTypes || ['MEETING_ROOM', 'TRAINING_ROOM', 'CONFERENCE_ROOM', 'EVENT_SPACE', 'MAIN_PARKING_AREA'];
+        const configured = state.facilities.data.spaceTypes || ['MEETING_ROOM', 'CONFERENCE_ROOM', 'TRAINING_FACILITY', 'MULTIPURPOSE_FACILITY', 'INTERVIEW_ROOM', 'PARKING_AREA', 'OPEN_AREA'];
         const values = Array.from(new Set([selected, ...configured].filter(Boolean)));
         return values.map(value => ({ value, label: spaceTypeLabel(value), selected }));
     }
