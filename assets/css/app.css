@@ -10853,10 +10853,29 @@ body[data-active-nav="employee-request-room"] .employee-reservation-workspace {
   margin: 0;
   color: var(--text, #111827);
 }
+.reservation-preview-ai-summary {
+  display: grid;
+  gap: 0.45rem;
+}
+.reservation-preview-ai-label {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  color: var(--text-muted, #64748b);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.reservation-preview-ai-label .material-symbols-outlined {
+  color: var(--primary, #2563eb);
+  font-size: 1rem;
+}
 .reservation-preview-summary {
   padding: 0.75rem;
   border-radius: 0.55rem;
   background: var(--surface-container, #f8fafc);
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 .reservation-preview-actions {
   display: flex;
@@ -14571,14 +14590,64 @@ body.facility-drawer-open {
   min-height: 100%;
   aspect-ratio: auto;
 }
-.reservation-preview-empty {
+.reservation-selected-facility-media .reservation-facility-image-empty {
+  display: grid;
   width: 100%;
-  min-height: 100% !important;
-  justify-content: center;
+  height: 100%;
+  min-height: 13rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.4rem;
+  padding: 1.25rem;
+  color: var(--text-muted, #64748b);
+  background: var(--surface-container, #f8fafc);
   text-align: center;
 }
-.reservation-preview-empty .material-symbols-outlined {
-  font-size: 2.25rem;
+.reservation-facility-image-icon {
+  display: inline-grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  margin-bottom: 0.25rem;
+  place-items: center;
+  border: 1px solid var(--outline-variant, #d6dbe6);
+  border-radius: 0.85rem;
+  color: var(--primary, #2563eb);
+  background: var(--surface, #ffffff);
+  font-size: 2rem;
+}
+.reservation-facility-image-empty strong {
+  color: var(--text, #111827);
+  font-size: 0.98rem;
+}
+.reservation-facility-image-empty span:last-child {
+  font-size: 0.86rem;
+}
+.reservation-preview-empty {
+  display: grid !important;
+  width: 100%;
+  min-height: 11rem !important;
+  place-items: center;
+  align-content: center;
+  gap: 0.45rem;
+  padding: 1.35rem;
+  text-align: center;
+}
+.reservation-preview-empty .reservation-preview-empty-icon {
+  display: inline-grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 0.8rem;
+  color: var(--primary, #2563eb);
+  background: var(--surface-container, #f8fafc);
+  font-size: 1.9rem;
+}
+.reservation-preview-empty strong {
+  color: var(--text, #111827);
+}
+.reservation-preview-empty span:last-child {
+  max-width: 18rem;
+  line-height: 1.45;
 }
 .reservation-legend-rejected { background: #dc2626; }
 .reservation-event-submitted {

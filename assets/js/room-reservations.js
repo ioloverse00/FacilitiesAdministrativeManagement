@@ -125,6 +125,13 @@
         return facilities()[state.facilityIndex] || null;
     }
 
+    function reservationFacilityMediaHtml(facility) {
+        const image = facility.image || facility.roomImage || {};
+        const url = window.FAMFacilityImages?.imageUrl?.(image) || '';
+        if (url) return `<img src="${esc(url)}" alt="${esc(facility.name || 'Facility image')}" loading="lazy">`;
+        return '<div class="reservation-facility-image-empty" data-facility-image-placeholder><span class="reservation-facility-image-icon material-symbols-outlined" aria-hidden="true">domain</span><strong>Facility Preview</strong><span>Photo not yet available</span></div>';
+    }
+
     function renderSelectedFacility() {
         const panel = qs('reservation-selected-facility');
         if (!panel) return;
@@ -145,7 +152,7 @@
         ];
         const position = `${state.facilityIndex + 1} / ${items.length}`;
         const disabled = items.length <= 1 ? ' disabled' : '';
-        panel.innerHTML = `<div class="reservation-facility-carousel"><div class="reservation-facility-carousel-header"><div class="reservation-facility-carousel-title"><span>Facility</span><strong title="${esc(facility.name || facility.code || 'Facility')}">${esc(facility.name || facility.code || 'Facility')}</strong></div><div class="reservation-facility-carousel-controls" aria-label="Facility selector"><button class="fam-icon-button" type="button" data-facility-carousel="prev" aria-label="Previous facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button><span class="reservation-facility-position" aria-live="polite">${esc(position)}</span><button class="fam-icon-button" type="button" data-facility-carousel="next" aria-label="Next facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button></div></div><div class="reservation-selected-facility-card"><div class="reservation-selected-facility-media">${window.FAMFacilityImages?.mediaHtml?.(facility, { alt: facility.name || 'Facility image' }) || ''}</div><div class="reservation-side-panel-body"><span class="facility-badge facility-status-approved">${esc(stateLabel)}</span><h3>${esc(facility.name || facility.code || 'Facility')}</h3><dl class="reservation-preview-list">${details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value || 'Not specified')}</dd></div>`).join('')}</dl></div></div></div>`;
+        panel.innerHTML = `<div class="reservation-facility-carousel"><div class="reservation-facility-carousel-header"><div class="reservation-facility-carousel-title"><span>Facility</span><strong title="${esc(facility.name || facility.code || 'Facility')}">${esc(facility.name || facility.code || 'Facility')}</strong></div><div class="reservation-facility-carousel-controls" aria-label="Facility selector"><button class="fam-icon-button" type="button" data-facility-carousel="prev" aria-label="Previous facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button><span class="reservation-facility-position" aria-live="polite">${esc(position)}</span><button class="fam-icon-button" type="button" data-facility-carousel="next" aria-label="Next facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button></div></div><div class="reservation-selected-facility-card"><div class="reservation-selected-facility-media">${reservationFacilityMediaHtml(facility)}</div><div class="reservation-side-panel-body"><span class="facility-badge facility-status-approved">${esc(stateLabel)}</span><h3>${esc(facility.name || facility.code || 'Facility')}</h3><dl class="reservation-preview-list">${details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value || 'Not specified')}</dd></div>`).join('')}</dl></div></div></div>`;
     }
 
     async function selectFacilityByOffset(offset) {
@@ -168,11 +175,11 @@
         const panel = qs('reservation-preview-panel');
         if (!panel) return;
         if (!item) {
-            panel.innerHTML = '<div class="fam-state reservation-preview-empty"><span class="material-symbols-outlined" aria-hidden="true">event_note</span><strong>Select a reservation</strong><span>Choose an event from the calendar to view its details.</span></div>';
+            panel.innerHTML = '<div class="fam-state reservation-preview-empty"><span class="reservation-preview-empty-icon material-symbols-outlined" aria-hidden="true">event_note</span><strong>No Reservation Selected</strong><span>Select a reservation from the calendar to view its summary.</span></div>';
             return;
         }
         const summary = aiSummary(item);
-        panel.innerHTML = `<div class="reservation-side-panel-body"><div class="reservation-preview-heading"><div><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h3>${esc(item.purpose || 'Reservation')}</h3></div>${badge(item.status)}</div><p class="reservation-preview-summary">${summary}</p><div class="reservation-preview-actions"><button class="btn-primary dashboard-action-button" type="button" data-preview-see-more="${esc(item.id)}">See More</button></div></div>`;
+        panel.innerHTML = `<div class="reservation-side-panel-body"><div class="reservation-preview-heading"><div><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h3>${esc(item.purpose || 'Reservation')}</h3></div>${badge(item.status)}</div><div class="reservation-preview-ai-summary"><span class="reservation-preview-ai-label"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>AI Summary</span><p class="reservation-preview-summary">${summary}</p></div><div class="reservation-preview-actions"><button class="btn-primary dashboard-action-button" type="button" data-preview-see-more="${esc(item.id)}">See More</button></div></div>`;
     }
 
     async function selectReservationPreview(id) {
