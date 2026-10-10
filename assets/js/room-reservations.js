@@ -103,7 +103,8 @@
     function populateFilters() {
         qs('reservation-room-filter').innerHTML = (state.options.facility_spaces || []).map(x => `<option value="${esc(x.id)}">${esc(x.name || x.code || 'Facility')}</option>`).join('');
         qs('reservation-room-filter').value = state.room;
-        qs('reservation-status-filter').innerHTML = '<option value="all">All statuses</option>' + (state.options.statuses || []).map(x => `<option value="${esc(x)}">${esc(title(x))}</option>`).join('');
+        const calendarStatuses = (state.options.statuses || []).filter(status => String(status).toUpperCase() !== 'REJECTED');
+        qs('reservation-status-filter').innerHTML = '<option value="all">All statuses</option>' + calendarStatuses.map(x => `<option value="${esc(x)}">${esc(title(x))}</option>`).join('');
     }
 
     function selectedFacility() {
@@ -238,7 +239,7 @@
         const today = ordered.filter(item => sameDay(toDate(item.start), now)).slice(0, 5);
         const upcoming = ordered.filter(item => (toDate(item.start) || 0) >= now).slice(0, 5);
         const pending = ordered.filter(item => `${item.approval || ''} ${item.status || ''}`.toLowerCase().match(/pending|submit/)).slice(0, 5);
-        const recent = [...ordered].reverse().filter(item => `${item.approval || ''} ${item.status || ''}`.toLowerCase().match(/reject|cancel/)).slice(0, 5);
+        const recent = [...ordered].reverse().filter(item => `${item.approval || ''} ${item.status || ''}`.toLowerCase().match(/cancel/)).slice(0, 5);
         const todayList = qs('reservation-today-list');
         const upcomingList = qs('reservation-upcoming-list');
         const pendingList = qs('reservation-pending-list');
@@ -246,7 +247,7 @@
         if (todayList) todayList.innerHTML = today.length ? today.map(focusRow).join('') : '<p>No reservations scheduled for today.</p>';
         if (upcomingList) upcomingList.innerHTML = upcoming.length ? upcoming.map(focusRow).join('') : '<p>No upcoming reservations in this period.</p>';
         if (pendingList) pendingList.innerHTML = pending.length ? pending.map(focusRow).join('') : '<p>No reservations pending approval.</p>';
-        if (recentList) recentList.innerHTML = recent.length ? recent.map(focusRow).join('') : '<p>No rejected or cancelled reservations in this period.</p>';
+        if (recentList) recentList.innerHTML = recent.length ? recent.map(focusRow).join('') : '<p>No cancelled reservations in this period.</p>';
     }
 
     function renderList() {

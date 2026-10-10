@@ -84,8 +84,18 @@ final class ReservationService
 
     public function calendar(array $query): array
     {
-        $result = $this->list(array_merge($query, ['per_page'=>1000,'sort'=>'start_datetime','direction'=>'asc']), 1000);
-        return ['items'=>$result['items'], 'pagination'=>$result['pagination']];
+        $query['sort'] = 'start_datetime';
+        $query['direction'] = 'asc';
+        [$where, $params] = $this->filters($query);
+        $where .= " AND r.status <> 'REJECTED' AND r.approval_status <> 'REJECTED'";
+        $statement = $this->pdo->prepare($this->baseSelect() . ' ' . $where . ' ORDER BY r.start_datetime ASC');
+        foreach ($params as $key => $value) {
+            $statement->bindValue($key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+        $statement->execute();
+        $items = array_map(fn($row) => $this->shape($row), $statement->fetchAll());
+
+        return ['items'=>$items, 'pagination'=>['page'=>1,'per_page'=>count($items),'total'=>count($items),'total_pages'=>1]];
     }
 
     public function options(): array
