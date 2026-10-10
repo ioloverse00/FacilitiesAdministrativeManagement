@@ -40,6 +40,11 @@ final class MailService
             throw new RuntimeException('Verification email is not configured.');
         }
 
+        if ($this->usesMailtrapSandboxApi()) {
+            $this->sendViaMailtrapSandboxApi($email, $subject, $body);
+            return;
+        }
+
         $autoload = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
         if (is_file($autoload)) {
             require_once $autoload;
@@ -94,6 +99,165 @@ final class MailService
         $timeout = (int) env('SMTP_TIMEOUT_SECONDS', env('MAIL_TIMEOUT_SECONDS', 10));
 
         return max(1, min(60, $timeout));
+    }
+
+    private function sendViaMailtrapSandboxApi(string $email, string $subject, string $body): void
+    {
+        if (!function_exists('curl_init')) {
+            error_log('Mailtrap Sandbox API delivery failed: ' . json_encode([
+                'category' => 'configuration_failure',
+                'message' => 'PHP cURL extension is unavailable.',
+                'transport' => 'mailtrap_sandbox_api',
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            throw new RuntimeException('Verification email is not configured.');
+        }
+
+        $token = trim((string) env('MAILTRAP_API_TOKEN', ''));
+        $inboxId = trim((string) env('MAILTRAP_SANDBOX_INBOX_ID', env('MAILTRAP_INBOX_ID', '')));
+        $from = trim((string) env('MAILTRAP_FROM_ADDRESS', env('SMTP_FROM_ADDRESS', env('MAIL_FROM_ADDRESS', ''))));
+        $fromName = trim((string) env('MAILTRAP_FROM_NAME', env('SMTP_FROM_NAME', env('MAIL_FROM_NAME', 'FAM Security'))));
+
+        if ($token === '' || !ctype_digit($inboxId) || (int) $inboxId < 1 || !filter_var($from, FILTER_VALIDATE_EMAIL)) {
+            $this->logMailtrapApiFailure('configuration_failure', [
+                'message' => 'Mailtrap Sandbox API configuration is incomplete.',
+                'api_token_configured' => $token !== '',
+                'inbox_id_configured' => $inboxId !== '',
+                'inbox_id_valid' => ctype_digit($inboxId) && (int) $inboxId > 0,
+                'from_domain' => $this->emailDomain($from),
+                'recipient_domain' => $this->emailDomain($email),
+            ]);
+            throw new RuntimeException('Verification email is not configured.');
+        }
+
+        $endpoint = 'https://sandbox.api.mailtrap.io/api/send/' . $inboxId;
+        $payload = json_encode([
+            'from' => [
+                'email' => $from,
+                'name' => $fromName !== '' ? $fromName : 'FAM Security',
+            ],
+            'to' => [
+                ['email' => $email],
+            ],
+            'subject' => $subject,
+            'text' => $body,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        if ($payload === false) {
+            $this->logMailtrapApiFailure('configuration_failure', [
+                'message' => 'Mailtrap Sandbox API payload could not be encoded.',
+                'recipient_domain' => $this->emailDomain($email),
+            ]);
+            throw new RuntimeException('Unable to send verification email.');
+        }
+
+        $curl = curl_init($endpoint);
+        if ($curl === false) {
+            $this->logMailtrapApiFailure('connection_failure', [
+                'message' => 'Mailtrap Sandbox API client could not be initialized.',
+                'recipient_domain' => $this->emailDomain($email),
+            ]);
+            throw new RuntimeException('Unable to send verification email.');
+        }
+
+        $timeout = $this->mailtrapApiTimeoutSeconds();
+        curl_setopt_array($curl, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ],
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_CONNECTTIMEOUT => $timeout,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ]);
+
+        $response = curl_exec($curl);
+        $curlErrorNumber = curl_errno($curl);
+        $curlError = curl_error($curl);
+        $statusCode = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        curl_close($curl);
+
+        if ($response === false || $curlErrorNumber !== 0) {
+            $category = $curlErrorNumber === CURLE_OPERATION_TIMEDOUT
+                ? 'connection_timeout'
+                : ($this->curlTlsError($curlErrorNumber, $curlError) ? 'tls_failure' : 'connection_failure');
+            $this->logMailtrapApiFailure($category, [
+                'message' => $this->sanitizeDiagnosticText($curlError),
+                'curl_errno' => $curlErrorNumber,
+                'http_status' => $statusCode,
+                'timeout_seconds' => $timeout,
+                'recipient_domain' => $this->emailDomain($email),
+            ]);
+            throw new RuntimeException('Unable to send verification email.');
+        }
+
+        if ($statusCode < 200 || $statusCode >= 300) {
+            $this->logMailtrapApiFailure($this->mailtrapHttpFailureCategory($statusCode), [
+                'message' => 'Mailtrap Sandbox API returned a non-success status.',
+                'http_status' => $statusCode,
+                'timeout_seconds' => $timeout,
+                'recipient_domain' => $this->emailDomain($email),
+            ]);
+            throw new RuntimeException('Unable to send verification email.');
+        }
+
+        $decoded = json_decode((string) $response, true);
+        if (!is_array($decoded) || ($decoded['success'] ?? null) !== true) {
+            $this->logMailtrapApiFailure('invalid_response', [
+                'message' => 'Mailtrap Sandbox API returned an unexpected response.',
+                'http_status' => $statusCode,
+                'timeout_seconds' => $timeout,
+                'recipient_domain' => $this->emailDomain($email),
+            ]);
+            throw new RuntimeException('Unable to send verification email.');
+        }
+    }
+
+    private function mailtrapApiTimeoutSeconds(): int
+    {
+        $timeout = (int) env('MAILTRAP_API_TIMEOUT_SECONDS', 10);
+
+        return max(1, min(60, $timeout));
+    }
+
+    private function logMailtrapApiFailure(string $category, array $metadata): void
+    {
+        error_log('Mailtrap Sandbox API delivery failed: ' . json_encode(array_merge([
+            'category' => $category,
+            'transport' => 'mailtrap_sandbox_api',
+            'api_host' => 'sandbox.api.mailtrap.io',
+        ], $metadata), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    }
+
+    private function mailtrapHttpFailureCategory(int $statusCode): string
+    {
+        if ($statusCode === 401 || $statusCode === 403) {
+            return 'authentication_failure';
+        }
+
+        if ($statusCode === 429) {
+            return 'rate_limited';
+        }
+
+        return 'http_failure';
+    }
+
+    private function curlTlsError(int $errorNumber, string $error): bool
+    {
+        $tlsErrorNumbers = array_filter([
+            defined('CURLE_SSL_CONNECT_ERROR') ? constant('CURLE_SSL_CONNECT_ERROR') : null,
+            defined('CURLE_PEER_FAILED_VERIFICATION') ? constant('CURLE_PEER_FAILED_VERIFICATION') : null,
+            defined('CURLE_SSL_CACERT_BADFILE') ? constant('CURLE_SSL_CACERT_BADFILE') : null,
+        ], static fn (?int $value): bool => $value !== null);
+
+        return in_array($errorNumber, $tlsErrorNumbers, true)
+            || str_contains(strtolower($error), 'ssl')
+            || str_contains(strtolower($error), 'tls')
+            || str_contains(strtolower($error), 'certificate');
     }
 
     private function logSmtpFailure(Throwable $exception, PHPMailer $mail, string $host, string $from, string $recipient, string $encryption): void
@@ -170,5 +334,10 @@ final class MailService
         }
 
         return strtolower((string) env('MAIL_MODE', 'smtp')) === 'smtp';
+    }
+
+    private function usesMailtrapSandboxApi(): bool
+    {
+        return strtolower(trim((string) env('MAIL_MODE', 'smtp'))) === 'mailtrap_sandbox_api';
     }
 }
