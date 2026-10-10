@@ -63,6 +63,7 @@ final class MailService
             $mail->isSMTP();
             $mail->Host = $host;
             $mail->Port = max(1, (int) env('SMTP_PORT', env('MAIL_PORT', 587)));
+            $mail->Timeout = $this->smtpTimeoutSeconds();
             $mail->SMTPAuth = true;
             $mail->Username = $username;
             $mail->Password = $password;
@@ -83,9 +84,82 @@ final class MailService
             $mail->AltBody = $body;
             $mail->send();
         } catch (Throwable $exception) {
-            error_log('Mail delivery failed: ' . $exception::class);
+            $this->logSmtpFailure($exception, $mail, $host, $from, $email, $encryption);
             throw new RuntimeException('Unable to send verification email.');
         }
+    }
+
+    private function smtpTimeoutSeconds(): int
+    {
+        $timeout = (int) env('SMTP_TIMEOUT_SECONDS', env('MAIL_TIMEOUT_SECONDS', 10));
+
+        return max(1, min(60, $timeout));
+    }
+
+    private function logSmtpFailure(Throwable $exception, PHPMailer $mail, string $host, string $from, string $recipient, string $encryption): void
+    {
+        $message = $this->sanitizeDiagnosticText($exception->getMessage());
+        $errorInfo = $this->sanitizeDiagnosticText((string) $mail->ErrorInfo);
+        $diagnosticText = strtolower($message . ' ' . $errorInfo);
+
+        error_log('Mail delivery failed: ' . json_encode([
+            'category' => $this->smtpFailureCategory($diagnosticText),
+            'exception' => $exception::class,
+            'message' => $message,
+            'error_info' => $errorInfo,
+            'smtp_host' => $this->sanitizeHost($host),
+            'smtp_port' => $mail->Port,
+            'smtp_encryption' => $encryption !== '' ? $encryption : 'none',
+            'smtp_timeout_seconds' => $mail->Timeout,
+            'smtp_username_configured' => trim((string) $mail->Username) !== '',
+            'smtp_from_domain' => $this->emailDomain($from),
+            'recipient_domain' => $this->emailDomain($recipient),
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    }
+
+    private function smtpFailureCategory(string $diagnosticText): string
+    {
+        if (str_contains($diagnosticText, 'timed out') || str_contains($diagnosticText, 'timeout')) {
+            return 'connection_timeout';
+        }
+
+        if (str_contains($diagnosticText, 'authenticate') || str_contains($diagnosticText, 'authentication') || str_contains($diagnosticText, 'username') || str_contains($diagnosticText, 'password')) {
+            return 'authentication_failure';
+        }
+
+        if (str_contains($diagnosticText, 'starttls') || str_contains($diagnosticText, 'tls') || str_contains($diagnosticText, 'ssl') || str_contains($diagnosticText, 'certificate')) {
+            return 'tls_failure';
+        }
+
+        if (str_contains($diagnosticText, 'could not connect') || str_contains($diagnosticText, 'connection refused') || str_contains($diagnosticText, 'network is unreachable')) {
+            return 'connection_failure';
+        }
+
+        return 'smtp_failure';
+    }
+
+    private function sanitizeDiagnosticText(string $value): string
+    {
+        $value = preg_replace('/\s+/', ' ', trim($value)) ?? '';
+        $value = preg_replace('/(password|passwd|pwd|token|secret|authorization)\s*[=:]\s*[^;\s,]+/i', '$1=[redacted]', $value) ?? $value;
+        $value = preg_replace('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i', '[email]', $value) ?? $value;
+
+        return substr($value, 0, 300);
+    }
+
+    private function sanitizeHost(string $host): string
+    {
+        $host = strtolower(trim($host));
+
+        return preg_match('/^[a-z0-9.-]+$/', $host) === 1 ? substr($host, 0, 190) : '[invalid-host]';
+    }
+
+    private function emailDomain(string $email): string
+    {
+        $parts = explode('@', strtolower(trim($email)), 2);
+        $domain = $parts[1] ?? '';
+
+        return preg_match('/^[a-z0-9.-]+$/', $domain) === 1 ? substr($domain, 0, 190) : '';
     }
 
     private function mailEnabled(): bool
