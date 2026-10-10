@@ -7,7 +7,7 @@
 
     const state = {
         active: 'facilities',
-        facilities: { section: 'spaces', data: {}, loading: false, loaded: false, error: '', building: 'all', search: '' },
+        facilities: { section: 'spaces', data: {}, loading: false, loaded: false, error: '', building: 'all', search: '', requestId: 0, refreshQueued: false },
         blacklist: { query: '', candidates: [], selected: null, entries: [], reason: '', loading: false },
         rules: { items: [], categories: [], statuses: [], search: '', category: 'all', status: 'all', loading: false, loaded: false, error: '' },
         lastFocus: null,
@@ -134,6 +134,7 @@
     function renderPanel() {
         const panel = qs('#admin-panel-card');
         if (!panel) return;
+        panel.classList.toggle('settings-facilities-card', state.active === 'facilities');
         if (state.active === 'facilities') panel.innerHTML = facilitiesPanel();
         if (state.active === 'visitors') panel.innerHTML = blacklistPanel();
         if (state.active === 'legal') panel.innerHTML = legalPanel();
@@ -153,29 +154,45 @@
     }
 
     async function loadFacilities() {
+        if (state.facilities.loading) {
+            state.facilities.refreshQueued = true;
+            return;
+        }
+        const requestId = state.facilities.requestId + 1;
+        state.facilities.requestId = requestId;
+        state.facilities.refreshQueued = false;
         state.facilities.loading = true;
         state.facilities.error = '';
         renderPanel();
         try {
             const payload = await window.FAMApi.request(api('settings/facilities.php'));
+            if (requestId !== state.facilities.requestId) return;
             state.facilities.data = payload.data || {};
             state.facilities.loaded = true;
         } catch (error) {
+            if (requestId !== state.facilities.requestId) return;
             state.facilities.error = error.message || 'Unable to load Facilities settings.';
         } finally {
+            if (requestId !== state.facilities.requestId) return;
             state.facilities.loading = false;
             if (state.active === 'facilities') renderPanel();
+            if (state.facilities.refreshQueued) {
+                state.facilities.refreshQueued = false;
+                loadFacilities().catch(console.error);
+            }
         }
     }
 
     function facilitiesPanel() {
         const body = state.facilities.loading ? stateBlock('Loading Facilities settings...', 'progress_activity') :
-            state.facilities.error ? stateBlock(state.facilities.error, 'error') : spacesPanel();
-        return `${sectionHeader('Facilities', 'Maintain facility master records used by facility reservations.')}${body}`;
+            state.facilities.error ? stateBlock(state.facilities.error, 'error') :
+                state.facilities.loaded ? spacesPanel() : stateBlock('Preparing facility inventory...', 'progress_activity');
+        return `<div class="settings-facilities-panel">${body}</div>`;
     }
 
     function spacesPanel() {
         const data = state.facilities.data;
+        const total = (data.spaces || []).length;
         const buildings = data.buildings || [];
         const query = state.facilities.search.trim().toLowerCase();
         const rows = (data.spaces || []).filter(space => {
@@ -193,17 +210,22 @@
             <td>${badge(space.status)}</td>
             <td>${canManageRooms() ? `<button class="facility-text-button" type="button" data-facilities-action="edit-space" data-space-id="${esc(space.id)}">Edit</button>` : ''}</td>
         </tr>`).join('');
-        return `<div class="facility-table-card">
-            <div class="facility-table-header">
-                <div><h3>Facilities</h3><p>${rows.length} facilit${rows.length === 1 ? 'y' : 'ies'} shown</p></div>
-                <div class="facility-header-controls legal-controls">
-                    <label class="facility-field facility-search-field"><span class="sr-only">Search facilities</span><input id="facilities-space-search" type="search" value="${esc(state.facilities.search)}" placeholder="Search facilities..."></label>
+        const emptyMessage = total ? 'No facilities match the current filters.' : 'No facility records are available yet.';
+        return `<div class="facility-table-card settings-facility-inventory">
+            <div class="settings-facility-header">
+                <div class="settings-facility-title">
+                    <h2>Facility Inventory</h2>
+                    <p>Manage facility records, availability, and photos.</p>
+                    <span>${rows.length} of ${total} facilit${total === 1 ? 'y' : 'ies'} shown</span>
+                </div>
+                <div class="settings-facility-toolbar">
+                    <label class="facility-field facility-search-field"><span class="sr-only">Search facilities</span><input id="facilities-space-search" type="search" value="${esc(state.facilities.search)}" placeholder="Search facilities"></label>
                     <label class="facility-field document-filter-field"><span class="sr-only">Building</span><select id="facilities-building-filter"><option value="all">All Buildings</option>${buildings.map(row => `<option value="${esc(row.id)}" ${String(state.facilities.building) === String(row.id) ? 'selected' : ''}>${esc(row.name)}</option>`).join('')}</select></label>
                     <button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="manage-buildings"><span class="material-symbols-outlined" aria-hidden="true">apartment</span>Manage Buildings</button>
                     ${canManageRooms() ? '<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="create-space"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Add Facility</button>' : ''}
                 </div>
             </div>
-            <div class="facility-table-scroll"><table class="facility-requests-table"><thead><tr><th>Facility</th><th>Building</th><th>Type</th><th>Capacity</th><th>Reservable</th><th>Image</th><th>Status</th><th>Actions</th></tr></thead><tbody>${tableRows || `<tr><td colspan="8">${stateBlock('No facilities match the current filters.', 'meeting_room')}</td></tr>`}</tbody></table></div>
+            <div class="facility-table-scroll settings-facility-table-scroll"><table class="facility-requests-table settings-facility-table"><thead><tr><th>Facility</th><th>Building</th><th>Type</th><th>Capacity</th><th>Reservable</th><th>Image</th><th>Status</th><th>Actions</th></tr></thead><tbody>${tableRows || `<tr><td colspan="8">${stateBlock(emptyMessage, 'meeting_room')}</td></tr>`}</tbody></table></div>
         </div>`;
     }
 
@@ -641,6 +663,7 @@
             if (maintenanceMode()) return;
             render();
             bind();
+            if (state.active === 'facilities') await loadFacilities();
             if (state.active === 'visitors') await loadBlacklist();
         } catch (error) {
             if (String(error.message || '').includes('403')) window.location.href = '../errors/403.html';
