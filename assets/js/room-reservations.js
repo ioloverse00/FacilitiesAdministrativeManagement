@@ -6,7 +6,7 @@
     const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     const toDate = value => value ? new Date(String(value).replace(' ', 'T')) : null;
     const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-    const state = { view: window.matchMedia('(max-width: 520px)').matches ? 'day' : 'month', anchor: new Date(), room: '', status: 'all', search: '', page: 1, perPage: 10, sort: 'start_datetime', direction: 'desc', events: [], rows: [], pagination: { total: 0, total_pages: 1 }, options: {}, details: new Map(), selectedReservationId: '', expandedDays: new Set(), calendarLoading: false, calendarLoaded: false, listLoading: false };
+    const state = { view: window.matchMedia('(max-width: 520px)').matches ? 'day' : 'month', anchor: new Date(), room: '', facilityIndex: 0, status: 'all', search: '', page: 1, perPage: 10, sort: 'start_datetime', direction: 'desc', events: [], rows: [], pagination: { total: 0, total_pages: 1 }, options: {}, details: new Map(), selectedReservationId: '', expandedDays: new Set(), calendarLoading: false, calendarLoaded: false, listLoading: false, calendarRequestId: 0, listRequestId: 0 };
     const fmtTime = value => { const d = value instanceof Date ? value : toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'Time unavailable'; };
     const fmtDateTime = value => { const d = toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not applicable'; };
     const fileSize = bytes => {
@@ -86,7 +86,7 @@
     function setCalendarBusy(isBusy, initial = false) {
         const card = qs('reservation-calendar-panel')?.closest('.reservation-calendar-card');
         const overlay = qs('reservation-calendar-loading');
-        const controls = ['reservation-today', 'reservation-prev-period', 'reservation-next-period', 'reservation-room-filter', 'reservation-status-filter', 'reservation-search', 'reservation-reset-filters'];
+        const controls = ['reservation-today', 'reservation-prev-period', 'reservation-next-period', 'reservation-status-filter', 'reservation-search', 'reservation-reset-filters'];
         card?.classList.toggle('fam-loading-region', isBusy);
         card?.setAttribute('aria-busy', String(isBusy));
         controls.forEach(id => {
@@ -101,22 +101,38 @@
     }
 
     function populateFilters() {
-        qs('reservation-room-filter').innerHTML = (state.options.facility_spaces || []).map(x => `<option value="${esc(x.id)}">${esc(x.name || x.code || 'Facility')}</option>`).join('');
-        qs('reservation-room-filter').value = state.room;
         const calendarStatuses = (state.options.statuses || []).filter(status => String(status).toUpperCase() !== 'REJECTED');
         qs('reservation-status-filter').innerHTML = '<option value="all">All statuses</option>' + calendarStatuses.map(x => `<option value="${esc(x)}">${esc(title(x))}</option>`).join('');
     }
 
+    function facilities() {
+        return state.options.facility_spaces || [];
+    }
+
+    function syncFacilitySelection() {
+        const items = facilities();
+        if (!items.length) {
+            state.room = '';
+            state.facilityIndex = 0;
+            return;
+        }
+        const currentIndex = items.findIndex(item => String(item.id) === String(state.room));
+        state.facilityIndex = currentIndex >= 0 ? currentIndex : Math.min(Math.max(state.facilityIndex, 0), items.length - 1);
+        state.room = String(items[state.facilityIndex]?.id || '');
+    }
+
     function selectedFacility() {
-        return (state.options.facility_spaces || []).find(item => String(item.id) === String(state.room));
+        return facilities()[state.facilityIndex] || null;
     }
 
     function renderSelectedFacility() {
         const panel = qs('reservation-selected-facility');
         if (!panel) return;
+        const items = facilities();
+        syncFacilitySelection();
         const facility = selectedFacility();
         if (!facility) {
-            panel.innerHTML = '<div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><strong>Select a facility</strong><span>Choose an active reservable facility to view its calendar.</span></div>';
+            panel.innerHTML = '<div class="fam-state"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><strong>No facilities available</strong><span>No active reservable facilities were returned by the reservation API.</span></div>';
             return;
         }
         const stateLabel = [facility.status || 'ACTIVE', facility.reservable === false ? 'Non-reservable' : 'Reservable'].filter(Boolean).map(title).join(' / ');
@@ -127,7 +143,25 @@
             ['Capacity', capacityLabel(facility)],
             ['Floor', facility.floor || facility.floor_number || 'Not specified'],
         ];
-        panel.innerHTML = `<div class="reservation-selected-facility-card"><div class="reservation-selected-facility-media">${window.FAMFacilityImages?.mediaHtml?.(facility, { alt: facility.name || 'Facility image' }) || ''}</div><div class="reservation-side-panel-body"><span class="facility-badge facility-status-approved">${esc(stateLabel)}</span><h3>${esc(facility.name || facility.code || 'Facility')}</h3><dl class="reservation-preview-list">${details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value || 'Not specified')}</dd></div>`).join('')}</dl></div></div>`;
+        const position = `${state.facilityIndex + 1} / ${items.length}`;
+        const disabled = items.length <= 1 ? ' disabled' : '';
+        panel.innerHTML = `<div class="reservation-facility-carousel"><div class="reservation-facility-carousel-header"><div class="reservation-facility-carousel-title"><span>Facility</span><strong title="${esc(facility.name || facility.code || 'Facility')}">${esc(facility.name || facility.code || 'Facility')}</strong></div><div class="reservation-facility-carousel-controls" aria-label="Facility selector"><button class="fam-icon-button" type="button" data-facility-carousel="prev" aria-label="Previous facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button><span class="reservation-facility-position" aria-live="polite">${esc(position)}</span><button class="fam-icon-button" type="button" data-facility-carousel="next" aria-label="Next facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button></div></div><div class="reservation-selected-facility-card"><div class="reservation-selected-facility-media">${window.FAMFacilityImages?.mediaHtml?.(facility, { alt: facility.name || 'Facility image' }) || ''}</div><div class="reservation-side-panel-body"><span class="facility-badge facility-status-approved">${esc(stateLabel)}</span><h3>${esc(facility.name || facility.code || 'Facility')}</h3><dl class="reservation-preview-list">${details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value || 'Not specified')}</dd></div>`).join('')}</dl></div></div></div>`;
+    }
+
+    async function selectFacilityByOffset(offset) {
+        const items = facilities();
+        if (!items.length) return;
+        const nextIndex = (state.facilityIndex + offset + items.length) % items.length;
+        if (nextIndex === state.facilityIndex) return;
+        state.facilityIndex = nextIndex;
+        state.room = String(items[state.facilityIndex]?.id || '');
+        state.page = 1;
+        state.selectedReservationId = '';
+        state.expandedDays.clear();
+        state.details.clear();
+        renderSelectedFacility();
+        renderReservationPreview(null);
+        await refreshFilteredViews();
     }
 
     function renderReservationPreview(item = null) {
@@ -138,7 +172,7 @@
             return;
         }
         const summary = aiSummary(item);
-        panel.innerHTML = `<div class="reservation-side-panel-body"><div class="reservation-preview-heading"><div><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h3>${esc(item.purpose || 'Reservation')}</h3></div>${badge(item.status)}</div><dl class="reservation-preview-list"><div><dt>Date</dt><dd>${esc(fmtDateTime(item.start))}</dd></div><div><dt>Time</dt><dd>${esc(fmtTime(item.start))} - ${esc(fmtTime(item.end))}</dd></div><div><dt>Requester</dt><dd>${esc(item.requester || 'Requester unavailable')}</dd></div><div><dt>Facility</dt><dd>${esc(item.room || 'Facility unavailable')}</dd></div></dl><p class="reservation-preview-summary">${summary}</p><div class="reservation-preview-actions"><button class="btn-primary dashboard-action-button" type="button" data-preview-see-more="${esc(item.id)}">See More</button></div></div>`;
+        panel.innerHTML = `<div class="reservation-side-panel-body"><div class="reservation-preview-heading"><div><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h3>${esc(item.purpose || 'Reservation')}</h3></div>${badge(item.status)}</div><p class="reservation-preview-summary">${summary}</p><div class="reservation-preview-actions"><button class="btn-primary dashboard-action-button" type="button" data-preview-see-more="${esc(item.id)}">See More</button></div></div>`;
     }
 
     async function selectReservationPreview(id) {
@@ -410,42 +444,50 @@
         if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     }
     async function loadCalendar() {
-        if (state.calendarLoading) return;
+        const requestId = ++state.calendarRequestId;
         const r = range();
         state.calendarLoading = true;
         setCalendarBusy(true, !state.calendarLoaded);
         try {
             const payload = await window.FAMApi.request(`../api/reservations/calendar.php?${calendarQuery({ date_from: isoDate(r.start), date_to: isoDate(r.end) })}`);
+            if (requestId !== state.calendarRequestId) return;
             state.events = payload.data?.items || [];
             renderCalendar();
             renderFocusPanels();
         } catch (error) {
+            if (requestId !== state.calendarRequestId) return;
             state.events = [];
             renderCalendar();
             renderFocusPanels();
             qs('reservation-calendar-message').innerHTML = `<span role="alert">${esc(error.message || 'Unable to load reservation calendar.')}</span> <button class="facility-text-button" type="button" data-calendar-retry>Retry</button>`;
         } finally {
-            state.calendarLoading = false;
-            state.calendarLoaded = true;
-            setCalendarBusy(false);
+            if (requestId === state.calendarRequestId) {
+                state.calendarLoading = false;
+                state.calendarLoaded = true;
+                setCalendarBusy(false);
+            }
         }
     }
     async function loadList() {
-        if (state.listLoading) return;
         if (!qs('reservation-records-body')) return;
+        const requestId = ++state.listRequestId;
         state.listLoading = true;
         qs('reservation-loading-state')?.classList.remove('hidden');
         try {
             const payload = await window.FAMApi.request(`../api/reservations/index.php?${listQuery({ page: state.page, per_page: state.perPage, sort: state.sort, direction: state.direction })}`);
+            if (requestId !== state.listRequestId) return;
             state.rows = payload.data?.items || [];
             state.pagination = payload.data?.pagination || state.pagination;
         } catch (error) {
+            if (requestId !== state.listRequestId) return;
             state.rows = [];
             state.pagination = { total: 0, total_pages: 1 };
             window.FAMModal?.showToast(error.message || 'Unable to load reservation list.');
         } finally {
-            state.listLoading = false;
-            renderList();
+            if (requestId === state.listRequestId) {
+                state.listLoading = false;
+                renderList();
+            }
         }
     }
     async function refreshCalendar() {
@@ -490,6 +532,7 @@
             const options = await window.FAMApi.request('../api/reservations/options.php');
             state.options = options.data || {};
             state.room = String(state.options.facility_spaces?.[0]?.id || '');
+            state.facilityIndex = 0;
             populateFilters();
             renderSelectedFacility();
             renderReservationPreview(null);
@@ -511,7 +554,6 @@
     qs('reservation-prev-period')?.addEventListener('click', () => shift(-1));
     qs('reservation-next-period')?.addEventListener('click', () => shift(1));
     document.querySelectorAll('[data-calendar-view]').forEach(button => button.addEventListener('click', () => { state.view = button.dataset.calendarView; state.expandedDays.clear(); refreshCalendar(); }));
-    qs('reservation-room-filter')?.addEventListener('change', event => { state.room = event.target.value; state.page = 1; state.selectedReservationId = ''; state.expandedDays.clear(); state.details.clear(); renderReservationPreview(null); refreshFilteredViews(); });
     qs('reservation-status-filter')?.addEventListener('change', event => { state.status = event.target.value; state.page = 1; state.expandedDays.clear(); refreshFilteredViews(); });
     qs('reservation-search')?.addEventListener('input', event => { state.search = event.target.value; state.page = 1; state.expandedDays.clear(); clearTimeout(state.timer); state.timer = setTimeout(refreshFilteredViews, 300); renderToolbar(); });
     qs('reservation-reset-filters')?.addEventListener('click', () => {
@@ -541,6 +583,8 @@
             event.stopPropagation();
             return window.FAMTableMenus?.toggle(menuToggle, document.querySelector(`[data-reservation-menu-panel="${CSS.escape(menuToggle.dataset.reservationMenu)}"]`));
         }
+        const facilityNav = event.target.closest('[data-facility-carousel]');
+        if (facilityNav) return selectFacilityByOffset(facilityNav.dataset.facilityCarousel === 'prev' ? -1 : 1).catch(error => window.FAMModal?.showToast(error.message || 'Unable to load facility calendar.'));
         const detailAction = event.target.closest('[data-open-reservation-details]');
         if (detailAction) return openDetails(detailAction.dataset.openReservationDetails);
         const open = event.target.closest('[data-reservation-id]');
