@@ -14661,6 +14661,8 @@ body.facility-drawer-open {
 .reservation-selected-facility-card {
   display: grid;
   grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
 }
 .reservation-facility-carousel-header {
   display: flex;
@@ -14704,7 +14706,7 @@ body.facility-drawer-open {
 .reservation-facility-carousel .reservation-selected-facility-card {
   border-radius: 0;
 }
-.reservation-dashboard-grid .reservation-selected-facility-card:focus-visible,
+.reservation-dashboard-grid .reservation-facility-carousel .reservation-side-panel-body:focus-visible,
 .reservation-dashboard-grid .reservation-preview-summary:focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.55);
   outline-offset: 3px;
@@ -14842,7 +14844,7 @@ body.facility-drawer-open {
     min-height: 0;
   }
   .reservation-dashboard-grid.reservation-height-synced .reservation-side-column {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 65fr) minmax(0, 35fr);
     align-self: stretch;
     height: var(--reservation-calendar-column-height, 0px);
     min-height: 0;
@@ -14857,6 +14859,14 @@ body.facility-drawer-open {
     height: 100%;
   }
   .reservation-dashboard-grid.reservation-height-synced .reservation-facility-carousel .reservation-selected-facility-card {
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+    overflow: hidden;
+  }
+  .reservation-dashboard-grid.reservation-height-synced .reservation-selected-facility-card .reservation-selected-facility-media {
+    aspect-ratio: 21 / 9;
+  }
+  .reservation-dashboard-grid.reservation-height-synced .reservation-facility-carousel .reservation-side-panel-body {
     min-height: 0;
     overflow: auto;
   }
