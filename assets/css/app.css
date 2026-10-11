@@ -14654,13 +14654,13 @@ body.facility-drawer-open {
 .reservation-preview-panel > .fam-state {
   flex: 1 1 auto;
 }
-.reservation-selected-facility-card {
-  display: grid;
-  grid-template-columns: 1fr;
-}
 .reservation-facility-carousel {
   display: grid;
   min-height: 0;
+}
+.reservation-selected-facility-card {
+  display: grid;
+  grid-template-columns: 1fr;
 }
 .reservation-facility-carousel-header {
   display: flex;
@@ -14703,6 +14703,11 @@ body.facility-drawer-open {
 }
 .reservation-facility-carousel .reservation-selected-facility-card {
   border-radius: 0;
+}
+.reservation-dashboard-grid .reservation-selected-facility-card:focus-visible,
+.reservation-dashboard-grid .reservation-preview-summary:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.55);
+  outline-offset: 3px;
 }
 .reservation-selected-facility-card .reservation-selected-facility-media {
   aspect-ratio: 16 / 9;
@@ -14830,8 +14835,44 @@ body.facility-drawer-open {
   .reservation-dashboard-grid {
     grid-template-columns: minmax(0, 1.7fr) minmax(25rem, 0.9fr);
   }
-  .reservation-side-column {
-    max-height: 100%;
+  .reservation-calendar-column {
+    min-height: 0;
+  }
+  .reservation-calendar-card {
+    min-height: 0;
+  }
+  .reservation-dashboard-grid.reservation-height-synced .reservation-side-column {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    align-self: stretch;
+    height: var(--reservation-calendar-column-height, 0px);
+    min-height: 0;
+    overflow: hidden;
+  }
+  .reservation-dashboard-grid.reservation-height-synced .reservation-side-column > .reservation-side-panel {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .reservation-dashboard-grid.reservation-height-synced .reservation-facility-carousel {
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+  }
+  .reservation-dashboard-grid.reservation-height-synced .reservation-facility-carousel .reservation-selected-facility-card {
+    min-height: 0;
+    overflow: auto;
+  }
+  .reservation-dashboard-grid.reservation-height-synced .reservation-preview-panel > .reservation-side-panel-body {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    min-height: 0;
+  }
+  .reservation-dashboard-grid.reservation-height-synced .reservation-preview-ai-summary {
+    min-height: 0;
+  }
+  .reservation-dashboard-grid.reservation-height-synced .reservation-preview-summary {
+    overflow: auto;
+  }
+  .reservation-dashboard-grid.reservation-height-synced .reservation-preview-panel > .fam-state {
+    min-height: 0 !important;
   }
 }
 @media (min-width: 1280px) {

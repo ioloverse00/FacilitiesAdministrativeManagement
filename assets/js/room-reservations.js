@@ -7,6 +7,11 @@
     const toDate = value => value ? new Date(String(value).replace(' ', 'T')) : null;
     const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
     const state = { view: window.matchMedia('(max-width: 520px)').matches ? 'day' : 'month', anchor: new Date(), room: '', facilityIndex: 0, status: 'all', search: '', page: 1, perPage: 10, sort: 'start_datetime', direction: 'desc', events: [], rows: [], pagination: { total: 0, total_pages: 1 }, options: {}, details: new Map(), selectedReservationId: '', expandedDays: new Set(), calendarLoading: false, calendarLoaded: false, listLoading: false, calendarRequestId: 0, listRequestId: 0 };
+    const dashboardHeightQuery = window.matchMedia('(min-width: 960px)');
+    let dashboardHeightObserver = null;
+    let dashboardHeightRaf = 0;
+    let dashboardHeightLast = 0;
+    let dashboardHeightMediaHandler = null;
     const fmtTime = value => { const d = value instanceof Date ? value : toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'Time unavailable'; };
     const fmtDateTime = value => { const d = toDate(value); return d && !Number.isNaN(d.getTime()) ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not applicable'; };
     const fileSize = bytes => {
@@ -152,7 +157,8 @@
         ];
         const position = `${state.facilityIndex + 1} / ${items.length}`;
         const disabled = items.length <= 1 ? ' disabled' : '';
-        panel.innerHTML = `<div class="reservation-facility-carousel"><div class="reservation-facility-carousel-header"><div class="reservation-facility-carousel-title"><span>Facility</span><strong title="${esc(facility.name || facility.code || 'Facility')}">${esc(facility.name || facility.code || 'Facility')}</strong></div><div class="reservation-facility-carousel-controls" aria-label="Facility selector"><button class="fam-icon-button" type="button" data-facility-carousel="prev" aria-label="Previous facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button><span class="reservation-facility-position" aria-live="polite">${esc(position)}</span><button class="fam-icon-button" type="button" data-facility-carousel="next" aria-label="Next facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button></div></div><div class="reservation-selected-facility-card"><div class="reservation-selected-facility-media">${reservationFacilityMediaHtml(facility)}</div><div class="reservation-side-panel-body"><span class="facility-badge facility-status-approved">${esc(stateLabel)}</span><dl class="reservation-preview-list">${details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value || 'Not specified')}</dd></div>`).join('')}</dl></div></div></div>`;
+        panel.innerHTML = `<div class="reservation-facility-carousel"><div class="reservation-facility-carousel-header"><div class="reservation-facility-carousel-title"><span>Facility</span><strong title="${esc(facility.name || facility.code || 'Facility')}">${esc(facility.name || facility.code || 'Facility')}</strong></div><div class="reservation-facility-carousel-controls" aria-label="Facility selector"><button class="fam-icon-button" type="button" data-facility-carousel="prev" aria-label="Previous facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button><span class="reservation-facility-position" aria-live="polite">${esc(position)}</span><button class="fam-icon-button" type="button" data-facility-carousel="next" aria-label="Next facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button></div></div><div class="reservation-selected-facility-card" data-scroll-label="Facility details, scroll for more information"><div class="reservation-selected-facility-media">${reservationFacilityMediaHtml(facility)}</div><div class="reservation-side-panel-body"><span class="facility-badge facility-status-approved">${esc(stateLabel)}</span><dl class="reservation-preview-list">${details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value || 'Not specified')}</dd></div>`).join('')}</dl></div></div></div>`;
+        scheduleDashboardHeightSync();
     }
 
     async function selectFacilityByOffset(offset) {
@@ -179,7 +185,8 @@
             return;
         }
         const summary = aiSummary(item);
-        panel.innerHTML = `<div class="reservation-side-panel-body"><div class="reservation-preview-heading"><div><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h3>${esc(item.purpose || 'Reservation')}</h3></div>${badge(item.status)}</div><div class="reservation-preview-ai-summary"><span class="reservation-preview-ai-label"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>AI Summary</span><p class="reservation-preview-summary">${summary}</p></div><div class="reservation-preview-actions"><button class="btn-primary dashboard-action-button" type="button" data-preview-see-more="${esc(item.id)}">See More</button></div></div>`;
+        panel.innerHTML = `<div class="reservation-side-panel-body"><div class="reservation-preview-heading"><div><span class="facility-details-modal-request-number">${esc(item.reservationNo || 'Reservation')}</span><h3>${esc(item.purpose || 'Reservation')}</h3></div>${badge(item.status)}</div><div class="reservation-preview-ai-summary"><span class="reservation-preview-ai-label"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>AI Summary</span><p class="reservation-preview-summary" data-scroll-label="Reservation summary, scroll for more information">${summary}</p></div><div class="reservation-preview-actions"><button class="btn-primary dashboard-action-button" type="button" data-preview-see-more="${esc(item.id)}">See More</button></div></div>`;
+        scheduleDashboardHeightSync();
     }
 
     async function selectReservationPreview(id) {
@@ -532,7 +539,95 @@
         state.expandedDays.clear();
         refreshCalendar();
     }
+    function updateScrollableRegionAccess(enabled = dashboardHeightQuery.matches) {
+        document.querySelectorAll('.reservation-dashboard-grid [data-scroll-label]').forEach(element => {
+            const hasOverflow = enabled && (element.scrollHeight > element.clientHeight + 1 || element.scrollWidth > element.clientWidth + 1);
+            if (hasOverflow) {
+                element.setAttribute('tabindex', '0');
+                element.setAttribute('aria-label', element.dataset.scrollLabel || 'Scrollable content');
+            } else {
+                element.removeAttribute('tabindex');
+                element.removeAttribute('aria-label');
+            }
+        });
+    }
+
+    function clearDashboardHeightSync() {
+        if (dashboardHeightObserver) {
+            dashboardHeightObserver.disconnect();
+            dashboardHeightObserver = null;
+        }
+        if (dashboardHeightRaf) {
+            cancelAnimationFrame(dashboardHeightRaf);
+            dashboardHeightRaf = 0;
+        }
+        if (dashboardHeightMediaHandler) {
+            dashboardHeightQuery.removeEventListener?.('change', dashboardHeightMediaHandler);
+            dashboardHeightQuery.removeListener?.(dashboardHeightMediaHandler);
+            dashboardHeightMediaHandler = null;
+        }
+        dashboardHeightLast = 0;
+        document.querySelector('.reservation-dashboard-grid')?.classList.remove('reservation-height-synced');
+        document.querySelector('.reservation-side-column')?.style.removeProperty('--reservation-calendar-column-height');
+        updateScrollableRegionAccess(false);
+    }
+
+    function updateDashboardHeightSync() {
+        const dashboardGrid = document.querySelector('.reservation-dashboard-grid');
+        const calendarColumn = document.querySelector('.reservation-calendar-column');
+        const sideColumn = document.querySelector('.reservation-side-column');
+        if (!dashboardGrid || !calendarColumn || !sideColumn || !dashboardHeightQuery.matches) {
+            dashboardGrid?.classList.remove('reservation-height-synced');
+            sideColumn?.style.removeProperty('--reservation-calendar-column-height');
+            dashboardHeightLast = 0;
+            updateScrollableRegionAccess(false);
+            return;
+        }
+        dashboardGrid.classList.add('reservation-height-synced');
+        const nextHeight = Math.max(0, Math.round(calendarColumn.getBoundingClientRect().height));
+        if (!nextHeight) {
+            dashboardGrid.classList.remove('reservation-height-synced');
+            sideColumn.style.removeProperty('--reservation-calendar-column-height');
+            dashboardHeightLast = 0;
+            updateScrollableRegionAccess(false);
+            return;
+        }
+        if (nextHeight === dashboardHeightLast) {
+            updateScrollableRegionAccess();
+            return;
+        }
+        dashboardHeightLast = nextHeight;
+        sideColumn.style.setProperty('--reservation-calendar-column-height', `${nextHeight}px`);
+        updateScrollableRegionAccess();
+    }
+
+    function scheduleDashboardHeightSync() {
+        if (dashboardHeightRaf) return;
+        dashboardHeightRaf = requestAnimationFrame(() => {
+            dashboardHeightRaf = 0;
+            updateDashboardHeightSync();
+        });
+    }
+
+    function setupDashboardHeightSync() {
+        clearDashboardHeightSync();
+        const dashboardGrid = document.querySelector('.reservation-dashboard-grid');
+        const calendarColumn = document.querySelector('.reservation-calendar-column');
+        const sideColumn = document.querySelector('.reservation-side-column');
+        if (!dashboardGrid || !calendarColumn || !sideColumn || typeof ResizeObserver === 'undefined') return;
+        dashboardGrid.classList.add('reservation-height-synced');
+        dashboardHeightObserver = new ResizeObserver(scheduleDashboardHeightSync);
+        dashboardHeightObserver.observe(calendarColumn);
+        dashboardHeightMediaHandler = scheduleDashboardHeightSync;
+        if (typeof dashboardHeightQuery.addEventListener === 'function') {
+            dashboardHeightQuery.addEventListener('change', dashboardHeightMediaHandler);
+        } else if (typeof dashboardHeightQuery.addListener === 'function') {
+            dashboardHeightQuery.addListener(dashboardHeightMediaHandler);
+        }
+        scheduleDashboardHeightSync();
+    }
     async function init() {
+        setupDashboardHeightSync();
         renderToolbar();
         try {
             await window.FAMApi.me();
