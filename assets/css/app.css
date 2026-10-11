@@ -14752,6 +14752,32 @@ body.facility-drawer-open {
   gap: 0.7rem;
   padding: 0.9rem;
 }
+.reservation-facility-overview {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.95fr) minmax(0, 1.05fr);
+  gap: 0.8rem;
+  align-items: start;
+  min-width: 0;
+}
+.reservation-facility-overview .reservation-selected-facility-media {
+  aspect-ratio: 4 / 3;
+  border-radius: 0.55rem;
+}
+.reservation-facility-key-details,
+.reservation-facility-location-details {
+  min-width: 0;
+}
+.reservation-facility-key-details {
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+.reservation-facility-location-details {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem 0.85rem;
+}
+.reservation-facility-location-details div:last-child {
+  grid-column: 1 / -1;
+}
 .reservation-facility-carousel .facility-badge {
   width: fit-content;
 }
@@ -14844,7 +14870,7 @@ body.facility-drawer-open {
     min-height: 0;
   }
   .reservation-dashboard-grid.reservation-height-synced .reservation-side-column {
-    grid-template-rows: minmax(0, 65fr) minmax(0, 35fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
     align-self: stretch;
     height: var(--reservation-calendar-column-height, 0px);
     min-height: 0;
@@ -14862,9 +14888,6 @@ body.facility-drawer-open {
     grid-template-rows: auto minmax(0, 1fr);
     min-height: 0;
     overflow: hidden;
-  }
-  .reservation-dashboard-grid.reservation-height-synced .reservation-selected-facility-card .reservation-selected-facility-media {
-    aspect-ratio: 21 / 9;
   }
   .reservation-dashboard-grid.reservation-height-synced .reservation-facility-carousel .reservation-side-panel-body {
     min-height: 0;
@@ -14891,6 +14914,12 @@ body.facility-drawer-open {
   }
 }
 @media (max-width: 959px) {
+  .reservation-facility-overview {
+    grid-template-columns: 1fr;
+  }
+  .reservation-facility-overview .reservation-selected-facility-media {
+    aspect-ratio: 16 / 9;
+  }
   .reservation-facility-carousel-header {
     align-items: stretch;
     flex-direction: column;

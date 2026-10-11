@@ -148,16 +148,20 @@
             return;
         }
         const stateLabel = [facility.status || 'ACTIVE', facility.reservable === false ? 'Non-reservable' : 'Reservable'].filter(Boolean).map(title).join(' / ');
-        const details = [
+        const primaryDetails = [
+            ['Status / Reservability', stateLabel],
             ['Type', title(facility.type || 'Facility')],
-            ['Building', facility.building_name || facility.buildingName || 'Not assigned'],
-            ['Location', facility.location_description || facility.location || 'Not specified'],
             ['Capacity', capacityLabel(facility)],
-            ['Floor', facility.floor || facility.floor_number || 'Not specified'],
         ];
+        const locationDetails = [
+            ['Building', facility.building_name || facility.buildingName || 'Not assigned'],
+            ['Floor', facility.floor || facility.floor_number || 'Not specified'],
+            ['Location', facility.location_description || facility.location || 'Not specified'],
+        ];
+        const detailItems = items => items.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value || 'Not specified')}</dd></div>`).join('');
         const position = `${state.facilityIndex + 1} / ${items.length}`;
         const disabled = items.length <= 1 ? ' disabled' : '';
-        panel.innerHTML = `<div class="reservation-facility-carousel"><div class="reservation-facility-carousel-header"><div class="reservation-facility-carousel-title"><span>Facility</span><strong title="${esc(facility.name || facility.code || 'Facility')}">${esc(facility.name || facility.code || 'Facility')}</strong></div><div class="reservation-facility-carousel-controls" aria-label="Facility selector"><button class="fam-icon-button" type="button" data-facility-carousel="prev" aria-label="Previous facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button><span class="reservation-facility-position" aria-live="polite">${esc(position)}</span><button class="fam-icon-button" type="button" data-facility-carousel="next" aria-label="Next facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button></div></div><div class="reservation-selected-facility-card"><div class="reservation-selected-facility-media">${reservationFacilityMediaHtml(facility)}</div><div class="reservation-side-panel-body" data-scroll-label="Facility details, scroll for more information"><span class="facility-badge facility-status-approved">${esc(stateLabel)}</span><dl class="reservation-preview-list">${details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value || 'Not specified')}</dd></div>`).join('')}</dl></div></div></div>`;
+        panel.innerHTML = `<div class="reservation-facility-carousel"><div class="reservation-facility-carousel-header"><div class="reservation-facility-carousel-title"><span>Facility</span><strong title="${esc(facility.name || facility.code || 'Facility')}">${esc(facility.name || facility.code || 'Facility')}</strong></div><div class="reservation-facility-carousel-controls" aria-label="Facility selector"><button class="fam-icon-button" type="button" data-facility-carousel="prev" aria-label="Previous facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button><span class="reservation-facility-position" aria-live="polite">${esc(position)}</span><button class="fam-icon-button" type="button" data-facility-carousel="next" aria-label="Next facility"${disabled}><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button></div></div><div class="reservation-selected-facility-card"><div class="reservation-side-panel-body" data-scroll-label="Facility details, scroll for more information"><div class="reservation-facility-overview"><div class="reservation-selected-facility-media">${reservationFacilityMediaHtml(facility)}</div><dl class="reservation-preview-list reservation-facility-key-details">${detailItems(primaryDetails)}</dl></div><dl class="reservation-preview-list reservation-facility-location-details">${detailItems(locationDetails)}</dl></div></div></div>`;
         scheduleDashboardHeightSync();
     }
 
