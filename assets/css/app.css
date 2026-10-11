@@ -10927,6 +10927,12 @@ body[data-active-nav="employee-request-room"] .employee-reservation-workspace {
   height: 100%;
   border-radius: 0;
 }
+
+.reservation-selected-facility-media img {
+  display: block;
+  object-fit: cover;
+  object-position: center;
+}
 .reservation-side-panel-body {
   display: grid;
   gap: 0.8rem;
@@ -14650,12 +14656,11 @@ body.facility-drawer-open {
 }
 .reservation-selected-facility-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  min-height: 13rem;
+  grid-template-columns: 1fr;
 }
 .reservation-facility-carousel {
   display: grid;
-  min-height: 100%;
+  min-height: 0;
 }
 .reservation-facility-carousel-header {
   display: flex;
@@ -14700,14 +14705,15 @@ body.facility-drawer-open {
   border-radius: 0;
 }
 .reservation-selected-facility-card .reservation-selected-facility-media {
-  min-height: 100%;
-  aspect-ratio: auto;
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+  overflow: hidden;
 }
 .reservation-selected-facility-media .reservation-facility-image-empty {
   display: grid;
   width: 100%;
   height: 100%;
-  min-height: 13rem;
+  min-height: 0;
   place-items: center;
   align-content: center;
   gap: 0.4rem;
@@ -14734,6 +14740,24 @@ body.facility-drawer-open {
 }
 .reservation-facility-image-empty span:last-child {
   font-size: 0.86rem;
+}
+.reservation-facility-carousel .reservation-side-panel-body {
+  gap: 0.7rem;
+  padding: 0.9rem;
+}
+.reservation-facility-carousel .facility-badge {
+  width: fit-content;
+}
+.reservation-facility-carousel .reservation-preview-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 0.85rem;
+}
+.reservation-facility-carousel .reservation-preview-list div {
+  min-width: 0;
+}
+.reservation-facility-carousel .reservation-preview-list dd {
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 .reservation-preview-empty {
   display: grid !important;
@@ -14804,16 +14828,18 @@ body.facility-drawer-open {
 }
 @media (min-width: 960px) {
   .reservation-dashboard-grid {
-    grid-template-columns: minmax(0, 1.8fr) minmax(24rem, 1fr);
+    grid-template-columns: minmax(0, 1.7fr) minmax(25rem, 0.9fr);
   }
   .reservation-side-column {
     max-height: 100%;
   }
 }
-@media (max-width: 959px) {
-  .reservation-selected-facility-card {
-    grid-template-columns: 1fr;
+@media (min-width: 1280px) {
+  .reservation-dashboard-grid {
+    grid-template-columns: minmax(0, 1.65fr) minmax(28rem, 34rem);
   }
+}
+@media (max-width: 959px) {
   .reservation-facility-carousel-header {
     align-items: stretch;
     flex-direction: column;
@@ -14823,6 +14849,11 @@ body.facility-drawer-open {
   }
   .reservation-calendar-actions {
     justify-content: flex-start;
+  }
+}
+@media (max-width: 520px) {
+  .reservation-facility-carousel .reservation-preview-list {
+    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 640px) {
