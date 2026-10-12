@@ -14749,13 +14749,13 @@ body.facility-drawer-open {
   font-size: 0.86rem;
 }
 .reservation-facility-carousel .reservation-side-panel-body {
-  gap: 0.7rem;
-  padding: 0.9rem;
+  gap: 0.55rem;
+  padding: 0.72rem;
 }
 .reservation-facility-overview {
   display: grid;
-  grid-template-columns: minmax(8rem, 0.95fr) minmax(0, 1.05fr);
-  gap: 0.8rem;
+  grid-template-columns: minmax(7.25rem, 0.82fr) minmax(0, 1.18fr);
+  gap: 0.65rem;
   align-items: start;
   min-width: 0;
 }
@@ -14769,14 +14769,36 @@ body.facility-drawer-open {
 }
 .reservation-facility-key-details {
   grid-template-columns: 1fr;
-  gap: 0.5rem;
+  gap: 0.38rem;
 }
 .reservation-facility-location-details {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem 0.85rem;
+  grid-template-columns: 1fr;
+  gap: 0.38rem;
 }
-.reservation-facility-location-details div:last-child {
-  grid-column: 1 / -1;
+.reservation-facility-key-stack {
+  display: grid;
+  gap: 0.42rem;
+  align-content: start;
+  min-width: 0;
+}
+.reservation-facility-carousel .reservation-facility-status-badge {
+  justify-self: start;
+  max-width: 100%;
+  padding: 0.14rem 0.42rem;
+  font-size: 0.625rem;
+  line-height: 1.2;
+  white-space: normal;
+}
+.reservation-facility-carousel .reservation-preview-list div {
+  gap: 0.08rem;
+}
+.reservation-facility-carousel .reservation-preview-list dt {
+  font-size: 0.625rem;
+  line-height: 1.15;
+}
+.reservation-facility-carousel .reservation-preview-list dd {
+  font-size: 0.75rem;
+  line-height: 1.25;
 }
 .reservation-facility-carousel .facility-badge {
   width: fit-content;
@@ -14784,6 +14806,16 @@ body.facility-drawer-open {
 .reservation-facility-carousel .reservation-preview-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem 0.85rem;
+}
+.reservation-facility-carousel .reservation-facility-key-details,
+.reservation-facility-carousel .reservation-facility-location-details {
+  gap: 0.38rem;
+}
+.reservation-facility-carousel .reservation-facility-key-details {
+  grid-template-columns: 1fr;
+}
+.reservation-facility-carousel .reservation-facility-location-details {
+  grid-template-columns: 1fr;
 }
 .reservation-facility-carousel .reservation-preview-list div {
   min-width: 0;
