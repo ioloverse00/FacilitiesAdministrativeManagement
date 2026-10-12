@@ -52,6 +52,16 @@
         return `${(n / 1048576).toFixed(1)} MB`;
     }
 
+    function validateBuildingImageFile(file) {
+        if (!file) return '';
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+        const extension = String(file.name || '').split('.').pop().toLowerCase();
+        if (!allowedTypes.includes(file.type) || !allowedExtensions.includes(extension)) return 'Upload a JPEG, PNG, or WebP building image.';
+        if (file.size <= 0 || file.size > 5242880) return 'Building image must be 5 MB or smaller.';
+        return '';
+    }
+
     function badge(value, kind = 'status') {
         const raw = String(value || '');
         const cls = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -221,7 +231,6 @@
             <td>${esc(spaceTypeLabel(space.type))}</td>
             <td>${esc(capacityLabel(space))}</td>
             <td>${space.reservable ? 'Yes' : 'No'}</td>
-            <td>${space.hasImage ? 'Uploaded' : 'No image'}</td>
             <td>${badge(space.status)}</td>
             <td class="facility-actions-cell">${menu(`settings-space-menu-${space.id}`, `Actions for ${space.name || space.code || 'facility'}`, actions)}</td>
         </tr>`;
@@ -241,7 +250,7 @@
                     ${canManageRooms() ? '<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="create-space"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Add Facility</button>' : ''}
                 </div>
             </div>
-            <div class="facility-table-scroll settings-facility-table-scroll"><table class="facility-requests-table settings-facility-table"><thead><tr><th>Facility</th><th>Building</th><th>Type</th><th>Capacity</th><th>Reservable</th><th>Image</th><th>Status</th><th>Actions</th></tr></thead><tbody>${tableRows || `<tr><td colspan="8">${stateBlock(emptyMessage, 'meeting_room')}</td></tr>`}</tbody></table></div>
+            <div class="facility-table-scroll settings-facility-table-scroll"><table class="facility-requests-table settings-facility-table"><thead><tr><th>Facility</th><th>Building</th><th>Type</th><th>Capacity</th><th>Reservable</th><th>Status</th><th>Actions</th></tr></thead><tbody>${tableRows || `<tr><td colspan="7">${stateBlock(emptyMessage, 'meeting_room')}</td></tr>`}</tbody></table></div>
         </div>`;
     }
 
@@ -336,7 +345,7 @@
     }
 
     function openBuildingForm(building = {}) {
-        const imagePanel = building.id ? buildingImagePanel(building) : '<section class="document-form-section facility-image-section"><h3>Building Image</h3><p class="legal-empty-note">Save the building before adding an image.</p></section>';
+        const imagePanel = building.id ? buildingImagePanel(building) : newBuildingImagePanel();
         openDialog(`<form class="facility-dialog-panel legal-form" data-settings-form="facility-building" data-id="${esc(building.id || '')}"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>${building.id ? 'Edit Building' : 'Add Building'}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-settings-error></div><section class="document-form-section"><div class="document-form-grid">${field('code', 'Code *', building.code || '', 'text', true)}${field('name', 'Name *', building.name || '', 'text', true)}${field('address', 'Address', building.address || '')}${selectField('status', 'Status', statusOptions(building.status || 'ACTIVE'), building.status || 'ACTIVE')}</div>${textarea('description', 'Description', building.description || '')}</section>${imagePanel}</div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-settings-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Save Building</button></div></form>`);
     }
 
@@ -345,12 +354,15 @@
         const media = imageUrl
             ? `<img src="${esc(imageUrl)}" alt="${esc(space.name || 'Facility image')}" loading="lazy">`
             : (window.FAMFacilityImages?.placeholderHtml?.(space, 'No image yet') || '<div class="facility-image-placeholder"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><span>No image yet</span></div>');
-        openDialog(`<div class="facility-dialog-panel legal-form settings-detail-panel"><div class="facility-details-modal-header"><div><p>Facility Details</p><span class="facility-details-modal-request-number">${esc(space.code || 'Facility')}</span><h2>${esc(space.name || 'Facility')}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close details">&times;</button></div><div class="facility-dialog-body legal-form-body"><section class="settings-detail-layout"><div class="reservation-room-image-panel settings-room-image-panel">${media}<div><strong>${esc(space.name || 'Facility')}</strong><small>${space.hasImage ? esc([space.imageFileName, fileSize(space.imageFileSize), space.imageUploadedAt ? `Uploaded ${fmt(space.imageUploadedAt)}` : ''].filter(Boolean).join(' - ')) : 'No facility image uploaded.'}</small></div></div><div class="contract-detail-grid">${detail('Facility Name', space.name)}${detail('Facility Code', space.code)}${detail('Building', space.buildingName || 'Not assigned')}${detail('Type', spaceTypeLabel(space.type))}${detail('Capacity', capacityLabel(space))}${detail('Floor', space.floor || 'Not specified')}${detail('Location', space.location || 'Not specified')}${detail('Status', title(space.status || 'ACTIVE'))}${detail('Reservability', space.reservable ? 'Reservable' : 'Non-reservable')}</div></section></div><div class="facility-dialog-actions">${canManageRooms() ? `<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="edit-space" data-space-id="${esc(space.id)}">Edit Facility</button>` : ''}<button class="btn-primary dashboard-action-button" type="button" data-settings-dialog-close>Done</button></div></div>`);
+        openDialog(`<div class="facility-dialog-panel legal-form settings-detail-panel"><div class="facility-details-modal-header"><div><p>Facility Details</p><span class="facility-details-modal-request-number">${esc(space.code || 'Facility')}</span><h2>${esc(space.name || 'Facility')}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close details">&times;</button></div><div class="facility-dialog-body legal-form-body"><section class="settings-detail-layout"><div class="reservation-room-image-panel settings-room-image-panel">${media}<div><strong>${esc(space.name || 'Facility')}</strong><small>${space.hasImage ? esc([space.imageFileName, fileSize(space.imageFileSize), space.imageUploadedAt ? `Uploaded ${fmt(space.imageUploadedAt)}` : ''].filter(Boolean).join(' - ')) : 'No facility image uploaded.'}</small></div></div><div class="settings-space-detail-grid">${detail('Facility Name', space.name)}${detail('Facility Code', space.code)}${detail('Building', space.buildingName || 'Not assigned')}${detail('Type', spaceTypeLabel(space.type))}${detail('Capacity', capacityLabel(space))}${detail('Floor', space.floor || 'Not specified')}${detail('Location', space.location || 'Not specified')}${detail('Status', title(space.status || 'ACTIVE'))}${detail('Reservability', space.reservable ? 'Reservable' : 'Non-reservable')}</div></section></div><div class="facility-dialog-actions">${canManageRooms() ? `<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="edit-space" data-space-id="${esc(space.id)}">Edit Facility</button>` : ''}<button class="btn-primary dashboard-action-button" type="button" data-settings-dialog-close>Done</button></div></div>`);
     }
 
     function openBuildingDetails(building = {}) {
-        const imageActions = canManageRooms() && building.id ? `<div class="settings-building-detail-image-actions"><button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="edit-building" data-building-id="${esc(building.id)}">${building.hasImage ? 'Change Image' : 'Add Image'}</button>${building.hasImage ? `<button class="btn-secondary dashboard-action-button document-danger-action" type="button" data-remove-building-image="${esc(building.id)}">Remove Image</button>` : ''}</div>` : '';
-        openDialog(`<div class="facility-dialog-panel legal-form settings-detail-panel settings-building-detail-panel"><div class="facility-details-modal-header settings-building-detail-header"><div><p>Building Details</p><h2>${esc(building.name || 'Building')}</h2></div><div class="settings-building-detail-header-actions">${badge(building.status || 'ACTIVE')}<button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close details">&times;</button></div></div><div class="facility-dialog-body legal-form-body"><section class="settings-building-detail-layout"><div class="settings-building-detail-media">${buildingMedia(building)}</div>${imageActions}<div class="settings-building-detail-grid"><article><span>Building Code</span><strong>${esc(building.code || 'Not available')}</strong></article><article><span>Status</span><strong>${esc(title(building.status || 'ACTIVE'))}</strong></article><article class="settings-building-detail-full"><span>Address</span><strong>${esc(building.address || 'Not set')}</strong></article><article class="settings-building-detail-full"><span>Description</span><strong>${esc(building.description || 'Not available')}</strong></article></div></section></div><div class="facility-dialog-actions">${canManageRooms() ? `<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="edit-building" data-building-id="${esc(building.id)}">Edit Building</button>` : ''}<button class="btn-primary dashboard-action-button" type="button" data-settings-dialog-close>Close</button></div></div>`);
+        openDialog(`<div class="facility-dialog-panel legal-form settings-detail-panel settings-building-detail-panel"><div class="facility-details-modal-header settings-building-detail-header"><div><p>Building Details</p><h2>${esc(building.name || 'Building')}</h2></div><div class="settings-building-detail-header-actions">${badge(building.status || 'ACTIVE')}<button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close details">&times;</button></div></div><div class="facility-dialog-body legal-form-body"><section class="settings-building-detail-layout"><div class="settings-building-detail-media">${buildingMedia(building)}</div><div class="settings-building-detail-grid"><article><span>Building Code</span><strong>${esc(building.code || 'Not available')}</strong></article><article><span>Status</span><strong>${esc(title(building.status || 'ACTIVE'))}</strong></article><article class="settings-building-detail-full"><span>Address</span><strong>${esc(building.address || 'Not set')}</strong></article><article class="settings-building-detail-full"><span>Description</span><strong>${esc(building.description || 'Not available')}</strong></article></div></section></div><div class="facility-dialog-actions">${canManageRooms() ? `<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="edit-building" data-building-id="${esc(building.id)}">Edit Building</button>` : ''}<button class="btn-primary dashboard-action-button" type="button" data-settings-dialog-close>Close</button></div></div>`);
+    }
+
+    function newBuildingImagePanel() {
+        return `<section class="document-form-section facility-image-section settings-new-building-image-panel"><h3>Building Image</h3><div class="reservation-room-image-panel settings-room-image-panel settings-building-image-panel"><div class="settings-building-image-frame" data-building-image-preview-frame><img class="settings-building-image hidden" src="" alt="Selected building image preview" data-building-image-preview><div class="settings-building-placeholder"><span class="material-symbols-outlined" aria-hidden="true">apartment</span><span>Building Photo</span><small>No image selected</small></div></div><div><strong>Optional image</strong><small data-building-image-meta>JPEG, PNG, or WebP up to 5 MB.</small><div class="settings-image-actions"><label class="facility-field"><span>Image File</span><input name="building_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"></label><div class="reservation-room-image-actions"><button class="btn-secondary dashboard-action-button hidden" type="button" data-clear-new-building-image>Remove Selected Image</button></div></div></div></div></section>`;
     }
 
     function buildingImagePanel(building = {}) {
@@ -370,6 +382,13 @@
     async function submitFacilitiesForm(form) {
         if (form.dataset.submitting === 'true') return;
         const type = form.dataset.settingsForm;
+        const isNewBuilding = type === 'facility-building' && !form.dataset.id;
+        const pendingBuildingImage = isNewBuilding ? form.querySelector('input[name="building_image"]')?.files?.[0] : null;
+        const imageError = validateBuildingImageFile(pendingBuildingImage);
+        if (imageError) {
+            showError(form, { message: imageError });
+            return;
+        }
         const payload = formPayload(form);
         payload.id = form.dataset.id || '';
         payload.action = {
@@ -380,8 +399,23 @@
         setSubmitting(form, true);
         clearError(form);
         try {
-            await window.FAMApi.request(api('settings/facilities.php'), { method: 'POST', body: payload });
-            window.FAMModal?.showToast?.('Facilities settings saved.');
+            const result = await window.FAMApi.request(api('settings/facilities.php'), { method: 'POST', body: payload });
+            const savedId = result.data?.item?.id || payload.id;
+            let imageUploaded = false;
+            if (pendingBuildingImage && savedId) {
+                try {
+                    await uploadBuildingImageFile(savedId, pendingBuildingImage);
+                    imageUploaded = true;
+                } catch (imageError) {
+                    window.FAMModal?.showToast?.('Building created, but its image was not uploaded. Use Edit Building to add the image.');
+                    closeDialog();
+                    await loadFacilities();
+                    const created = (state.facilities.data.buildings || []).find(row => String(row.id) === String(savedId));
+                    openBuildingForm(created || { id: savedId, name: payload.name, code: payload.code, status: payload.status });
+                    return;
+                }
+            }
+            window.FAMModal?.showToast?.(pendingBuildingImage && imageUploaded ? 'Building and image saved.' : 'Facilities settings saved.');
             closeDialog();
             await loadFacilities();
             if (type === 'facility-building') openBuildingsManager();
@@ -390,6 +424,14 @@
         } finally {
             if (form.isConnected) setSubmitting(form, false);
         }
+    }
+
+    async function uploadBuildingImageFile(buildingId, file) {
+        const error = validateBuildingImageFile(file);
+        if (error) throw new Error(error);
+        const body = new FormData();
+        body.append('building_image', file);
+        await window.FAMApi.request(api(`settings/building-image.php?building_id=${encodeURIComponent(buildingId)}`), { method: 'POST', body });
     }
 
     async function submitRoomImage(container) {
@@ -432,12 +474,10 @@
             window.FAMModal?.showToast?.('Select a building image first.');
             return;
         }
-        const body = new FormData();
-        body.append('building_image', input.files[0]);
         state.facilities.buildingImageBusy = true;
         button.disabled = true;
         try {
-            await window.FAMApi.request(api(`settings/building-image.php?building_id=${encodeURIComponent(buildingId)}`), { method: 'POST', body });
+            await uploadBuildingImageFile(buildingId, input.files[0]);
             window.FAMModal?.showToast?.('Building image saved.');
             closeDialog();
             await loadFacilities();
@@ -448,6 +488,49 @@
             state.facilities.buildingImageBusy = false;
             button.disabled = false;
         }
+    }
+
+    function updateNewBuildingImagePreview(input) {
+        const form = input.closest('[data-settings-form="facility-building"]');
+        if (!form || form.dataset.id) return;
+        const file = input.files?.[0] || null;
+        const preview = form.querySelector('[data-building-image-preview]');
+        const placeholder = form.querySelector('[data-building-image-preview-frame] .settings-building-placeholder');
+        const meta = form.querySelector('[data-building-image-meta]');
+        const clear = form.querySelector('[data-clear-new-building-image]');
+        if (preview?.dataset.objectUrl) {
+            URL.revokeObjectURL(preview.dataset.objectUrl);
+            delete preview.dataset.objectUrl;
+        }
+        if (!file) {
+            if (preview) {
+                preview.src = '';
+                preview.classList.add('hidden');
+            }
+            if (placeholder) placeholder.hidden = false;
+            if (meta) meta.textContent = 'JPEG, PNG, or WebP up to 5 MB.';
+            clear?.classList.add('hidden');
+            return;
+        }
+        const error = validateBuildingImageFile(file);
+        if (meta) meta.textContent = error || `${file.name} - ${fileSize(file.size)}`;
+        if (error) {
+            if (preview) {
+                preview.src = '';
+                preview.classList.add('hidden');
+            }
+            if (placeholder) placeholder.hidden = false;
+            clear?.classList.remove('hidden');
+            return;
+        }
+        if (preview && !error) {
+            const url = URL.createObjectURL(file);
+            preview.dataset.objectUrl = url;
+            preview.src = url;
+            preview.classList.remove('hidden');
+            if (placeholder) placeholder.hidden = true;
+        }
+        clear?.classList.remove('hidden');
     }
 
     async function removeBuildingImage(buildingId) {
@@ -703,6 +786,15 @@
                 if (imageForm) submitBuildingImage(imageForm).catch(console.error);
                 return;
             }
+            const clearBuildingImage = event.target.closest('[data-clear-new-building-image]');
+            if (clearBuildingImage) {
+                const input = clearBuildingImage.closest('[data-settings-form]')?.querySelector('input[name="building_image"]');
+                if (input) {
+                    input.value = '';
+                    updateNewBuildingImagePreview(input);
+                }
+                return;
+            }
             const select = event.target.closest('[data-blacklist-select]');
             if (select) {
                 state.blacklist.selected = state.blacklist.candidates.find(candidate => Number(candidate.id) === Number(select.dataset.blacklistSelect)) || null;
@@ -790,6 +882,9 @@
             if (event.target.matches('#facilities-building-filter')) {
                 state.facilities.building = event.target.value;
                 renderPanel();
+            }
+            if (event.target.matches('[data-settings-form="facility-building"] input[name="building_image"]')) {
+                updateNewBuildingImagePreview(event.target);
             }
         });
         document.addEventListener('submit', event => {
