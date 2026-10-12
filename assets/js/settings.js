@@ -8,7 +8,7 @@
     const state = {
         active: 'facilities',
         facilities: { section: 'spaces', data: {}, loading: false, loaded: false, error: '', building: 'all', search: '', requestId: 0, refreshQueued: false },
-        blacklist: { query: '', candidates: [], selected: null, entries: [], reason: '', loading: false },
+        blacklist: { query: '', tableQuery: '', candidates: [], selected: null, entries: [], reason: '', loading: false, submitting: false },
         rules: { items: [], categories: [], statuses: [], search: '', category: 'all', status: 'all', loading: false, loaded: false, error: '' },
         lastFocus: null,
         bound: false,
@@ -98,6 +98,14 @@
 
     function detail(label, value) {
         return `<article><span>${esc(label)}</span><strong>${esc(value || 'Not available')}</strong></article>`;
+    }
+
+    function menu(id, label, items) {
+        return `<div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-settings-menu-toggle="${esc(id)}" aria-haspopup="menu" aria-expanded="false" aria-label="${esc(label)}">&#8942;</button><div id="${esc(id)}" class="facility-action-dropdown hidden" role="menu">${items.join('')}</div></div>`;
+    }
+
+    function buildingMedia() {
+        return `<div class="settings-building-placeholder"><span class="material-symbols-outlined" aria-hidden="true">apartment</span><span>Building Photo</span><small>Photo not configured</small></div>`;
     }
 
     function showError(form, error) {
@@ -200,16 +208,22 @@
             const haystack = [space.code, space.name, space.type, space.buildingName, space.location].join(' ').toLowerCase();
             return matchesBuilding && (!query || haystack.includes(query));
         });
-        const tableRows = rows.map(space => `<tr>
-            <td><button class="document-primary-cell legal-primary-cell" type="button" data-facilities-action="edit-space" data-space-id="${esc(space.id)}"><span class="material-symbols-outlined document-file-icon" aria-hidden="true">meeting_room</span><span><strong>${esc(space.name)}</strong><small>${esc(space.code)}</small></span></button></td>
+        const tableRows = rows.map(space => {
+            const actions = [
+                `<button type="button" role="menuitem" data-facilities-action="view-space" data-space-id="${esc(space.id)}">View Details</button>`,
+                canManageRooms() ? `<button type="button" role="menuitem" data-facilities-action="edit-space" data-space-id="${esc(space.id)}">Edit Facility</button>` : '',
+            ].filter(Boolean);
+            return `<tr>
+            <td><button class="document-primary-cell legal-primary-cell" type="button" data-facilities-action="view-space" data-space-id="${esc(space.id)}"><span class="material-symbols-outlined document-file-icon" aria-hidden="true">meeting_room</span><span><strong>${esc(space.name)}</strong><small>${esc(space.code)}</small></span></button></td>
             <td>${esc(space.buildingName || 'Not assigned')}</td>
             <td>${esc(spaceTypeLabel(space.type))}</td>
             <td>${esc(capacityLabel(space))}</td>
             <td>${space.reservable ? 'Yes' : 'No'}</td>
             <td>${space.hasImage ? 'Uploaded' : 'No image'}</td>
             <td>${badge(space.status)}</td>
-            <td>${canManageRooms() ? `<button class="facility-text-button" type="button" data-facilities-action="edit-space" data-space-id="${esc(space.id)}">Edit</button>` : ''}</td>
-        </tr>`).join('');
+            <td class="facility-actions-cell">${menu(`settings-space-menu-${space.id}`, `Actions for ${space.name || space.code || 'facility'}`, actions)}</td>
+        </tr>`;
+        }).join('');
         const emptyMessage = total ? 'No facilities match the current filters.' : 'No facility records are available yet.';
         return `<div class="facility-table-card settings-facility-inventory">
             <div class="settings-facility-header">
@@ -290,13 +304,22 @@
         state.lastFocus = document.activeElement;
         modal.hidden = false;
         modal.innerHTML = html;
+        const title = modal.querySelector('.facility-details-modal-header h2');
+        if (title) {
+            title.id = 'admin-dialog-title';
+            modal.setAttribute('aria-labelledby', title.id);
+        } else {
+            modal.removeAttribute('aria-labelledby');
+        }
         document.body.classList.add('fam-modal-open', 'facility-details-modal-open');
+        modal.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus?.();
     }
 
     function closeDialog() {
         const modal = qs('#admin-dialog');
         if (modal) {
             modal.hidden = true;
+            modal.removeAttribute('aria-labelledby');
             modal.innerHTML = '';
         }
         document.body.classList.remove('fam-modal-open', 'facility-details-modal-open');
@@ -305,12 +328,25 @@
     }
 
     function openBuildingsManager() {
-        const rows = (state.facilities.data.buildings || []).map(building => `<tr><td><strong>${esc(building.code)}</strong><small class="table-cell-secondary">${esc(building.name)}</small></td><td>${esc(building.address || 'Not set')}</td><td>${badge(building.status)}</td><td>${canManageRooms() ? `<button class="facility-text-button" type="button" data-facilities-action="edit-building" data-building-id="${esc(building.id)}">Edit</button>` : ''}</td></tr>`).join('');
-        openDialog(`<div class="facility-dialog-panel legal-form"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>Manage Buildings</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="facility-table-scroll"><table class="facility-requests-table"><thead><tr><th>Building</th><th>Address</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows || `<tr><td colspan="4">${stateBlock('No buildings found.', 'apartment')}</td></tr>`}</tbody></table></div></div><div class="facility-dialog-actions">${canManageRooms() ? '<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="create-building">Add Building</button>' : ''}<button class="btn-primary dashboard-action-button" type="button" data-settings-dialog-close>Done</button></div></div>`);
+        const buildings = state.facilities.data.buildings || [];
+        const cards = buildings.map(building => `<button class="settings-building-card" type="button" data-facilities-action="view-building" data-building-id="${esc(building.id)}">${buildingMedia(building)}<span><strong>${esc(building.name || building.code || 'Building')}</strong><small>${esc(building.code || 'No code')}</small></span>${badge(building.status)}</button>`).join('');
+        openDialog(`<div class="facility-dialog-panel legal-form settings-buildings-panel"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>Manage Buildings</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close buildings">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="settings-building-gallery">${cards || stateBlock('No buildings found.', 'apartment')}</div></div><div class="facility-dialog-actions">${canManageRooms() ? '<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="create-building">Add Building</button>' : ''}<button class="btn-primary dashboard-action-button" type="button" data-settings-dialog-close>Done</button></div></div>`);
     }
 
     function openBuildingForm(building = {}) {
         openDialog(`<form class="facility-dialog-panel legal-form" data-settings-form="facility-building" data-id="${esc(building.id || '')}"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>${building.id ? 'Edit Building' : 'Add Building'}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-settings-error></div><section class="document-form-section"><div class="document-form-grid">${field('code', 'Code *', building.code || '', 'text', true)}${field('name', 'Name *', building.name || '', 'text', true)}${field('address', 'Address', building.address || '')}${selectField('status', 'Status', statusOptions(building.status || 'ACTIVE'), building.status || 'ACTIVE')}</div>${textarea('description', 'Description', building.description || '')}</section></div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-settings-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Save Building</button></div></form>`);
+    }
+
+    function openSpaceDetails(space = {}) {
+        const imageUrl = space.hasImage ? api(`reservations/room-image.php?space_id=${encodeURIComponent(space.id)}`) : '';
+        const media = imageUrl
+            ? `<img src="${esc(imageUrl)}" alt="${esc(space.name || 'Facility image')}" loading="lazy">`
+            : (window.FAMFacilityImages?.placeholderHtml?.(space, 'No image yet') || '<div class="facility-image-placeholder"><span class="material-symbols-outlined" aria-hidden="true">meeting_room</span><span>No image yet</span></div>');
+        openDialog(`<div class="facility-dialog-panel legal-form settings-detail-panel"><div class="facility-details-modal-header"><div><p>Facility Details</p><span class="facility-details-modal-request-number">${esc(space.code || 'Facility')}</span><h2>${esc(space.name || 'Facility')}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close details">&times;</button></div><div class="facility-dialog-body legal-form-body"><section class="settings-detail-layout"><div class="reservation-room-image-panel settings-room-image-panel">${media}<div><strong>${esc(space.name || 'Facility')}</strong><small>${space.hasImage ? esc([space.imageFileName, fileSize(space.imageFileSize), space.imageUploadedAt ? `Uploaded ${fmt(space.imageUploadedAt)}` : ''].filter(Boolean).join(' - ')) : 'No facility image uploaded.'}</small></div></div><div class="contract-detail-grid">${detail('Facility Name', space.name)}${detail('Facility Code', space.code)}${detail('Building', space.buildingName || 'Not assigned')}${detail('Type', spaceTypeLabel(space.type))}${detail('Capacity', capacityLabel(space))}${detail('Floor', space.floor || 'Not specified')}${detail('Location', space.location || 'Not specified')}${detail('Status', title(space.status || 'ACTIVE'))}${detail('Reservability', space.reservable ? 'Reservable' : 'Non-reservable')}</div></section></div><div class="facility-dialog-actions">${canManageRooms() ? `<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="edit-space" data-space-id="${esc(space.id)}">Edit Facility</button>` : ''}<button class="btn-primary dashboard-action-button" type="button" data-settings-dialog-close>Done</button></div></div>`);
+    }
+
+    function openBuildingDetails(building = {}) {
+        openDialog(`<div class="facility-dialog-panel legal-form settings-detail-panel"><div class="facility-details-modal-header"><div><p>Building Details</p><span class="facility-details-modal-request-number">${esc(building.code || 'Building')}</span><h2>${esc(building.name || 'Building')}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close details">&times;</button></div><div class="facility-dialog-body legal-form-body"><section class="settings-detail-layout"><div class="settings-building-detail-media">${buildingMedia(building)}</div><div class="contract-detail-grid">${detail('Building Name', building.name)}${detail('Building Code', building.code)}${detail('Address', building.address || 'Not set')}${detail('Status', title(building.status || 'ACTIVE'))}${detail('Description', building.description || 'Not available')}</div></section></div><div class="facility-dialog-actions">${canManageRooms() ? `<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="edit-building" data-building-id="${esc(building.id)}">Edit Building</button>` : ''}<button class="btn-primary dashboard-action-button" type="button" data-settings-dialog-close>Close</button></div></div>`);
     }
 
     function openSpaceForm(space = {}) {
@@ -382,10 +418,39 @@
         if (!isBlacklistAdmin()) {
             return `${sectionHeader('Visitor Blacklist', 'Restrict visitor registration for blocked individuals.')}${stateBlock('Visitor Blacklist requires FAM Super Admin access.', 'lock')}`;
         }
-        const candidates = state.blacklist.candidates.map(candidate => `<button class="facility-text-button admin-blacklist-candidate" type="button" data-blacklist-select="${esc(candidate.id)}"><strong>${esc(candidate.name || candidate.full_name)}</strong><span>${esc(candidate.email || candidate.email_address || candidate.phone || candidate.mobile_number || 'No contact on file')}</span></button>`).join('');
+        const tableQuery = state.blacklist.tableQuery.trim().toLowerCase();
+        const entries = (state.blacklist.entries || []).filter(entry => !tableQuery || [entry.name, entry.email, entry.phone, entry.reason].join(' ').toLowerCase().includes(tableQuery));
+        const rows = entries.map(entry => {
+            const actions = [
+                `<button type="button" role="menuitem" data-blacklist-view="${esc(entry.id)}">View Details</button>`,
+                `<button type="button" role="menuitem" class="document-danger-action" data-blacklist-remove="${esc(entry.id)}">Unblacklist</button>`,
+            ];
+            return `<tr><td>${esc(entry.name)}</td><td>${esc(entry.email || 'Not available')}</td><td>${esc(entry.phone || 'Not available')}</td><td>${esc(entry.reason || 'No reason supplied')}</td><td>${esc(fmt(entry.blacklisted_at))}</td><td class="facility-actions-cell">${menu(`blacklist-menu-${entry.id}`, `Actions for ${entry.name || 'blacklist record'}`, actions)}</td></tr>`;
+        }).join('');
+        const empty = tableQuery ? 'No blacklisted visitors match the current search.' : 'No blacklisted visitors';
+        return `${sectionHeader('Visitor Blacklist', 'Block visitor self-registration and scanner entry for selected people.')}<div class="facility-table-card admin-blacklist-panel"><div class="settings-facility-header admin-blacklist-header"><div class="settings-facility-title"><h2>Visitor Blacklist</h2><p>Review active blacklist records and add existing visitors when required.</p><span>${state.blacklist.entries.length} active blacklist ${state.blacklist.entries.length === 1 ? 'record' : 'records'}</span></div><div class="settings-facility-toolbar"><label class="facility-field facility-search-field"><span class="sr-only">Search blacklist</span><input id="blacklist-table-search" type="search" value="${esc(state.blacklist.tableQuery)}" placeholder="Search blacklist records"></label><button class="btn-secondary dashboard-action-button" type="button" data-blacklist-open-add><span class="material-symbols-outlined" aria-hidden="true">add_circle</span>Add Visitor</button></div></div><div class="facility-table-scroll admin-blacklist-table-scroll"><table class="facility-requests-table admin-blacklist-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Reason</th><th>Blacklisted date</th><th>Actions</th></tr></thead><tbody>${rows || `<tr><td colspan="6">${stateBlock(empty, 'block')}<p class="admin-blacklist-empty-copy">${tableQuery ? 'Try a different name, contact detail, or reason.' : 'Use Add Visitor to blacklist an existing visitor record.'}</p></td></tr>`}</tbody></table></div></div>`;
+    }
+
+    function blacklistFormContent() {
+        const candidates = state.blacklist.candidates.map(candidate => `<button class="facility-text-button admin-blacklist-candidate" type="button" data-blacklist-select="${esc(candidate.id)}" ${candidate.is_blacklisted ? 'disabled' : ''}><strong>${esc(candidate.name || candidate.full_name)}</strong><span>${esc(candidate.email || candidate.email_address || candidate.phone || candidate.mobile_number || 'No contact on file')}${candidate.is_blacklisted ? ' - Already blacklisted' : ''}</span></button>`).join('');
         const selected = state.blacklist.selected ? `<article class="fam-card admin-selected-visitor"><h3>${esc(state.blacklist.selected.name || state.blacklist.selected.full_name)}</h3><p>${esc(state.blacklist.selected.email || state.blacklist.selected.email_address || 'No email')} - ${esc(state.blacklist.selected.phone || state.blacklist.selected.mobile_number || 'No phone')}</p></article>` : '';
-        const rows = state.blacklist.entries.map(entry => `<tr><td>${esc(entry.name)}</td><td>${esc(entry.email || 'Not available')}</td><td>${esc(entry.phone || 'Not available')}</td><td>${esc(entry.reason || 'No reason supplied')}</td><td>${esc(fmt(entry.blacklisted_at))}</td><td><button class="facility-text-button document-danger-action" type="button" data-blacklist-remove="${esc(entry.id)}">Unblacklist</button></td></tr>`).join('');
-        return `${sectionHeader('Visitor Blacklist', 'Block visitor self-registration and scanner entry for selected people.')}<div class="admin-blacklist-layout"><section class="fam-card admin-blacklist-search"><h3>Add Visitor To Blacklist</h3><label class="facility-field"><span>Search Visitors</span><input id="blacklist-search" type="search" value="${esc(state.blacklist.query)}" placeholder="Search visitor by name..."></label><div class="admin-blacklist-results">${state.blacklist.loading ? stateBlock('Searching visitors...', 'progress_activity') : candidates || stateBlock('Search for an existing visitor by name.', 'person_search')}</div>${selected}<label class="facility-field document-full-field"><span>Blacklist Reason *</span><textarea id="blacklist-reason" rows="4" required>${esc(state.blacklist.reason)}</textarea></label><button class="btn-primary dashboard-action-button" type="button" data-blacklist-add ${state.blacklist.selected && state.blacklist.reason.trim() ? '' : 'disabled'}>Add To Blacklist</button></section><section class="fam-card admin-blacklist-table-card"><div class="facility-table-header admin-inner-header"><div><h3>Blacklisted Visitors</h3><p>${state.blacklist.entries.length} active records</p></div></div><div class="facility-table-scroll"><table class="facility-requests-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Reason</th><th>Blacklisted</th><th>Actions</th></tr></thead><tbody>${rows || `<tr><td colspan="6">${stateBlock('No visitors are currently blacklisted.', 'block')}</td></tr>`}</tbody></table></div></section></div>`;
+        return `<label class="facility-field"><span>Search Existing Visitor</span><input id="blacklist-search" type="search" value="${esc(state.blacklist.query)}" placeholder="Search visitor by name..." autocomplete="off"></label><div class="admin-blacklist-results">${state.blacklist.loading ? stateBlock('Searching visitors...', 'progress_activity') : candidates || stateBlock('Search for an existing visitor by name.', 'person_search')}</div>${selected}<label class="facility-field document-full-field"><span>Blacklist Reason *</span><textarea id="blacklist-reason" rows="4" required>${esc(state.blacklist.reason)}</textarea></label>`;
+    }
+
+    function renderBlacklistDialog() {
+        const body = qs('#blacklist-modal-body');
+        const submit = qs('#blacklist-modal-submit');
+        if (!body) return;
+        body.innerHTML = blacklistFormContent();
+        if (submit) submit.disabled = state.blacklist.submitting || !state.blacklist.selected || !state.blacklist.reason.trim();
+    }
+
+    function openBlacklistModal() {
+        openDialog(`<div class="facility-dialog-panel legal-form admin-blacklist-modal"><div class="facility-details-modal-header"><div><p>Visitor Management</p><h2>Add Visitor To Blacklist</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div id="blacklist-modal-body" class="facility-dialog-body legal-form-body">${blacklistFormContent()}</div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-settings-dialog-close>Cancel</button><button id="blacklist-modal-submit" class="btn-primary dashboard-action-button" type="button" data-blacklist-add ${state.blacklist.selected && state.blacklist.reason.trim() ? '' : 'disabled'}>Add to Blacklist</button></div></div>`);
+    }
+
+    function openBlacklistDetails(entry = {}) {
+        openDialog(`<div class="facility-dialog-panel legal-form settings-detail-panel"><div class="facility-details-modal-header"><div><p>Visitor Blacklist</p><h2>${esc(entry.name || 'Blacklisted Visitor')}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close details">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="contract-detail-grid">${detail('Name', entry.name)}${detail('Email', entry.email || 'Not available')}${detail('Phone', entry.phone || 'Not available')}${detail('Reason', entry.reason || 'No reason supplied')}${detail('Blacklisted Date', fmt(entry.blacklisted_at))}</div></div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button document-danger-action" type="button" data-blacklist-remove="${esc(entry.id)}">Unblacklist</button><button class="btn-primary dashboard-action-button" type="button" data-settings-dialog-close>Close</button></div></div>`);
     }
 
     async function loadBlacklist() {
@@ -401,32 +466,46 @@
         state.blacklist.candidates = [];
         state.blacklist.selected = null;
         if (query.length < 2) {
-            renderPanel();
+            if (qs('#blacklist-modal-body')) renderBlacklistDialog();
+            else renderPanel();
             return;
         }
         state.blacklist.loading = true;
-        renderPanel();
+        if (qs('#blacklist-modal-body')) renderBlacklistDialog();
+        else renderPanel();
         try {
             const payload = await window.FAMApi.request(api(`settings/visitor-search.php?name=${encodeURIComponent(query)}`));
             state.blacklist.candidates = payload.data?.items || [];
         } finally {
             state.blacklist.loading = false;
-            if (state.active === 'visitors') renderPanel();
+            if (qs('#blacklist-modal-body')) renderBlacklistDialog();
+            else if (state.active === 'visitors') renderPanel();
         }
     }
 
     async function addBlacklistEntry() {
         if (!state.blacklist.selected || !state.blacklist.reason.trim()) return;
-        await window.FAMApi.request(api('settings/visitor-blacklist.php'), { method: 'POST', body: { visitor_id: state.blacklist.selected.id, reason: state.blacklist.reason.trim() } });
-        window.FAMModal?.showToast?.('Visitor blacklisted.');
-        state.blacklist = { ...state.blacklist, query: '', candidates: [], selected: null, reason: '' };
-        await loadBlacklist();
+        if (state.blacklist.submitting) return;
+        state.blacklist.submitting = true;
+        renderBlacklistDialog();
+        try {
+            await window.FAMApi.request(api('settings/visitor-blacklist.php'), { method: 'POST', body: { visitor_id: state.blacklist.selected.id, reason: state.blacklist.reason.trim() } });
+            window.FAMModal?.showToast?.('Visitor blacklisted.');
+            state.blacklist = { ...state.blacklist, query: '', candidates: [], selected: null, reason: '', submitting: false };
+            closeDialog();
+            await loadBlacklist();
+        } catch (error) {
+            state.blacklist.submitting = false;
+            renderBlacklistDialog();
+            throw error;
+        }
     }
 
     async function removeBlacklistEntry(id) {
         if (!await window.FAMModal.confirm('Remove this visitor from the blacklist?', { title: 'Unblacklist Visitor', confirmLabel: 'Unblacklist' })) return;
         await window.FAMApi.request(api('settings/visitor-blacklist.php'), { method: 'DELETE', body: { id } });
         window.FAMModal?.showToast?.('Visitor removed from blacklist.');
+        if (qs('#admin-dialog')?.hidden === false) closeDialog();
         await loadBlacklist();
     }
 
@@ -553,6 +632,7 @@
             }
             const facilitiesAction = event.target.closest('[data-facilities-action]');
             if (facilitiesAction) {
+                window.FAMTableMenus?.close();
                 handleFacilitiesAction(facilitiesAction).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to open Facilities settings.'));
                 return;
             }
@@ -567,18 +647,31 @@
             const select = event.target.closest('[data-blacklist-select]');
             if (select) {
                 state.blacklist.selected = state.blacklist.candidates.find(candidate => Number(candidate.id) === Number(select.dataset.blacklistSelect)) || null;
-                renderPanel();
+                if (qs('#blacklist-modal-body')) renderBlacklistDialog();
+                else renderPanel();
                 return;
+            }
+            const openBlacklist = event.target.closest('[data-blacklist-open-add]');
+            if (openBlacklist) return openBlacklistModal();
+            const viewBlacklist = event.target.closest('[data-blacklist-view]');
+            if (viewBlacklist) {
+                window.FAMTableMenus?.close();
+                return openBlacklistDetails((state.blacklist.entries || []).find(entry => Number(entry.id) === Number(viewBlacklist.dataset.blacklistView)) || {});
             }
             const add = event.target.closest('[data-blacklist-add]');
             if (add) return void addBlacklistEntry().catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to blacklist visitor.'));
             const remove = event.target.closest('[data-blacklist-remove]');
             if (remove) return void removeBlacklistEntry(Number(remove.dataset.blacklistRemove)).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to remove visitor from blacklist.'));
             if (event.target.closest('[data-settings-dialog-close]')) return void closeDialog();
+            const settingsToggle = event.target.closest('[data-settings-menu-toggle]');
+            if (settingsToggle) return void window.FAMTableMenus?.toggle(settingsToggle, document.getElementById(settingsToggle.dataset.settingsMenuToggle));
             const toggle = event.target.closest('[data-settings-rule-menu-toggle]');
             if (toggle) return void window.FAMTableMenus?.toggle(toggle, document.getElementById(toggle.dataset.settingsRuleMenuToggle));
             const action = event.target.closest('[data-settings-rule-action]');
-            if (!action) return;
+            if (!action) {
+                window.FAMTableMenus?.close();
+                return;
+            }
             window.FAMTableMenus?.close();
             const policyId = Number(action.dataset.policyId || 0);
             const provisionId = Number(action.dataset.provisionId || 0);
@@ -599,9 +692,14 @@
                 window.clearTimeout(state.blacklistTimer);
                 state.blacklistTimer = window.setTimeout(() => searchVisitors().catch(console.error), 250);
             }
+            if (event.target.matches('#blacklist-table-search')) {
+                state.blacklist.tableQuery = event.target.value;
+                renderPanel();
+            }
             if (event.target.matches('#blacklist-reason')) {
                 state.blacklist.reason = event.target.value;
-                renderPanel();
+                if (qs('#blacklist-modal-body')) renderBlacklistDialog();
+                else renderPanel();
             }
             if (event.target.matches('#settings-rules-search')) {
                 state.rules.search = event.target.value;
@@ -636,10 +734,27 @@
             else submitLegalForm(form).catch(console.error);
         });
         document.addEventListener('keydown', event => {
+            const dialog = qs('#admin-dialog');
+            if (event.key === 'Tab' && dialog?.hidden === false) {
+                const focusable = Array.from(dialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter(element => !element.disabled && element.offsetParent !== null);
+                if (!focusable.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+                return;
+            }
             if (event.key !== 'Escape' || event.defaultPrevented) return;
             if (qs('#admin-dialog')?.hidden === false) {
                 event.preventDefault();
                 closeDialog();
+            } else {
+                window.FAMTableMenus?.close();
             }
         });
     }
@@ -648,8 +763,10 @@
         const type = action.dataset.facilitiesAction;
         if (type === 'manage-buildings') return openBuildingsManager();
         if (type === 'create-building') return openBuildingForm();
+        if (type === 'view-building') return openBuildingDetails((state.facilities.data.buildings || []).find(row => String(row.id) === String(action.dataset.buildingId)) || {});
         if (type === 'edit-building') return openBuildingForm((state.facilities.data.buildings || []).find(row => String(row.id) === String(action.dataset.buildingId)) || {});
         if (type === 'create-space') return openSpaceForm();
+        if (type === 'view-space') return openSpaceDetails((state.facilities.data.spaces || []).find(row => String(row.id) === String(action.dataset.spaceId)) || {});
         if (type === 'edit-space') return openSpaceForm((state.facilities.data.spaces || []).find(row => String(row.id) === String(action.dataset.spaceId)) || {});
     }
 

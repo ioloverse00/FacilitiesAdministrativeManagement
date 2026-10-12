@@ -6186,6 +6186,154 @@ button.reservation-more-events {
   width: 5.5rem;
 }
 
+.settings-buildings-panel {
+  width: min(64rem, 100%);
+}
+
+.settings-building-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1rem;
+}
+
+.settings-building-card {
+  display: grid;
+  gap: 0.65rem;
+  align-content: start;
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-building-card:hover,
+.settings-building-card:focus-visible {
+  border-color: rgba(79, 70, 229, 0.34);
+  box-shadow: var(--shadow-md);
+}
+
+.settings-building-card strong,
+.settings-building-card small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.settings-building-card small {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.settings-building-placeholder,
+.settings-building-detail-media {
+  display: grid;
+  place-items: center;
+  gap: 0.25rem;
+  min-height: 8rem;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #f8fafc;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.settings-building-placeholder .material-symbols-outlined {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.8rem;
+  background: #eef2ff;
+  color: var(--primary);
+  font-size: 1.45rem;
+}
+
+.settings-building-placeholder span:not(.material-symbols-outlined) {
+  color: var(--text-main);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.settings-building-placeholder small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.settings-detail-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-blacklist-panel {
+  border: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  overflow: visible;
+}
+
+.admin-blacklist-header {
+  align-items: end;
+}
+
+.admin-blacklist-table {
+  min-width: 940px;
+}
+
+.admin-blacklist-table th,
+.admin-blacklist-table td {
+  vertical-align: middle;
+}
+
+.admin-blacklist-empty-copy {
+  margin: -0.8rem 0 1rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.admin-blacklist-modal {
+  width: min(40rem, 100%);
+}
+
+.admin-blacklist-results {
+  display: grid;
+  gap: 0.5rem;
+  min-height: 4rem;
+}
+
+.admin-blacklist-candidate {
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+}
+
+.admin-blacklist-candidate span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.admin-selected-visitor {
+  padding: 0.85rem;
+  border-radius: var(--radius-lg);
+  background: #f8fafc;
+}
+
+.admin-selected-visitor h3,
+.admin-selected-visitor p {
+  margin: 0;
+}
+
+.admin-selected-visitor p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
 .admin-unsaved {
   display: inline-flex;
   align-items: center;
@@ -14784,8 +14932,8 @@ body.facility-drawer-open {
 .reservation-facility-carousel .reservation-facility-status-badge {
   justify-self: start;
   max-width: 100%;
-  padding: 0.14rem 0.42rem;
-  font-size: 0.625rem;
+  padding: 0.18rem 0.5rem;
+  font-size: 0.6875rem;
   line-height: 1.2;
   white-space: normal;
 }
