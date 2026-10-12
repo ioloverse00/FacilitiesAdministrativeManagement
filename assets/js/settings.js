@@ -7,7 +7,7 @@
 
     const state = {
         active: 'facilities',
-        facilities: { section: 'spaces', data: {}, loading: false, loaded: false, error: '', building: 'all', search: '', requestId: 0, refreshQueued: false },
+        facilities: { section: 'spaces', data: {}, loading: false, loaded: false, error: '', building: 'all', search: '', requestId: 0, refreshQueued: false, buildingImageBusy: false },
         blacklist: { query: '', tableQuery: '', candidates: [], selected: null, entries: [], reason: '', loading: false, submitting: false },
         rules: { items: [], categories: [], statuses: [], search: '', category: 'all', status: 'all', loading: false, loaded: false, error: '' },
         lastFocus: null,
@@ -104,8 +104,10 @@
         return `<div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-settings-menu-toggle="${esc(id)}" aria-haspopup="menu" aria-expanded="false" aria-label="${esc(label)}">&#8942;</button><div id="${esc(id)}" class="facility-action-dropdown hidden" role="menu">${items.join('')}</div></div>`;
     }
 
-    function buildingMedia() {
-        return `<div class="settings-building-placeholder"><span class="material-symbols-outlined" aria-hidden="true">apartment</span><span>Building Photo</span><small>Photo not configured</small></div>`;
+    function buildingMedia(building = {}) {
+        const placeholder = `<div class="settings-building-placeholder" ${building.hasImage ? 'hidden' : ''}><span class="material-symbols-outlined" aria-hidden="true">apartment</span><span>Building Photo</span><small>Photo not configured</small></div>`;
+        if (!building.hasImage || !building.imageUrl) return placeholder;
+        return `<div class="settings-building-image-frame"><img class="settings-building-image" src="${esc(api(building.imageUrl))}" alt="${esc(building.name || 'Building image')}" loading="lazy">${placeholder}</div>`;
     }
 
     function showError(form, error) {
@@ -334,7 +336,8 @@
     }
 
     function openBuildingForm(building = {}) {
-        openDialog(`<form class="facility-dialog-panel legal-form" data-settings-form="facility-building" data-id="${esc(building.id || '')}"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>${building.id ? 'Edit Building' : 'Add Building'}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-settings-error></div><section class="document-form-section"><div class="document-form-grid">${field('code', 'Code *', building.code || '', 'text', true)}${field('name', 'Name *', building.name || '', 'text', true)}${field('address', 'Address', building.address || '')}${selectField('status', 'Status', statusOptions(building.status || 'ACTIVE'), building.status || 'ACTIVE')}</div>${textarea('description', 'Description', building.description || '')}</section></div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-settings-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Save Building</button></div></form>`);
+        const imagePanel = building.id ? buildingImagePanel(building) : '<section class="document-form-section facility-image-section"><h3>Building Image</h3><p class="legal-empty-note">Save the building before adding an image.</p></section>';
+        openDialog(`<form class="facility-dialog-panel legal-form" data-settings-form="facility-building" data-id="${esc(building.id || '')}"><div class="facility-details-modal-header"><div><p>Facilities</p><h2>${building.id ? 'Edit Building' : 'Add Building'}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close form">&times;</button></div><div class="facility-dialog-body legal-form-body"><div class="document-form-error hidden" data-settings-error></div><section class="document-form-section"><div class="document-form-grid">${field('code', 'Code *', building.code || '', 'text', true)}${field('name', 'Name *', building.name || '', 'text', true)}${field('address', 'Address', building.address || '')}${selectField('status', 'Status', statusOptions(building.status || 'ACTIVE'), building.status || 'ACTIVE')}</div>${textarea('description', 'Description', building.description || '')}</section>${imagePanel}</div><div class="facility-dialog-actions"><button class="btn-secondary dashboard-action-button" type="button" data-settings-dialog-close>Cancel</button><button class="btn-primary dashboard-action-button" type="submit">Save Building</button></div></form>`);
     }
 
     function openSpaceDetails(space = {}) {
@@ -346,7 +349,13 @@
     }
 
     function openBuildingDetails(building = {}) {
-        openDialog(`<div class="facility-dialog-panel legal-form settings-detail-panel"><div class="facility-details-modal-header"><div><p>Building Details</p><span class="facility-details-modal-request-number">${esc(building.code || 'Building')}</span><h2>${esc(building.name || 'Building')}</h2></div><button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close details">&times;</button></div><div class="facility-dialog-body legal-form-body"><section class="settings-detail-layout"><div class="settings-building-detail-media">${buildingMedia(building)}</div><div class="contract-detail-grid">${detail('Building Name', building.name)}${detail('Building Code', building.code)}${detail('Address', building.address || 'Not set')}${detail('Status', title(building.status || 'ACTIVE'))}${detail('Description', building.description || 'Not available')}</div></section></div><div class="facility-dialog-actions">${canManageRooms() ? `<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="edit-building" data-building-id="${esc(building.id)}">Edit Building</button>` : ''}<button class="btn-primary dashboard-action-button" type="button" data-settings-dialog-close>Close</button></div></div>`);
+        const imageActions = canManageRooms() && building.id ? `<div class="settings-building-detail-image-actions"><button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="edit-building" data-building-id="${esc(building.id)}">${building.hasImage ? 'Change Image' : 'Add Image'}</button>${building.hasImage ? `<button class="btn-secondary dashboard-action-button document-danger-action" type="button" data-remove-building-image="${esc(building.id)}">Remove Image</button>` : ''}</div>` : '';
+        openDialog(`<div class="facility-dialog-panel legal-form settings-detail-panel settings-building-detail-panel"><div class="facility-details-modal-header settings-building-detail-header"><div><p>Building Details</p><h2>${esc(building.name || 'Building')}</h2></div><div class="settings-building-detail-header-actions">${badge(building.status || 'ACTIVE')}<button class="facility-details-modal-close" type="button" data-settings-dialog-close aria-label="Close details">&times;</button></div></div><div class="facility-dialog-body legal-form-body"><section class="settings-building-detail-layout"><div class="settings-building-detail-media">${buildingMedia(building)}</div>${imageActions}<div class="settings-building-detail-grid"><article><span>Building Code</span><strong>${esc(building.code || 'Not available')}</strong></article><article><span>Status</span><strong>${esc(title(building.status || 'ACTIVE'))}</strong></article><article class="settings-building-detail-full"><span>Address</span><strong>${esc(building.address || 'Not set')}</strong></article><article class="settings-building-detail-full"><span>Description</span><strong>${esc(building.description || 'Not available')}</strong></article></div></section></div><div class="facility-dialog-actions">${canManageRooms() ? `<button class="btn-secondary dashboard-action-button" type="button" data-facilities-action="edit-building" data-building-id="${esc(building.id)}">Edit Building</button>` : ''}<button class="btn-primary dashboard-action-button" type="button" data-settings-dialog-close>Close</button></div></div>`);
+    }
+
+    function buildingImagePanel(building = {}) {
+        const meta = building.hasImage ? [building.imageFileName, fileSize(building.imageFileSize), building.imageUploadedAt ? `Uploaded ${fmt(building.imageUploadedAt)}` : ''].filter(Boolean).join(' - ') : 'No building image uploaded.';
+        return `<section class="document-form-section facility-image-section"><h3>Building Image</h3><div class="reservation-room-image-panel settings-room-image-panel settings-building-image-panel">${buildingMedia(building)}<div><strong>${esc(building.name || 'Building')}</strong><small>${esc(meta)}</small>${canManageRooms() ? `<div data-building-image-form data-building-id="${esc(building.id)}" class="settings-image-actions"><label class="facility-field"><span>Image File</span><input name="building_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"><small>JPEG, PNG, or WebP up to 5 MB.</small></label><div class="reservation-room-image-actions"><button class="btn-primary dashboard-action-button" type="button" data-upload-building-image>${building.hasImage ? 'Change Image' : 'Add Image'}</button>${building.hasImage ? `<button class="btn-secondary dashboard-action-button" type="button" data-remove-building-image="${esc(building.id)}">Remove Image</button>` : ''}</div></div>` : ''}</div></div></section>`;
     }
 
     function openSpaceForm(space = {}) {
@@ -412,6 +421,48 @@
         window.FAMModal?.showToast?.('Facility image removed.');
         closeDialog();
         await loadFacilities();
+    }
+
+    async function submitBuildingImage(container) {
+        if (state.facilities.buildingImageBusy) return;
+        const button = container.querySelector('[data-upload-building-image]');
+        const input = container.querySelector('input[name="building_image"]');
+        const buildingId = container.dataset.buildingId;
+        if (!input?.files?.length) {
+            window.FAMModal?.showToast?.('Select a building image first.');
+            return;
+        }
+        const body = new FormData();
+        body.append('building_image', input.files[0]);
+        state.facilities.buildingImageBusy = true;
+        button.disabled = true;
+        try {
+            await window.FAMApi.request(api(`settings/building-image.php?building_id=${encodeURIComponent(buildingId)}`), { method: 'POST', body });
+            window.FAMModal?.showToast?.('Building image saved.');
+            closeDialog();
+            await loadFacilities();
+            openBuildingsManager();
+        } catch (error) {
+            window.FAMModal?.showToast?.(error.message || 'Unable to save building image.');
+        } finally {
+            state.facilities.buildingImageBusy = false;
+            button.disabled = false;
+        }
+    }
+
+    async function removeBuildingImage(buildingId) {
+        if (state.facilities.buildingImageBusy) return;
+        if (!await window.FAMModal.confirm('Remove the image for this building?', { title: 'Remove Building Image', confirmLabel: 'Remove Image' })) return;
+        state.facilities.buildingImageBusy = true;
+        try {
+            await window.FAMApi.request(api(`settings/building-image.php?building_id=${encodeURIComponent(buildingId)}`), { method: 'DELETE' });
+            window.FAMModal?.showToast?.('Building image removed.');
+            closeDialog();
+            await loadFacilities();
+            openBuildingsManager();
+        } finally {
+            state.facilities.buildingImageBusy = false;
+        }
     }
 
     function blacklistPanel() {
@@ -644,6 +695,14 @@
                 if (imageForm) submitRoomImage(imageForm).catch(console.error);
                 return;
             }
+            const removeBuildingImageButton = event.target.closest('[data-remove-building-image]');
+            if (removeBuildingImageButton) return void removeBuildingImage(removeBuildingImageButton.dataset.removeBuildingImage).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to remove building image.'));
+            const uploadBuildingImage = event.target.closest('[data-upload-building-image]');
+            if (uploadBuildingImage) {
+                const imageForm = uploadBuildingImage.closest('[data-building-image-form]');
+                if (imageForm) submitBuildingImage(imageForm).catch(console.error);
+                return;
+            }
             const select = event.target.closest('[data-blacklist-select]');
             if (select) {
                 state.blacklist.selected = state.blacklist.candidates.find(candidate => Number(candidate.id) === Number(select.dataset.blacklistSelect)) || null;
@@ -686,6 +745,13 @@
             if (type === 'deactivate-policy') deactivatePolicy(policyId).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to deactivate policy.'));
             if (type === 'deactivate-provision') deactivateProvision(provisionId, policyId).catch(error => window.FAMModal?.showToast?.(error.message || 'Unable to deactivate provision.'));
         });
+        document.addEventListener('error', event => {
+            const image = event.target.closest?.('.settings-building-image');
+            if (!image) return;
+            image.hidden = true;
+            const placeholder = image.nextElementSibling;
+            if (placeholder?.classList?.contains('settings-building-placeholder')) placeholder.hidden = false;
+        }, true);
         document.addEventListener('input', event => {
             if (event.target.matches('#blacklist-search')) {
                 state.blacklist.query = event.target.value;

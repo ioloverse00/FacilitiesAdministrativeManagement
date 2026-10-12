@@ -93,10 +93,20 @@ function settingsFacilitiesCode(mixed $value, string $field, int $max = 50): str
 function settingsFacilitiesList(array $user): array
 {
     $pdo = settingsFacilitiesPdo();
-    $buildings = $pdo->query("SELECT building_id id, building_code code, building_name name, address, description, status, updated_at FROM building WHERE deleted_at IS NULL ORDER BY building_name")->fetchAll();
+    $buildings = $pdo->query("SELECT building_id id, building_code code, building_name name, address, description, status, updated_at updatedAt, primary_image_original_file_name imageFileName, primary_image_storage_path imageStoragePath, primary_image_mime_type imageMimeType, primary_image_file_size imageFileSize, primary_image_uploaded_at imageUploadedAt FROM building WHERE deleted_at IS NULL ORDER BY building_name")->fetchAll();
     $spaces = $pdo->query("SELECT fs.facility_space_id id, fs.building_id buildingId, fs.parent_space_id parentSpaceId, fs.space_code code, fs.space_name name, fs.space_type type, fs.floor_number floor, fs.capacity, fs.capacity_unit capacityUnit, fs.location_description location, fs.is_reservable reservable, fs.status, fs.updated_at updatedAt, fs.primary_image_original_file_name imageFileName, fs.primary_image_mime_type imageMimeType, fs.primary_image_file_size imageFileSize, fs.primary_image_uploaded_at imageUploadedAt, b.building_name buildingName FROM facility_space fs INNER JOIN building b ON b.building_id=fs.building_id WHERE fs.deleted_at IS NULL ORDER BY b.building_name, fs.space_name")->fetchAll();
     return [
-        'buildings' => $buildings,
+        'buildings' => array_map(static function (array $row): array {
+            $hasImage = !empty($row['imageStoragePath']) && !empty($row['imageMimeType']);
+            unset($row['imageStoragePath']);
+            $row['hasImage'] = $hasImage;
+            $row['imageUrl'] = $hasImage ? 'settings/building-image.php?building_id=' . (int)$row['id'] : null;
+            $row['imageFileName'] = $hasImage ? $row['imageFileName'] : null;
+            $row['imageMimeType'] = $hasImage ? $row['imageMimeType'] : null;
+            $row['imageFileSize'] = $hasImage ? (int)$row['imageFileSize'] : null;
+            $row['imageUploadedAt'] = $hasImage ? $row['imageUploadedAt'] : null;
+            return $row;
+        }, $buildings),
         'spaces' => array_map(static function (array $row): array {
             $row['reservable'] = (int)$row['reservable'] === 1;
             $row['hasImage'] = !empty($row['imageFileName']);
