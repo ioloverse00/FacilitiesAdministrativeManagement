@@ -114,10 +114,13 @@
         return `<div class="facility-action-menu"><button class="facility-action-toggle" type="button" data-settings-menu-toggle="${esc(id)}" aria-haspopup="menu" aria-expanded="false" aria-label="${esc(label)}">&#8942;</button><div id="${esc(id)}" class="facility-action-dropdown hidden" role="menu">${items.join('')}</div></div>`;
     }
 
+    function buildingPlaceholder(message = 'Photo not configured') {
+        return `<div class="settings-building-placeholder"><span class="material-symbols-outlined" aria-hidden="true">apartment</span><span>Building Photo</span><small>${esc(message)}</small></div>`;
+    }
+
     function buildingMedia(building = {}) {
-        const placeholder = `<div class="settings-building-placeholder" ${building.hasImage ? 'hidden' : ''}><span class="material-symbols-outlined" aria-hidden="true">apartment</span><span>Building Photo</span><small>Photo not configured</small></div>`;
-        if (!building.hasImage || !building.imageUrl) return placeholder;
-        return `<div class="settings-building-image-frame"><img class="settings-building-image" src="${esc(api(building.imageUrl))}" alt="${esc(building.name || 'Building image')}" loading="lazy">${placeholder}</div>`;
+        if (!building.hasImage || !building.imageUrl) return buildingPlaceholder();
+        return `<div class="settings-building-image-frame"><img class="settings-building-image" src="${esc(api(building.imageUrl))}" alt="${esc(building.name || 'Building image')}" loading="lazy"></div>`;
     }
 
     function showError(form, error) {
@@ -840,9 +843,8 @@
         document.addEventListener('error', event => {
             const image = event.target.closest?.('.settings-building-image');
             if (!image) return;
-            image.hidden = true;
-            const placeholder = image.nextElementSibling;
-            if (placeholder?.classList?.contains('settings-building-placeholder')) placeholder.hidden = false;
+            const frame = image.closest('.settings-building-image-frame');
+            if (frame) frame.innerHTML = buildingPlaceholder();
         }, true);
         document.addEventListener('input', event => {
             if (event.target.matches('#blacklist-search')) {
