@@ -6383,6 +6383,12 @@ button.reservation-more-events {
   overflow: hidden;
 }
 
+.settings-building-detail-media > .settings-building-image-frame,
+.settings-building-detail-media > .settings-building-placeholder {
+  justify-self: center;
+  max-width: 100%;
+}
+
 .settings-building-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
